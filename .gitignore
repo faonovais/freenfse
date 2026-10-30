@@ -1,0 +1,57 @@
+# ============================================================================
+# O repositório é PÚBLICO. Nada confidencial pode ser versionado.
+# ============================================================================
+
+# --- Segredos e configuração local --------------------------------------------
+# Só o .env.example (valores fictícios ou vazios) é versionado.
+.env
+.env.*
+!.env.example
+
+# Certificados e chaves
+*.pfx
+*.p12
+*.pem
+*.key
+*.crt
+*.cer
+*.jks
+*.keystore
+secrets/
+
+# --- Mídia, uploads, backups e dumps ------------------------------------------
+media/
+uploads/
+backups/
+dumps/
+exportacoes/
+*.dump
+*.sql.gz
+*.bak
+*.backup
+
+# --- Python --------------------------------------------------------------------
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+staticfiles/
+
+# --- Node / frontend ------------------------------------------------------------
+node_modules/
+dist/
+coverage/
+*.tsbuildinfo
+
+# --- Editores e sistema operacional ---------------------------------------------
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# --- Docker ---------------------------------------------------------------------
+docker-compose.override.yml

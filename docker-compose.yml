@@ -1,0 +1,165 @@
+# freenfse — ambiente completo (aplicação vazia da Fase 0).
+#
+# Uso:
+#   cp .env.example .env     # preencha SECRET_KEY e POSTGRES_PASSWORD
+#   docker compose up --build
+#   curl http://localhost:8080/api/versao/
+#
+# Em desenvolvimento, é possível subir só a infraestrutura e rodar o backend no
+# host (POSTGRES_HOST=localhost no .env):
+#   docker compose up -d postgres redis
+#
+# Padrões de teto de memória, publicação em loopback e dimensionamento de
+# processos baseados nas práticas de implantação da Topo.
+#
+# Teto de memória por contêiner: sem limite, a pilha inteira disputa a RAM do
+# host e, em máquinas apertadas, os contêineres ficam presos em "Created". Os
+# valores abaixo são iniciais (medidos com a aplicação vazia, com folga) e
+# precisam ser recalibrados com carga real na Fase 6. Cada teto é
+# sobrescrevível pelo .env (MEM_LIMIT_*). Ultrapassar o teto faz o kernel
+# encerrar o processo (OOM): aumente o do serviço antes de rodar cargas maiores.
+#
+# Decisões deliberadas: nenhuma senha padrão (o repositório é público;
+# POSTGRES_PASSWORD e SECRET_KEY são obrigatórios), sem container_name (o nome
+# do projeto já isola) e depends_on por saúde (service_healthy).
+
+name: freenfse
+
+services:
+  postgres:
+    image: postgres:18
+    restart: unless-stopped
+    mem_limit: ${MEM_LIMIT_POSTGRES:-512m}
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    # Publicado só no loopback do host: backend, worker e beat alcançam o
+    # Postgres pela rede interna (POSTGRES_HOST=postgres), então em produção o
+    # banco não escuta na interface externa. Para expor em dev, defina
+    # POSTGRES_BIND=0.0.0.0 (e proteja com firewall).
+    ports:
+      - "${POSTGRES_BIND:-127.0.0.1}:${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      # A imagem 18 guarda os dados em /var/lib/postgresql/18/docker.
+      - postgres_data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  redis:
+    image: redis:7
+    restart: unless-stopped
+    mem_limit: ${MEM_LIMIT_REDIS:-64m}
+    command: ["redis-server", "--appendonly", "yes"]
+    # Publicado só no loopback do host (ver nota do postgres). Para expor em dev,
+    # defina REDIS_BIND=0.0.0.0.
+    ports:
+      - "${REDIS_BIND:-127.0.0.1}:${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  backend:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.backend
+    image: freenfse-backend:local
+    restart: unless-stopped
+    mem_limit: ${MEM_LIMIT_BACKEND:-512m}
+    # GUNICORN_WORKERS: ajuste conforme a RAM e os núcleos do host.
+    command:
+      - gunicorn
+      - config.wsgi:application
+      - --bind=0.0.0.0:8000
+      - --workers=${GUNICORN_WORKERS:-2}
+      - --access-logfile=-
+      # O socket de controle do Gunicorn 26 grava em $HOME, que não existe para o
+      # usuário de sistema, e não é usado aqui.
+      - --no-control-socket
+    env_file: .env
+    # Dentro da rede do compose os serviços se acham pelo nome e pela porta
+    # interna; o .env usa localhost (para rodar o backend no host) e uma porta
+    # que pode ser a de publicação, então sobrescrevemos aqui.
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      REDIS_URL: redis://redis:6379/0
+      EXECUTAR_MIGRACOES: "1"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/versao/', timeout=3)"
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+
+  worker:
+    image: freenfse-backend:local
+    restart: unless-stopped
+    mem_limit: ${MEM_LIMIT_WORKER:-512m}
+    # CELERY_CONCURRENCY: sem a variável o Celery abriria um processo por núcleo
+    # do host, o que estoura o teto de memória em servidores grandes.
+    command: celery -A config worker --loglevel=info --concurrency=${CELERY_CONCURRENCY:-2}
+    env_file: .env
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      REDIS_URL: redis://redis:6379/0
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      # Saudável = o worker responde no broker (nome padrão do nó: celery@<hostname>).
+      test: ["CMD-SHELL", "celery -A config inspect ping --timeout 5 -d celery@$$HOSTNAME"]
+      interval: 10s
+      timeout: 10s
+      retries: 6
+      start_period: 30s
+
+  # Agendador do Celery: o estado do scheduler fica em /tmp (efêmero, recriado a
+  # cada início). Sem healthcheck: o Celery não oferece sonda simples para o beat.
+  beat:
+    image: freenfse-backend:local
+    restart: unless-stopped
+    mem_limit: ${MEM_LIMIT_BEAT:-192m}
+    command: celery -A config beat --loglevel=info --schedule=/tmp/celerybeat-schedule
+    env_file: .env
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      REDIS_URL: redis://redis:6379/0
+    depends_on:
+      backend:
+        condition: service_healthy
+
+  nginx:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.nginx
+    image: freenfse-nginx:local
+    restart: unless-stopped
+    mem_limit: ${MEM_LIMIT_NGINX:-32m}
+    ports:
+      - "${HTTP_PORT:-8080}:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
+  redis_data:

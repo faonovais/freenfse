@@ -1,0 +1,20 @@
+# Contexto de build enxuto e sem segredos: nada disto entra nas imagens.
+.git
+.github
+.env
+.env.*
+!.env.example
+*.pfx
+*.p12
+*.pem
+*.key
+*.crt
+*.cer
+**/__pycache__
+**/*.pyc
+**/.venv
+**/.pytest_cache
+**/.ruff_cache
+**/node_modules
+**/dist
+docs
