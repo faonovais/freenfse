@@ -38,7 +38,7 @@ Dentro do backend: `models` → `services` → `api` → React.
 
 | SHARED_APPS (schema público) | TENANT_APPS (schema por empresa) |
 |---|---|
-| `core` — Empresa, Domínio, Usuário, vínculos, auditoria (e os apps de terceiros: allauth, sessões) | `cadastros` — pessoas, serviços |
+| `core` — Empresa, Domínio, Usuário, vínculos, auditoria, Município (dado público do IBGE) e os apps de terceiros (allauth, sessões) | `cadastros` — pessoas, serviços |
 | | `fiscal` — parâmetros, certificado, NFS-e, eventos |
 | | `documentos` — lote, e-mail, Google Drive |
 | | `agendamentos` — modelos, agendamentos, rascunhos |
@@ -54,8 +54,8 @@ backend/
 ├── config/           # settings.py, urls.py (root), celery.py, wsgi.py
 ├── core/             # models/ (Empresa, Usuario, Vinculo, LogAuditoria), permissoes.py, crypto.py, fields.py,
 │                     # middleware.py, services/, auth/ (adapters, sinais), api/, management/commands/
-├── cadastros/        # tenant
-├── fiscal/           # tenant
+├── cadastros/        # tenant: Pessoa, PerfilPessoa, Servico (vigência), cópia entre empresas
+├── fiscal/           # tenant: ParametrosFiscais, Certificado, Logo; gateway.py (freedfe), logo.py, tasks.py
 ├── documentos/       # tenant
 └── agendamentos/     # tenant
 ```
@@ -185,7 +185,7 @@ urlpatterns = router.urls
 ### 4.5 Services
 
 - Toda regra de negócio e orquestração vive em `services/`, em funções que recebem a empresa e o usuário **explicitamente**
-- O acesso à `freedfe` passa por um único ponto (`GatewayNfse`, Fase 3), que se testa com um servidor Sefin falso
+- O acesso à `freedfe` passa por um único ponto (`fiscal/gateway.py`; a Fase 3 o amplia para a emissão). Os testes trocam só o transporte HTTP (`fiscal/tests/apoio.py::TransporteFalso`): a biblioteca roda de verdade, sem rede
 - Exceções do driver ou da biblioteca nunca sobem cruas: encapsular em exceção do domínio (`Erro…`)
 
 ### 4.6 Tasks Celery
@@ -222,6 +222,12 @@ registrar_permissao("nfse.cancelar", "Cancelar NFS-e", perfis=[Perfil.EMISSOR])
 **Auditoria.** `core.services.auditoria.registrar(Acao.X, request=request, alvo="...", detalhes={...})` — usuário, empresa, IP e a marca `master` saem da requisição. Nunca coloque senha, token ou conteúdo de certificado em `detalhes`.
 
 **Campo criptografado.** Declare o campo e use normalmente; a chave atual grava e todas as chaves leem. Rotação: nova chave na frente em `FREENFSE_CHAVES`, reiniciar, `python manage.py recriptografar` (use `--dry-run` antes) e só então retirar a chave antiga.
+
+**Certificado e segredos fiscais.** `.pfx` e senha só existem em claro na memória, durante o uso (`fiscal/services/certificado.py::abrir_em_memoria`). Nenhuma resposta, log, auditoria ou `repr` os contém; ao criar um endpoint novo que toque no certificado, estenda os testes de sigilo de `fiscal/tests/test_certificado.py`. Certificados de teste são **gerados no teste** (`fiscal/tests/apoio.py::gerar_pfx`), nunca versionados.
+
+**Dado de referência.** Dado público e igual para todas as empresas (como `core.Municipio`) vai no schema público; os modelos de empresa guardam o código e validam em serviço, sem chave estrangeira entre schemas.
+
+**Upload de arquivo.** Valide pelo **conteúdo**, nunca pelo nome ou pelo tipo informado; limite o tamanho antes de ler; e, se o arquivo for exibido a outros usuários, sane-o por lista de permissões (ver `fiscal/logo.py`). Entregue-o por rota autenticada, com `Content-Security-Policy` e `nosniff`.
 
 **Autenticação.** Não crie endpoint de login, cadastro ou senha: use o `allauth` headless (`/_allauth/browser/v1/`). Cadastro público fica fechado nos adapters de `core/auth/adapters.py`. O login social passa pelas mesmas etapas do login por senha, inclusive o 2FA: não crie atalho que abra a sessão a partir do provedor (a prova está em `core/tests/test_login_social_2fa.py`).
 
@@ -332,7 +338,7 @@ A fonte dos tokens é `frontend/src/index.css` + `docs/design-system.md`, ambos 
 - Nomenclatura: arquivo `test_<funcionalidade>.py`, função `def test_<o que verifica>()`
 - Frontend: `npm test` (Vitest) em `frontend/`, arquivos `*.test.js(x)` ao lado do módulo; `npm run lint` (ESLint). Telas são testadas com a SPA inteira sobre uma API falsa (`src/testes/`); consultas por papel e nome acessível, não por classe CSS
 - O backend de testes usa `config.settings_testes` (cache em memória, hash de senha rápido, chaves fictícias e o app `apoio_testes`, que existe só para exercitar o isolamento por schema e os campos criptografados). Fixtures prontas em `backend/conftest.py`: `empresa_a`, `empresa_b`, `master`, `usuario`, `vincular`, `cliente_de`
-- `core/tests/test_contrato_frontend.py` resolve no URLconf real todas as rotas citadas em `frontend/src/api/`: um caminho errado na SPA reprova o backend, já que os testes do frontend usam API falsa
+- `core/tests/test_contrato_frontend.py` resolve no URLconf real todas as rotas citadas em `frontend/src/api/` (inclusive `cadastros.js` e `fiscal.js`): um caminho errado na SPA reprova o backend, já que os testes do frontend usam API falsa
 
 **Fixture de empresa:**
 
