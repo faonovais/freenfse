@@ -20,6 +20,11 @@ export default defineConfig([
     },
   },
   {
+    // Contextos exportam o provedor e o hook de uso no mesmo arquivo.
+    files: ['src/contexts/**/*.{js,jsx}'],
+    rules: { 'react-refresh/only-export-components': 'off' },
+  },
+  {
     files: ['*.config.js', 'src/**/*.test.{js,jsx}'],
     languageOptions: { globals: globals.node },
   },
