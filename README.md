@@ -6,7 +6,7 @@ Sistema para emissão e gestão de notas fiscais de serviços eletrônica que ut
 
 ## Stack
 
-Python 3.14 · Django 6.1 · Django REST Framework 3.18 · PostgreSQL 18 (schema por empresa, `django-tenants`) · Celery + Redis · React 19 · Vite · Tailwind 4. Decisão das versões: [ADR 0001](docs/adr/0001-versoes.md). Acesso, empresas e segurança: [ADR 0002](docs/adr/0002-acesso-e-seguranca.md).
+Python 3.14 · Django 6.1 · Django REST Framework 3.18 · PostgreSQL 18 (schema por empresa, `django-tenants`) · Celery + Redis · React 19 · Vite · Tailwind 4. Decisão das versões: [ADR 0001](docs/adr/0001-versoes.md). Acesso, empresas e segurança: [ADR 0002](docs/adr/0002-acesso-e-seguranca.md). Cadastros e configuração fiscal: [ADR 0003](docs/adr/0003-cadastros-e-configuracao-fiscal.md).
 
 ## Subir com Docker Compose
 
@@ -43,6 +43,14 @@ Entre com esse e-mail e senha. Como o Master precisa de verificação em duas et
 3. Preencha `AUTH_GOOGLE_CLIENT_ID` e `AUTH_GOOGLE_CLIENT_SECRET` no `.env` e reinicie o `backend`.
 
 O botão "Entrar com Google" só aparece quando as duas variáveis estão preenchidas. O login social **não cria contas**: o e-mail do Google precisa estar cadastrado pelo Master e verificado pelo Google. `AUTH_DOMINIOS_PERMITIDOS` restringe os domínios aceitos. Microsoft e OpenID Connect estão instalados, mas desligados por padrão.
+
+### Configuração fiscal da empresa
+
+Depois de criar a empresa e o vínculo, o Administrador da empresa configura, em **Configuração fiscal**: parâmetros
+(regime, série da DPS, município emissor e ambiente — o padrão é a **produção restrita**), certificado A1 e logo; e, em
+**Cadastros**, pessoas e serviços. Os municípios do IBGE são carregados sozinhos na subida do backend
+(`carregar_municipios`). O roteiro para validar com um certificado real está em
+[`docs/verificacao-fase-2.md`](docs/verificacao-fase-2.md).
 
 ### Chaves de criptografia
 

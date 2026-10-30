@@ -48,3 +48,36 @@ def formatar_cnpj(valor):
     if len(cnpj) != 14:
         return valor
     return f"{cnpj[:2]}.{cnpj[2:5]}.{cnpj[5:8]}/{cnpj[8:12]}-{cnpj[12:]}"
+
+
+def normalizar_cpf(valor):
+    """Remove pontuação e espaços, mantendo só os dígitos."""
+    return re.sub(r"\D", "", valor or "")
+
+
+def cpf_valido(valor):
+    """Indica se o CPF tem 11 dígitos, não é sequência repetida e os dígitos verificadores batem."""
+    cpf = normalizar_cpf(valor)
+    if len(cpf) != 11 or len(set(cpf)) == 1:
+        return False
+    for tamanho in (9, 10):
+        pesos = range(tamanho + 1, 1, -1)
+        soma = sum(int(digito) * peso for digito, peso in zip(cpf[:tamanho], pesos, strict=True))
+        digito = (soma * 10) % 11 % 10
+        if digito != int(cpf[tamanho]):
+            return False
+    return True
+
+
+def validar_cpf(valor):
+    """Validador de campo: recusa CPF com formato ou dígito verificador inválido."""
+    if not cpf_valido(valor):
+        raise ValidationError("CPF inválido.", code="cpf_invalido")
+
+
+def formatar_cpf(valor):
+    """Formata como 000.000.000-00."""
+    cpf = normalizar_cpf(valor)
+    if len(cpf) != 11:
+        return valor
+    return f"{cpf[:3]}.{cpf[3:6]}.{cpf[6:9]}-{cpf[9:]}"

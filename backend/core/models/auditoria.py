@@ -44,6 +44,14 @@ class LogAuditoria(models.Model):
         USUARIO_ALTERADO = "usuario_alterado", "Usuário alterado"
         VINCULO_CRIADO = "vinculo_criado", "Vínculo criado"
         VINCULO_ALTERADO = "vinculo_alterado", "Vínculo alterado"
+        PARAMETROS_ALTERADOS = "parametros_alterados", "Parâmetros fiscais alterados"
+        AMBIENTE_ALTERADO = "ambiente_alterado", "Ambiente de emissão alterado"
+        CONVENIO_VERIFICADO = "convenio_verificado", "Convênio do município verificado"
+        CERTIFICADO_ENVIADO = "certificado_enviado", "Certificado A1 enviado"
+        CERTIFICADO_REMOVIDO = "certificado_removido", "Certificado A1 removido"
+        CERTIFICADO_A_VENCER = "certificado_a_vencer", "Alerta de vencimento do certificado"
+        LOGO_ALTERADO = "logo_alterado", "Logo da empresa alterado"
+        PESSOAS_COPIADAS = "pessoas_copiadas", "Cadastros copiados de outra empresa"
 
     usuario = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="+"

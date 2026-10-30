@@ -29,3 +29,15 @@ class PermissaoMaster(BasePermission):
         """Só o Master autenticado e ativo."""
         usuario = request.user
         return bool(usuario.is_authenticated and usuario.is_active and usuario.is_master)
+
+
+class QualquerVinculado(BasePermission):
+    """Qualquer usuário com acesso à empresa da requisição (vínculo ativo ou Master).
+
+    O middleware já recusou quem não tem acesso (403); esta classe só confirma que a rota é de
+    empresa. Serve a dados que a interface mostra a todos, como o ambiente e o logo.
+    """
+
+    def has_permission(self, request, view):
+        """Exige usuário autenticado numa rota de empresa."""
+        return request.user.is_authenticated and getattr(request, "empresa", None) is not None

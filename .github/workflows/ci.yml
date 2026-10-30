@@ -129,6 +129,13 @@ jobs:
           test "$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8080/api/qualquer/)" = "401"
           test "$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8080/api/eu/)" = "403"
           test "$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8080/api/admin-global/empresas/)" = "403"
+          # rotas de cadastros e fiscal são de empresa: sem login, 401
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8080/api/cadastros/pessoas/)" = "401"
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8080/api/fiscal/identidade/)" = "401"
+      - name: Municípios do IBGE foram carregados na subida
+        run: |
+          docker compose exec -T backend python manage.py shell -c \
+            "import sys; from core.models import Municipio; sys.exit(0 if Municipio.objects.count() == 5571 else 1)"
       - name: Primeiro Master é criado pela linha de comando
         run: |
           docker compose exec -T -e DJANGO_SUPERUSER_PASSWORD="$(python3 -c 'import secrets; print(secrets.token_urlsafe(24))')" \

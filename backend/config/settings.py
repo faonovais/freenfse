@@ -7,6 +7,7 @@ Nenhum valor sensível é definido neste arquivo.
 from pathlib import Path
 
 import environ
+from celery.schedules import crontab
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 RAIZ_REPOSITORIO = BASE_DIR.parent
@@ -244,6 +245,13 @@ CELERY_RESULT_BACKEND = REDIS_URL
 CELERY_TIMEZONE = "America/Sao_Paulo"
 CELERY_TASK_TRACK_STARTED = True
 CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = True
+CELERY_BEAT_SCHEDULE = {
+    # Alertas de vencimento do certificado A1 (30, 15 e 7 dias): todo dia às 06:40 (Brasília).
+    "verificar-vencimento-de-certificados": {
+        "task": "fiscal.tasks.verificar_vencimento_certificados",
+        "schedule": crontab(hour=6, minute=40),
+    },
+}
 
 # --- Internacionalização ------------------------------------------------------
 LANGUAGE_CODE = "pt-br"
