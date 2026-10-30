@@ -12,8 +12,9 @@ from rest_framework.views import APIView
 
 from cadastros.models import PerfilPessoa, Pessoa, Servico
 from cadastros.services import copia, servicos
-from core.api.permissions import PermissaoPorOperacao
-from core.models import Empresa
+from core.api.permissions import PermissaoPorOperacao, QualquerVinculado
+from core.models import Empresa, Municipio
+from core.municipios import normalizar_nome
 
 from .serializers import (
     PerfilPessoaSerializer,
@@ -250,3 +251,31 @@ class CopiaPessoasView(APIView):
         except copia.CopiaInvalida as erro:
             raise serializers.ValidationError({"empresa_origem": str(erro)}) from None
         return Response(resultado, status=status.HTTP_201_CREATED)
+
+
+class MunicipioView(APIView):
+    """Busca de municípios (dado público do IBGE) para os campos de endereço."""
+
+    permission_classes = [QualquerVinculado]
+
+    def get(self, request):
+        """Até 20 municípios por `busca` (nome, sem acento nem caixa) e `uf`, ou um por `codigo`."""
+        params = request.query_params
+        consulta = Municipio.objects.all()
+        codigo = "".join(c for c in params.get("codigo", "") if c.isdigit())
+        if codigo:
+            consulta = consulta.filter(codigo=codigo)
+        busca = params.get("busca", "").strip()
+        if busca:
+            consulta = consulta.filter(nome_busca__contains=normalizar_nome(busca))
+        uf = params.get("uf", "").strip().upper()
+        if uf:
+            consulta = consulta.filter(uf=uf)
+        if not (codigo or busca):
+            return Response([])
+        return Response(
+            [
+                {"codigo": m.codigo, "nome": m.nome, "uf": m.uf}
+                for m in consulta.order_by("nome", "uf")[:20]
+            ]
+        )

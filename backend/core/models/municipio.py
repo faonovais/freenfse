@@ -2,6 +2,8 @@
 
 from django.db import models
 
+from core.municipios import normalizar_nome
+
 
 class Municipio(models.Model):
     """Município brasileiro identificado pelo código IBGE de 7 dígitos.
@@ -15,6 +17,7 @@ class Municipio(models.Model):
     codigo = models.CharField("código IBGE", max_length=7, primary_key=True)
     nome = models.CharField(max_length=120)
     uf = models.CharField("UF", max_length=2)
+    nome_busca = models.CharField(max_length=120, db_index=True, editable=False, default="")
 
     class Meta:
         verbose_name = "município"
@@ -24,3 +27,8 @@ class Municipio(models.Model):
 
     def __str__(self):
         return f"{self.nome}/{self.uf} ({self.codigo})"
+
+    def save(self, *args, **kwargs):
+        """Mantém o nome sem acento (usado na busca) em dia."""
+        self.nome_busca = normalizar_nome(self.nome)
+        super().save(*args, **kwargs)

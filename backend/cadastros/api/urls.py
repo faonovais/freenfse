@@ -12,5 +12,6 @@ roteador.register("perfis", views.PerfilPessoaViewSet, basename="perfil-pessoa")
 
 urlpatterns = [
     path("copia/pessoas/", views.CopiaPessoasView.as_view(), name="copia-pessoas"),
+    path("municipios/", views.MunicipioView.as_view(), name="municipios"),
     *roteador.urls,
 ]

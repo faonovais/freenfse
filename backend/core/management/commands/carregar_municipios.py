@@ -3,7 +3,7 @@
 from django.core.management.base import BaseCommand, CommandError
 
 from core.models import Municipio
-from core.municipios import ErroNoArquivoDeMunicipios, ler_arquivo
+from core.municipios import ErroNoArquivoDeMunicipios, ler_arquivo, normalizar_nome
 
 
 class Command(BaseCommand):
@@ -31,10 +31,13 @@ class Command(BaseCommand):
             return
         antes = Municipio.objects.count()
         Municipio.objects.bulk_create(
-            [Municipio(codigo=codigo, nome=nome, uf=uf) for codigo, nome, uf in linhas],
+            [
+                Municipio(codigo=codigo, nome=nome, uf=uf, nome_busca=normalizar_nome(nome))
+                for codigo, nome, uf in linhas
+            ],
             update_conflicts=True,
             unique_fields=["codigo"],
-            update_fields=["nome", "uf"],
+            update_fields=["nome", "uf", "nome_busca"],
             batch_size=1000,
         )
         depois = Municipio.objects.count()

@@ -81,6 +81,14 @@ def test_comando_carrega_e_e_idempotente():
 
 
 @pytest.mark.django_db
+def test_comando_preenche_o_nome_de_busca_sem_acento():
+    call_command("carregar_municipios", stdout=StringIO())
+
+    assert Municipio.objects.get(codigo="3550308").nome_busca == "sao paulo"
+    assert Municipio.objects.get(codigo="2919553").nome_busca == "luis eduardo magalhaes"
+
+
+@pytest.mark.django_db
 def test_comando_atualiza_nome_alterado():
     Municipio.objects.create(codigo="2101400", nome="Nome Antigo", uf="MA")
 

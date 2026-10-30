@@ -1,6 +1,7 @@
 """Municípios: constantes e leitura do arquivo versionado do IBGE (ver `core/dados/LEIAME.md`)."""
 
 import csv
+import unicodedata
 from pathlib import Path
 
 ARQUIVO_PADRAO = Path(__file__).resolve().parent / "dados" / "municipios_ibge.csv"
@@ -12,6 +13,12 @@ UF_POR_CODIGO = {
     "28": "SE", "29": "BA", "31": "MG", "32": "ES", "33": "RJ", "35": "SP", "41": "PR",
     "42": "SC", "43": "RS", "50": "MS", "51": "MT", "52": "GO", "53": "DF",
 }  # fmt: skip
+
+
+def normalizar_nome(texto):
+    """Minúsculas e sem acento, para busca por nome ("sao luis" acha "São Luís")."""
+    decomposto = unicodedata.normalize("NFD", texto or "")
+    return "".join(c for c in decomposto if not unicodedata.combining(c)).lower().strip()
 
 
 class ErroNoArquivoDeMunicipios(ValueError):

@@ -9,7 +9,7 @@ from allauth.account.models import EmailAddress
 from rest_framework.test import APIClient
 
 from core.models import Empresa, Municipio, Usuario, VinculoUsuarioEmpresa
-from core.municipios import ler_arquivo
+from core.municipios import ler_arquivo, normalizar_nome
 from core.permissoes import Perfil
 from core.validators import calcular_digitos_cnpj
 
@@ -58,7 +58,9 @@ def criar_usuario_de_teste(email, *, master=False, perfil_senha=SENHA_DE_TESTE, 
 def municipios_basicos(db):
     """Alguns municípios reais (do arquivo versionado do IBGE) no schema público."""
     linhas = [m for m in ler_arquivo() if m[0] in CODIGOS_DE_MUNICIPIOS_BASICOS]
-    Municipio.objects.bulk_create([Municipio(codigo=c, nome=n, uf=u) for c, n, u in linhas])
+    Municipio.objects.bulk_create(
+        [Municipio(codigo=c, nome=n, uf=u, nome_busca=normalizar_nome(n)) for c, n, u in linhas]
+    )
     return {codigo: nome for codigo, nome, _ in linhas}
 
 
