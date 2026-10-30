@@ -21,3 +21,7 @@ PASSWORD_HASHERS = ["django.contrib.auth.hashers.MD5PasswordHasher"]
 # Os testes de 2FA ligam a política explicitamente; nos demais, o Master entra sem 2FA.
 AUTH_EXIGIR_2FA_MASTER = False
 AUTH_EXIGIR_2FA_TODOS = False
+
+# O pytest-django envolve cada teste numa transação; a trava de emissão só recusa transação
+# aberta fora dos testes (ver fiscal/persistencia/trava.py).
+FREENFSE_EMISSAO_EM_TRANSACAO_PERMITIDA = True
