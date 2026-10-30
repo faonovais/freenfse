@@ -6,12 +6,17 @@ asgiref==3.13.0
     # via
     #   -r requirements.txt
     #   django
+    #   django-allauth
 billiard==4.3.1
     # via
     #   -r requirements.txt
     #   celery
 celery==5.6.3
     # via -r requirements.txt
+certifi==2026.10.23
+    # via
+    #   -r requirements.txt
+    #   requests
 cffi==2.1.1
     # via
     #   -r requirements.txt
@@ -20,6 +25,7 @@ charset-normalizer==3.5.2
     # via
     #   -r requirements.txt
     #   reportlab
+    #   requests
 click==8.5.0
     # via
     #   -r requirements.txt
@@ -42,22 +48,32 @@ click-repl==0.4.1
 cryptography==50.0.2
     # via
     #   -r requirements.txt
+    #   fido2
     #   freedfe
 django==6.1.2
     # via
     #   -r requirements.txt
+    #   django-allauth
     #   django-tenants
     #   djangorestframework
+django-allauth==65.21.0
+    # via -r requirements.txt
 django-environ==0.14.0
     # via -r requirements.txt
 django-tenants==4.0.1
     # via -r requirements.txt
 djangorestframework==3.18.3
     # via -r requirements.txt
+fido2==2.2.1
+    # via -r requirements.txt
 freedfe @ git+https://github.com/topoconsultoria/freedfe.git@56ea16a6c4b44248a19e7472fce4f9237e3060a8
     # via -r requirements.txt
 gunicorn==26.2.0
     # via -r requirements.txt
+idna==3.20
+    # via
+    #   -r requirements.txt
+    #   requests
 iniconfig==2.3.1
     # via pytest
 kombu==5.6.2
@@ -68,6 +84,8 @@ lxml==6.1.3
     # via
     #   -r requirements.txt
     #   freedfe
+oauthlib==4.0.0
+    # via -r requirements.txt
 packaging==26.3
     # via
     #   -r requirements.txt
@@ -93,6 +111,8 @@ pycparser==3.12
     #   cffi
 pygments==2.21.0
     # via pytest
+pyjwt==2.15.1
+    # via -r requirements.txt
 pytest==9.2.0
     # via
     #   -r requirements-dev.in
@@ -103,9 +123,13 @@ python-dateutil==3.0.0
     # via
     #   -r requirements.txt
     #   celery
+qrcode==8.2
+    # via -r requirements.txt
 redis==6.4.0
     # via -r requirements.txt
 reportlab==5.1.0
+    # via -r requirements.txt
+requests==2.34.2
     # via -r requirements.txt
 ruff==0.17.3
     # via -r requirements-dev.in
@@ -130,6 +154,10 @@ tzlocal==5.4.5
     # via
     #   -r requirements.txt
     #   celery
+urllib3==2.8.0
+    # via
+    #   -r requirements.txt
+    #   requests
 vine==5.1.0
     # via
     #   -r requirements.txt
