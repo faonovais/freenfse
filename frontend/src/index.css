@@ -1,0 +1,211 @@
+/*
+ * Baseado no design system da Topo.
+ *
+ * Estilos globais do freenfse.
+ *
+ * Define a paleta (accent #ff5900 + rampa de dados laranja), o modo escuro
+ * por classe e a tipografia: Poppins 900 para títulos e Source Code Pro no
+ * corpo (300 no claro, 400 no escuro).
+ *
+ * Especificidades do freenfse (docs/design-system.md):
+ * - fontes auto-hospedadas via @font-face (public/fonts), sem Google Fonts (§4);
+ * - utilitários botao, botao-leve, botao-perigo e campo centralizados (§3);
+ * - estados semânticos --color-estado-* (§1.3);
+ * - o fundo da página fica no componente raiz, não no CSS global.
+ */
+@import 'tailwindcss';
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* Fontes locais (licença OFL em public/fonts/). Nada vem de CDN. */
+@font-face {
+  font-family: 'Poppins';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url('/fonts/poppins-latin-600-normal.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Poppins';
+  font-style: normal;
+  font-weight: 900;
+  font-display: swap;
+  src: url('/fonts/poppins-latin-900-normal.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Source Code Pro';
+  font-style: normal;
+  font-weight: 300;
+  font-display: swap;
+  src: url('/fonts/source-code-pro-latin-300-normal.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Source Code Pro';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/source-code-pro-latin-400-normal.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Source Code Pro';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url('/fonts/source-code-pro-latin-600-normal.woff2') format('woff2');
+}
+
+@theme {
+  --color-accent: #ff5900;
+  --font-title: 'Poppins', sans-serif;
+  --font-body: 'Source Code Pro', monospace;
+
+  /* Paleta de dados: rampa laranja uniforme para séries de gráfico, separada
+     por luminosidade. Vira utilitários Tailwind (bg-data-1…6 / text-data-1…6). */
+  --color-data-1: #ffd0a8;
+  --color-data-2: #ffab6b;
+  --color-data-3: #ff8534;
+  --color-data-4: #ff5900; /* = accent */
+  --color-data-5: #cc4300;
+  --color-data-6: #8f2f00;
+
+  /* Estados semânticos (docs/design-system.md §1.3): sucesso = autorizada/paga,
+     atenção = em aberto/incerta, alerta = certificado perto de vencer,
+     erro = rejeitada, neutro = cancelada. */
+  --color-estado-sucesso: #16a34a;
+  --color-estado-atencao: #ca8a04;
+  --color-estado-alerta: #ea580c;
+  --color-estado-erro: #dc2626;
+  --color-estado-neutro: #6b7280;
+}
+
+/* Cor neutra das séries de contagem dos gráficos: cinza da escala, tema-aware.
+   Sobre o fundo claro usa um cinza claro (#d1d5db); sobre o escuro sobe para
+   um cinza mais claro (#e5e7eb) para não sumir no fundo. */
+:root {
+  --grafico-neutro: #d1d5db;
+  /* Neutro de TRAÇO de linha: a série neutra precisa de mais contraste que a
+     barra — sobre o fundo claro o gray-300 some. Sobe para gray-500 (#6b7280)
+     no claro; no escuro o cinza claro (#e5e7eb) já contrasta. */
+  --grafico-neutro-linha: #6b7280;
+  /* Realce de hover: no claro é um cinza bem claro (#f3f4f6); no escuro é
+     apenas UM tom acima do fundo do card (gray-900 → gray-800 #1f2937). */
+  --grafico-hover: #f3f4f6;
+}
+/* Override do dark SEM :where(): a classe .dark fica no <html> (=:root), e
+   :where() tem especificidade zero — então :root venceria e a variável ficaria
+   presa no valor claro. `.dark` (0,1,0) empata com :root e, vindo depois na
+   folha, vence no tema escuro; no claro não casa e o :root prevalece. */
+.dark {
+  --grafico-neutro: #e5e7eb;
+  --grafico-neutro-linha: #e5e7eb;
+  --grafico-hover: #1f2937;
+}
+
+/* Estilos base em @layer para permitir sobrescrita pelas utilities. */
+@layer base {
+  body {
+    font-family: var(--font-body);
+    font-weight: 300;
+  }
+
+  /* Corpo mais encorpado no tema escuro: Source Code Pro 300 perde contraste
+     sobre o fundo #121212, então sobe para 400 no escuro. */
+  :where(.dark) body {
+    font-weight: 400;
+  }
+
+  h1, h2, h3, h4, h5, h6, .font-title {
+    font-family: var(--font-title);
+    font-weight: 900;
+    letter-spacing: -0.025em;
+  }
+
+  .font-body {
+    font-family: var(--font-body);
+    font-weight: 300;
+  }
+}
+
+/* Botão de ação das tabelas (Editar, Cancelar, Substituir, Reenviar…).
+   Largura FIXA para todos ficarem do mesmo tamanho, em qualquer tela e em
+   qualquer grid — com a largura do próprio texto, a coluna de ações ficaria
+   irregular e, ao quebrar em telas estreitas, desalinhada. 7rem comporta
+   rótulos de até 11 caracteres em Source Code Pro 12px. O texto fica
+   centralizado; a altura é a mesma por vir do mesmo padding. */
+@utility botao-acao-grid {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 7rem;
+  padding: 0.25rem 0.5rem;
+  font-size: 0.75rem;
+  line-height: 1rem;
+  border-radius: 0.25rem;
+  border: 1px solid var(--color-gray-200);
+  white-space: nowrap;
+  :where(.dark, .dark *) & {
+    border-color: var(--color-gray-800);
+  }
+  &:hover:not(:disabled) {
+    border-color: var(--color-accent);
+  }
+  &:disabled {
+    opacity: 0.4;
+  }
+}
+
+/* Célula de ações das tabelas: contêiner dos botões (botao-acao-grid) na
+   coluna "Ações". Empilha à direita no mobile e vira linha que quebra no
+   sm+. Definido uma vez para mudar o breakpoint ou o gap em um só ponto. */
+@utility celula-acoes {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.5rem;
+  @media (min-width: 40rem) {
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+}
+
+/* Padrão dos títulos de grupo do menu lateral: Poppins 600, 12px, maiúsculas. */
+@utility titulo-grupo-menu {
+  font-family: var(--font-title);
+  font-weight: 600;
+  font-size: 0.75rem;
+  line-height: 1rem;
+  letter-spacing: -0.025em;
+  text-transform: uppercase;
+  color: var(--color-gray-900);
+  :where(.dark, .dark *) & {
+    color: var(--color-gray-100);
+  }
+}
+
+/*
+ * Botões e campo (docs/design-system.md §3), definidos uma única vez em vez
+ * de constantes repetidas em cada tela. Texto gray-900 sobre o accent dá
+ * contraste de 5,6:1 (WCAG AA): não trocar por texto branco (3,1:1).
+ */
+@utility botao {
+  @apply rounded bg-accent px-4 py-2 text-sm font-semibold text-gray-900 hover:opacity-90 disabled:opacity-50;
+}
+
+@utility botao-leve {
+  @apply rounded border border-gray-200 px-3 py-1 text-sm hover:border-accent dark:border-gray-800;
+}
+
+/* Ação destrutiva: mesmo formato do botão primário, fundo no estado de erro
+   (texto branco, contraste 4,8:1). */
+@utility botao-perigo {
+  @apply rounded bg-estado-erro px-4 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50;
+}
+
+@utility campo {
+  @apply w-full rounded border border-gray-200 bg-white px-3 py-2 text-sm text-gray-800 focus:border-accent focus:outline-none dark:border-gray-800 dark:bg-gray-900 dark:text-gray-300;
+}
