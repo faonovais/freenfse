@@ -347,7 +347,7 @@ def test_cadastra_pessoa(empresa):
 - Imagens rodam sem root. Arquivos `.env` nunca entram na imagem (`.dockerignore`)
 - Cabeçalhos de segurança HTTP são definidos no Nginx (fonte única). Mídia por empresa nunca é servida direto pelo Nginx
 - Configuração **somente** por variáveis de ambiente (`django-environ`). Nenhuma senha padrão: `SECRET_KEY` e `POSTGRES_PASSWORD` são obrigatórios
-- Dependências do backend: editar `requirements*.in` e regerar os `.txt` com `uv pip compile --python-version 3.14`; sempre versões fixadas
+- Dependências do backend: editar `requirements*.in` e regerar os `.txt` com `uv pip compile --python-version 3.14`; sempre versões fixadas. A `freedfe` é fixada por commit (o repositório não publica tags), e por isso o `Dockerfile.backend` instala as dependências num estágio de build com `git`
 
 ---
 

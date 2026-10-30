@@ -1,17 +1,33 @@
 # Imagem do backend (Gunicorn), do worker e do beat do Celery.
 # Contexto de build: raiz do repositório.
+
+# --- Estágio de build ---------------------------------------------------------
+# O git existe só aqui: a freedfe é instalada por commit (o repositório dela não
+# publica tags). Ele não vai para a imagem final.
+FROM python:3.14-slim AS build
+
+ENV PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends git ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY backend/requirements.txt /tmp/requirements.txt
+RUN python -m venv /opt/venv \
+    && /opt/venv/bin/pip install -r /tmp/requirements.txt
+
+# --- Imagem final -------------------------------------------------------------
 FROM python:3.14-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    PIP_NO_CACHE_DIR=1 \
-    PIP_DISABLE_PIP_VERSION_CHECK=1
+    PATH="/opt/venv/bin:$PATH"
+
+COPY --from=build /opt/venv /opt/venv
 
 # Layout: /app/VERSION e /app/backend (o settings lê ../VERSION).
 WORKDIR /app
-
-COPY backend/requirements.txt backend/requirements.txt
-RUN pip install -r backend/requirements.txt
 
 COPY VERSION VERSION
 COPY backend backend

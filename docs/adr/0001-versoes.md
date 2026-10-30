@@ -23,6 +23,7 @@ D3 definiu usar a versão estável mais recente que **todas** as dependências c
 | PostgreSQL | 18 (testado com 18.6) | `postgres:18`, CI |
 | Celery / redis-py / Redis | 5.6.3 / 6.4.0 / 7 | `backend/requirements.txt`, `redis:7` |
 | Gunicorn | 26.2.0 | `backend/requirements.txt` |
+| freedfe | 0.3.0, fixada pelo commit `56ea16a6c4b44248a19e7472fce4f9237e3060a8` (extra `nfse`: lxml 6.1.3, reportlab 5.1.0, pillow 13.0.0; cryptography 50.0.2) | `backend/requirements.txt` |
 | Node (frontend) | 22 (engines ≥ 22.22.2, exigido pelo jsdom 30) | `package.json`, CI |
 | React / Vite / Tailwind / Vitest / ESLint | 19.3.1 / 8.3.5 / 4.3.3 / 5.0.5 / 10.13.0 | `frontend/package.json` |
 
@@ -44,17 +45,15 @@ Todas as dependências diretas e transitivas do backend estão fixadas (`require
 Os classificadores não bastam: `django-tenants` e Celery não listam Python 3.14. Por isso foram executados:
 
 - **django-tenants + django-allauth** em ambiente descartável, com `allauth.account`, `allauth.socialaccount` + provedor Google, `allauth.mfa` e `allauth.headless` ao lado do `django_tenants`: `manage.py check` sem problemas; `migrate_schemas --shared` aplicou todas as migrações; a criação de uma empresa criou o schema e aplicou as migrações das apps de tenant; a rota headless resolveu.
-- **Backend do projeto**: `pytest` (7 testes) contra PostgreSQL 18.6, incluindo criação e remoção do schema de uma `Empresa`.
+- **Backend do projeto**: `pytest` (10 testes) contra PostgreSQL 18.6, incluindo criação e remoção do schema de uma `Empresa`.
 - **Celery 5.6.3 em Python 3.14**: no Docker Compose, `celery inspect ping` responde e a task `core.tasks.ping` executada no worker retorna `pong`; o `beat` sobe sem erros.
 - **Gunicorn 26.2.0**: sobe e atende `/api/versao/` atrás do Nginx.
+- **freedfe 0.3.0 em Python 3.14**: a resolução de dependências conclui sem conflito com os pins existentes (só acrescenta `lxml`, `reportlab`, `pillow`, `cryptography` e transitivas), todas com wheels para 3.14. A versão instalada é 0.3.0 e os pontos de entrada usados pelo plano (`freedfe.nfse.fabrica.criar_servico_nfse`, `freedfe.certificado.CertificadoA1`) importam; `core/tests/test_dependencias.py` guarda isso.
 
 ## Consequências
 
 - Django 6.1 **não é LTS**: o suporte termina pouco depois do 6.2 LTS (previsto para abril/2027). A migração para o 6.2 LTS deve entrar no planejamento do primeiro semestre de 2027.
 - Revisar as versões semestralmente, aplicando o mesmo critério (D3).
 - O Gunicorn 26 cria um socket de controle em `$HOME`; o contêiner roda sem home, então o `CMD` usa `--no-control-socket`.
+- A `freedfe` é instalada por **commit**, não por tag: o repositório dela não publica tags. Por isso o `Dockerfile.backend` usa um estágio de build com `git`, que não vai para a imagem final. Trocar para uma tag ou para o PyPI quando a biblioteca publicar uma versão.
 - Se uma dependência futura deixar de suportar Django 6.1, a regra de recuo do plano continua valendo: usar Django 5.2 LTS e registrar um novo ADR.
-
-## Pendências
-
-- A biblioteca fiscal `freedfe` ≥ 0.3.0 (D5) ainda **não** está em `requirements.txt`: a tag publicada não pôde ser verificada nesta etapa. Este ADR deve ser atualizado quando ela for fixada.

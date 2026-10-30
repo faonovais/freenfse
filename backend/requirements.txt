@@ -6,6 +6,10 @@ billiard==4.3.1
     # via celery
 celery==5.6.3
     # via -r requirements.in
+cffi==2.1.1
+    # via cryptography
+charset-normalizer==3.5.2
+    # via reportlab
 click==8.5.0
     # via
     #   celery
@@ -18,6 +22,8 @@ click-plugins==1.1.1.2
     # via celery
 click-repl==0.4.1
     # via celery
+cryptography==50.0.2
+    # via freedfe
 django==6.1.2
     # via
     #   -r requirements.in
@@ -29,22 +35,32 @@ django-tenants==4.0.1
     # via -r requirements.in
 djangorestframework==3.18.3
     # via -r requirements.in
+freedfe @ git+https://github.com/topoconsultoria/freedfe.git@56ea16a6c4b44248a19e7472fce4f9237e3060a8
+    # via -r requirements.in
 gunicorn==26.2.0
     # via -r requirements.in
 kombu==5.6.2
     # via celery
+lxml==6.1.3
+    # via freedfe
 packaging==26.3
     # via kombu
+pillow==13.0.0
+    # via reportlab
 prompt-toolkit==3.0.53
     # via click-repl
 psycopg==3.3.6
     # via -r requirements.in
 psycopg-binary==3.3.6
     # via psycopg
+pycparser==3.12
+    # via cffi
 python-dateutil==3.0.0
     # via celery
 redis==6.4.0
     # via kombu
+reportlab==5.1.0
+    # via freedfe
 six==1.17.0
     # via python-dateutil
 sqlparse==0.6.0

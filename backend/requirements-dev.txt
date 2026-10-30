@@ -12,6 +12,14 @@ billiard==4.3.1
     #   celery
 celery==5.6.3
     # via -r requirements.txt
+cffi==2.1.1
+    # via
+    #   -r requirements.txt
+    #   cryptography
+charset-normalizer==3.5.2
+    # via
+    #   -r requirements.txt
+    #   reportlab
 click==8.5.0
     # via
     #   -r requirements.txt
@@ -31,6 +39,10 @@ click-repl==0.4.1
     # via
     #   -r requirements.txt
     #   celery
+cryptography==50.0.2
+    # via
+    #   -r requirements.txt
+    #   freedfe
 django==6.1.2
     # via
     #   -r requirements.txt
@@ -42,6 +54,8 @@ django-tenants==4.0.1
     # via -r requirements.txt
 djangorestframework==3.18.3
     # via -r requirements.txt
+freedfe @ git+https://github.com/topoconsultoria/freedfe.git@56ea16a6c4b44248a19e7472fce4f9237e3060a8
+    # via -r requirements.txt
 gunicorn==26.2.0
     # via -r requirements.txt
 iniconfig==2.3.1
@@ -50,11 +64,19 @@ kombu==5.6.2
     # via
     #   -r requirements.txt
     #   celery
+lxml==6.1.3
+    # via
+    #   -r requirements.txt
+    #   freedfe
 packaging==26.3
     # via
     #   -r requirements.txt
     #   kombu
     #   pytest
+pillow==13.0.0
+    # via
+    #   -r requirements.txt
+    #   reportlab
 pluggy==1.7.0
     # via pytest
 prompt-toolkit==3.0.53
@@ -65,6 +87,10 @@ psycopg==3.3.6
     # via -r requirements.txt
 psycopg-binary==3.3.6
     # via -r requirements.txt
+pycparser==3.12
+    # via
+    #   -r requirements.txt
+    #   cffi
 pygments==2.21.0
     # via pytest
 pytest==9.2.0
@@ -78,6 +104,8 @@ python-dateutil==3.0.0
     #   -r requirements.txt
     #   celery
 redis==6.4.0
+    # via -r requirements.txt
+reportlab==5.1.0
     # via -r requirements.txt
 ruff==0.17.3
     # via -r requirements-dev.in
