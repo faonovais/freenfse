@@ -1,0 +1,7 @@
+# Verificação de segredos (gitleaks). O repositório é público: o CI falha se
+# algum segredo for encontrado no código ou no histórico. Sem exceções
+# (allowlist) por padrão; qualquer exceção precisa de justificativa em revisão.
+title = "freenfse"
+
+[extend]
+useDefault = true

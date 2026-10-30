@@ -1,0 +1,6 @@
+# Dependências de desenvolvimento e CI.
+# Regerar: uv pip compile --python-version 3.14 requirements-dev.in -o requirements-dev.txt
+-r requirements.txt
+pytest
+pytest-django
+ruff

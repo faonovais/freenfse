@@ -1,0 +1,19 @@
+target-version = "py314"
+line-length = 100
+extend-exclude = ["*/migrations/*"]
+
+[lint]
+# E/F: pycodestyle e pyflakes · I: ordem de imports · B: bugbear · UP: sintaxe moderna
+# DJ: boas práticas Django · D: docstring obrigatória (padrão do projeto)
+select = ["E", "F", "I", "B", "UP", "DJ", "D"]
+ignore = [
+    "D203",  # conflita com D211
+    "D213",  # conflita com D212
+    "D100",  # docstring de módulo é exigida só onde agrega (ver D104 nos pacotes)
+    "D105",  # __str__ e demais métodos mágicos dispensam docstring
+    "D106",  # classe Meta dispensa docstring
+]
+
+[lint.per-file-ignores]
+"*/tests/*" = ["D"]
+"manage.py" = ["D"]

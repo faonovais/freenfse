@@ -1,0 +1,47 @@
+# Imagem do backend (Gunicorn), do worker e do beat do Celery.
+# Contexto de build: raiz do repositório.
+
+# --- Estágio de build ---------------------------------------------------------
+# O git existe só aqui: a freedfe é instalada por commit (o repositório dela não
+# publica tags). Ele não vai para a imagem final.
+FROM python:3.14-slim AS build
+
+ENV PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends git ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY backend/requirements.txt /tmp/requirements.txt
+RUN python -m venv /opt/venv \
+    && /opt/venv/bin/pip install -r /tmp/requirements.txt
+
+# --- Imagem final -------------------------------------------------------------
+FROM python:3.14-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PATH="/opt/venv/bin:$PATH"
+
+COPY --from=build /opt/venv /opt/venv
+
+# Layout: /app/VERSION e /app/backend (o settings lê ../VERSION).
+WORKDIR /app
+
+COPY VERSION VERSION
+COPY backend backend
+COPY docker/entrypoint-backend.sh /usr/local/bin/entrypoint-backend.sh
+
+# Execução sem privilégios de root.
+RUN useradd --system --uid 10001 --no-create-home freenfse \
+    && chmod 0755 /usr/local/bin/entrypoint-backend.sh
+USER freenfse
+
+WORKDIR /app/backend
+EXPOSE 8000
+
+ENTRYPOINT ["entrypoint-backend.sh"]
+# --no-control-socket: o socket de controle do Gunicorn 26 grava em $HOME, que
+# não existe para o usuário de sistema, e não é usado aqui.
+CMD ["gunicorn", "config.wsgi:application", "--bind", "0.0.0.0:8000", "--workers", "2", "--access-logfile", "-", "--no-control-socket"]

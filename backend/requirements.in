@@ -1,0 +1,11 @@
+# Dependências diretas do backend (fonte para o requirements.txt fixado).
+# Regerar: uv pip compile --python-version 3.14 requirements.in -o requirements.txt
+Django==6.1.2
+djangorestframework==3.18.3
+django-tenants==4.0.1
+django-environ==0.14.0
+psycopg[binary]==3.3.6
+celery[redis]==5.6.3
+gunicorn
+# Biblioteca fiscal (D5): fixada pelo commit da versão 0.3.0 (o repositório não publica tags).
+freedfe[nfse] @ git+https://github.com/topoconsultoria/freedfe.git@56ea16a6c4b44248a19e7472fce4f9237e3060a8
