@@ -1,0 +1,114 @@
+amqp==5.4.1
+    # via
+    #   -r requirements.txt
+    #   kombu
+asgiref==3.13.0
+    # via
+    #   -r requirements.txt
+    #   django
+billiard==4.3.1
+    # via
+    #   -r requirements.txt
+    #   celery
+celery==5.6.3
+    # via -r requirements.txt
+click==8.5.0
+    # via
+    #   -r requirements.txt
+    #   celery
+    #   click-didyoumean
+    #   click-plugins
+    #   click-repl
+click-didyoumean==0.3.1
+    # via
+    #   -r requirements.txt
+    #   celery
+click-plugins==1.1.1.2
+    # via
+    #   -r requirements.txt
+    #   celery
+click-repl==0.4.1
+    # via
+    #   -r requirements.txt
+    #   celery
+django==6.1.2
+    # via
+    #   -r requirements.txt
+    #   django-tenants
+    #   djangorestframework
+django-environ==0.14.0
+    # via -r requirements.txt
+django-tenants==4.0.1
+    # via -r requirements.txt
+djangorestframework==3.18.3
+    # via -r requirements.txt
+gunicorn==26.2.0
+    # via -r requirements.txt
+iniconfig==2.3.1
+    # via pytest
+kombu==5.6.2
+    # via
+    #   -r requirements.txt
+    #   celery
+packaging==26.3
+    # via
+    #   -r requirements.txt
+    #   kombu
+    #   pytest
+pluggy==1.7.0
+    # via pytest
+prompt-toolkit==3.0.53
+    # via
+    #   -r requirements.txt
+    #   click-repl
+psycopg==3.3.6
+    # via -r requirements.txt
+psycopg-binary==3.3.6
+    # via -r requirements.txt
+pygments==2.21.0
+    # via pytest
+pytest==9.2.0
+    # via
+    #   -r requirements-dev.in
+    #   pytest-django
+pytest-django==4.14.0
+    # via -r requirements-dev.in
+python-dateutil==3.0.0
+    # via
+    #   -r requirements.txt
+    #   celery
+redis==6.4.0
+    # via -r requirements.txt
+ruff==0.17.3
+    # via -r requirements-dev.in
+six==1.17.0
+    # via
+    #   -r requirements.txt
+    #   python-dateutil
+sqlparse==0.6.0
+    # via
+    #   -r requirements.txt
+    #   django
+typing-extensions==4.16.0
+    # via
+    #   -r requirements.txt
+    #   click-repl
+tzdata==2026.6
+    # via
+    #   -r requirements.txt
+    #   kombu
+    #   python-dateutil
+tzlocal==5.4.5
+    # via
+    #   -r requirements.txt
+    #   celery
+vine==5.1.0
+    # via
+    #   -r requirements.txt
+    #   amqp
+    #   celery
+    #   kombu
+wcwidth==0.9.4
+    # via
+    #   -r requirements.txt
+    #   prompt-toolkit
