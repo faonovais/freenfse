@@ -295,6 +295,11 @@ class Nfse(models.Model):
     servico = models.JSONField(default=dict)
     valores = models.JSONField(default=dict)
     totais = models.JSONField(default=dict)
+    complementos = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="Informações complementares, percentual do Simples e dados de IBS/CBS.",
+    )
     tomador_nome = models.CharField(max_length=300, blank=True, db_index=True)
     tomador_documento = models.CharField(max_length=14, blank=True, db_index=True)
     valor_servico = models.DecimalField(max_digits=17, decimal_places=2)
@@ -323,9 +328,9 @@ class Nfse(models.Model):
     substituicao_motivo = models.CharField(max_length=2, blank=True)
     substituicao_texto = models.CharField(max_length=255, blank=True)
 
-    criado_por = models.ForeignKey(
-        "core.Usuario", on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
-    )
+    # O usuário vive no schema público: sem chave estrangeira entre schemas (GUIDELINES §1).
+    # Guarda-se o id e o e-mail (que sobrevive à exclusão do usuário).
+    criado_por_id = models.PositiveBigIntegerField(null=True, blank=True)
     criado_por_email = models.CharField(max_length=254, blank=True)
     criado_em = models.DateTimeField(auto_now_add=True)
     atualizado_em = models.DateTimeField(auto_now=True)
@@ -355,6 +360,13 @@ class Nfse(models.Model):
                 )
         super().save(*args, **kwargs)
         self._situacao_gravada = self.situacao
+
+    @property
+    def criado_por(self):
+        """Usuário que criou a nota (do schema público), ou `None` se não existir mais."""
+        from core.models import Usuario
+
+        return Usuario.objects.filter(pk=self.criado_por_id).first() if self.criado_por_id else None
 
     @property
     def editavel(self):

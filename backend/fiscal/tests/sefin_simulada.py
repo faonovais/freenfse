@@ -12,6 +12,8 @@ Todos os dados são fictícios.
 import datetime as dt
 import json
 import re
+import threading
+import time
 from collections import deque
 from urllib.parse import urlsplit
 
@@ -64,6 +66,12 @@ class SefinSimulada(TransporteRest):
         self.eventos = {}  # chave -> [bytes do XML]
         self._contador = {}  # emitente -> último número de NFS-e
         self.agora = dt.datetime(2026, 11, 2, 15, 0, tzinfo=dt.UTC)
+        self.municipio_aderente = True  # convênio do município (parametrização)
+        self.registrar_substituicao = True  # False: a Sefin autoriza mas não registra o evento
+        self.latencia = 0.0  # demora de cada POST de emissão, para expor concorrência
+        self.simultaneas = 0
+        self.max_simultaneas = 0  # quantos POSTs de emissão estiveram em curso ao mesmo tempo
+        self._cadeado = threading.Lock()
 
     # -- roteiro ------------------------------------------------------------------
 
@@ -86,6 +94,17 @@ class SefinSimulada(TransporteRest):
         self.chamadas.append((metodo, caminho))
         if self.fora_do_ar:
             raise ComunicacaoErro("Sefin fora do ar (simulado).")
+        if metodo == "GET" and re.search(r"/parametrizacao/[0-9]{7}/convenio$", caminho):
+            return _json(
+                200,
+                {
+                    "parametrosConvenio": {
+                        "aderenteAmbienteNacional": int(self.municipio_aderente),
+                        "aderenteEmissorNacional": 1,
+                        "dataAtivacao": "2024-05-02",
+                    }
+                },
+            )
         if metodo == "POST" and re.search(r"/nfse$", caminho):
             return self._emitir(corpo)
         if metodo in ("HEAD", "GET") and (m := re.search(r"/dps/(DPS[0-9A-Z]+)$", caminho)):
@@ -101,6 +120,17 @@ class SefinSimulada(TransporteRest):
     # -- emissão ------------------------------------------------------------------
 
     def _emitir(self, corpo):
+        with self._cadeado:
+            self.simultaneas += 1
+            self.max_simultaneas = max(self.max_simultaneas, self.simultaneas)
+        try:
+            time.sleep(self.latencia)
+            return self._processar_emissao(corpo)
+        finally:
+            with self._cadeado:
+                self.simultaneas -= 1
+
+    def _processar_emissao(self, corpo):
         dps_xml = descomprimir_b64(json.loads(corpo)["dpsXmlGZipB64"])
         dps = etree.fromstring(dps_xml)
         inf = _achar(dps, "infDPS")
@@ -127,7 +157,7 @@ class SefinSimulada(TransporteRest):
         chave, xml = self._gerar_nfse(dps, id_dps)
         self.nfses[chave] = xml
         self.dps_para_chave[id_dps] = chave
-        if substituida:
+        if substituida and self.registrar_substituicao:
             self._registrar_substituicao(substituida, chave)
         if comportamento == "cai_depois_de_processar":
             self.fora_do_ar = True
@@ -136,8 +166,9 @@ class SefinSimulada(TransporteRest):
 
     def _gerar_nfse(self, dps, id_dps):
         municipio, tipo, inscricao = id_dps[3:10], id_dps[10], id_dps[11:25]
-        numero = self._contador.get(inscricao, 0) + 1
-        self._contador[inscricao] = numero
+        with self._cadeado:
+            numero = self._contador.get(inscricao, 0) + 1
+            self._contador[inscricao] = numero
         aamm = self.agora.strftime("%y%m")
         chave = f"{municipio}2{tipo}{inscricao}{numero:013d}{aamm}{numero:09d}0"
         raiz = etree.Element(_q("NFSe"), nsmap={None: NS}, versao="1.01")

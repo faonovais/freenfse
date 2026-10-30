@@ -281,19 +281,3 @@ def test_verificacao_da_empresa_a_nao_aparece_na_b(
     assert api_do_master(empresa_b).get(PARAMETROS).json()["convenio"] is None
     with schema_context(empresa_b.schema_name):
         assert ParametrosFiscais.obter().convenio_verificado_em is None
-
-
-def test_o_gateway_recusa_a_emissao_na_fase_2():
-    """As peças de persistência da emissão ainda não existem: ninguém emite por engano."""
-    from freedfe.certificado import CertificadoA1
-
-    servico = gateway._criar_servico(
-        cnpj=CNPJ_A,
-        ambiente_producao=False,
-        certificado=CertificadoA1(gerar_pfx(CNPJ_A), SENHA_DO_PFX),
-        transporte=TransporteFalso({}),
-        pausa=lambda s: None,
-    )
-
-    with pytest.raises(gateway.NaoDisponivelNaFase2):
-        servico.emissoes()
