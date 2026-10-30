@@ -1,30 +1,178 @@
-import { cleanup, render, screen } from '@testing-library/react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
-import App from './App.jsx'
+import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react'
+import { afterEach, describe, expect, it } from 'vitest'
+import { http } from './api/http.js'
+import { limparEmpresaAtiva, obterEmpresaAtiva } from './api/empresaAtiva.js'
+import { EMPRESA_A, EMPRESA_B, respostaEu } from './testes/apiFalsa.js'
+import { BASE, montarApp, rotasAnonimo, rotasAutenticado } from './testes/montarApp.jsx'
 
 afterEach(() => {
   cleanup()
-  vi.unstubAllGlobals()
+  limparEmpresaAtiva()
+  window.localStorage.clear()
+  document.documentElement.classList.remove('dark')
 })
 
-describe('App', () => {
-  it('mostra a versão da API quando ela responde', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => ({ versao: '9.9.9' }) }),
-    )
+const trocarEmpresaPara = async (nome) => {
+  fireEvent.click(screen.getByRole('combobox', { name: 'Empresa ativa' }))
+  fireEvent.mouseDown(await screen.findByRole('option', { name: new RegExp(nome) }))
+}
 
-    render(<App />)
+describe('acesso à aplicação', () => {
+  it('quem não está logado é levado ao login', async () => {
+    const { roteador } = montarApp({ rota: '/admin/empresas', rotasApi: rotasAnonimo() })
+
+    expect(await screen.findByRole('heading', { name: 'freenfse' })).toBeInTheDocument()
+    expect(screen.getByLabelText('E-mail')).toBeInTheDocument()
+    expect(roteador.state.location.pathname).toBe('/login')
+  })
+
+  it('quem precisa configurar o 2FA é levado à tela de configuração', async () => {
+    const eu = respostaEu({ mfa: { ativo: false, obrigatorio: true } })
+    const { roteador } = montarApp({ rotasApi: rotasAutenticado({ eu }) })
+
+    expect(await screen.findByRole('heading', { name: 'Verificação em duas etapas' })).toBeInTheDocument()
+    expect(roteador.state.location.pathname).toBe('/seguranca/2fa')
+    expect(screen.getByText(/exige a verificação em duas etapas/)).toBeInTheDocument()
+  })
+
+  it('usuário comum não vê a administração nem entra nela', async () => {
+    montarApp({ rota: '/admin/empresas', rotasApi: rotasAutenticado() })
+
+    expect(await screen.findByRole('heading', { name: 'Acesso negado' })).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'Empresas' })).not.toBeInTheDocument()
+  })
+
+  it('o Master vê a administração no menu', async () => {
+    montarApp({ rotasApi: rotasAutenticado({ eu: respostaEu({ master: true }) }) })
+
+    const menu = await screen.findByRole('navigation', { name: 'Menu principal' })
+    for (const nome of ['Empresas', 'Usuários', 'Vínculos']) {
+      expect(within(menu).getByRole('link', { name: nome })).toBeInTheDocument()
+    }
+  })
+
+  it('rota desconhecida mostra a página não encontrada dentro do layout', async () => {
+    montarApp({ rota: '/nao-existe', rotasApi: rotasAutenticado() })
+
+    expect(await screen.findByRole('heading', { name: 'Página não encontrada' })).toBeInTheDocument()
+  })
+
+  it('sair volta ao login e esquece a empresa ativa', async () => {
+    const { chamadas } = montarApp({
+      rotasApi: rotasAutenticado({ extras: { [`DELETE ${BASE}/auth/session`]: { status: 401, dados: {} } } }),
+    })
+    await screen.findByLabelText('Empresa em operação')
+    expect(obterEmpresaAtiva()).toBe(EMPRESA_A.id)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Sair' }))
+
+    expect(await screen.findByLabelText('E-mail')).toBeInTheDocument()
+    expect(obterEmpresaAtiva()).toBeNull()
+    expect(chamadas.some((chamada) => chamada.metodo === 'DELETE')).toBe(true)
+  })
+})
+
+describe('layout e empresa ativa por aba', () => {
+  it('mostra sempre o nome e o CNPJ da empresa em operação', async () => {
+    montarApp({ rotasApi: rotasAutenticado() })
+
+    const operacao = await screen.findByLabelText('Empresa em operação')
+    expect(operacao).toHaveTextContent('Empresa Alfa Ltda')
+    expect(operacao).toHaveTextContent('11.222.333/0001-81')
+  })
+
+  it('a empresa escolhida vai no cabeçalho X-Empresa das chamadas seguintes', async () => {
+    const { chamadas } = montarApp({ rotasApi: rotasAutenticado() })
+    await screen.findByLabelText('Empresa em operação')
+    expect((await http('/api/algo/')).status).toBe(404)
+    expect(chamadas.at(-1).cabecalhos['X-Empresa']).toBe('1')
+
+    await trocarEmpresaPara('Empresa Beta')
+
+    await waitFor(() => expect(screen.getByLabelText('Empresa em operação')).toHaveTextContent('Empresa Beta S.A.'))
+    expect(screen.getByLabelText('Empresa em operação')).toHaveTextContent('11.444.777/0001-61')
+    await http('/api/algo/')
+    expect(chamadas.at(-1).cabecalhos['X-Empresa']).toBe('2')
+  })
+
+  it('guarda a empresa só na aba (sessionStorage), nunca no localStorage', async () => {
+    montarApp({ rotasApi: rotasAutenticado() })
+    await screen.findByLabelText('Empresa em operação')
+
+    await trocarEmpresaPara('Empresa Beta')
+
+    await waitFor(() => expect(window.sessionStorage.getItem('freenfse-empresa-ativa')).toBe('2'))
+    expect(JSON.stringify({ ...window.localStorage })).not.toMatch(/empresa/i)
+  })
+
+  it('retoma a empresa desta aba depois de recarregar a página', async () => {
+    window.sessionStorage.setItem('freenfse-empresa-ativa', '2')
+
+    montarApp({ rotasApi: rotasAutenticado() })
+
+    expect(await screen.findByLabelText('Empresa em operação')).toHaveTextContent('Empresa Beta S.A.')
+  })
+
+  it('descarta a empresa guardada se o usuário não tem mais acesso a ela', async () => {
+    window.sessionStorage.setItem('freenfse-empresa-ativa', '99')
+
+    montarApp({ rotasApi: rotasAutenticado() })
+
+    expect(await screen.findByLabelText('Empresa em operação')).toHaveTextContent('Empresa Alfa Ltda')
+    expect(obterEmpresaAtiva()).toBe(1)
+  })
+
+  it('mostra o perfil e as permissões da empresa ativa e atualiza ao trocar', async () => {
+    montarApp({ rotasApi: rotasAutenticado() })
+    const permissoes = await screen.findByRole('list', { name: 'Permissões' })
+    expect(within(permissoes).getByText('nfse.emitir')).toBeInTheDocument()
+
+    await trocarEmpresaPara('Empresa Beta')
+
+    await waitFor(() => expect(screen.queryByText('nfse.emitir')).not.toBeInTheDocument())
+    expect(screen.getByText('nfse.consultar')).toBeInTheDocument()
+  })
+
+  it('exibe o emblema de produção restrita quando a empresa está nesse ambiente', async () => {
+    const restrita = { ...EMPRESA_A, ambiente: 'producao_restrita' }
+    montarApp({ rotasApi: rotasAutenticado({ eu: respostaEu({ empresas: [restrita, EMPRESA_B] }) }) })
+
+    expect(await screen.findByText('Produção restrita')).toBeInTheDocument()
+
+    await trocarEmpresaPara('Empresa Beta')
+
+    await waitFor(() => expect(screen.queryByText('Produção restrita')).not.toBeInTheDocument())
+  })
+
+  it('quem não tem empresa vê o aviso e nenhum cabeçalho X-Empresa é enviado', async () => {
+    const { chamadas } = montarApp({ rotasApi: rotasAutenticado({ eu: respostaEu({ empresas: [] }) }) })
+
+    expect(await screen.findByText(/não tem acesso a nenhuma empresa/)).toBeInTheDocument()
+    expect(screen.getByText('Nenhuma empresa liberada')).toBeInTheDocument()
+    expect(chamadas.every((chamada) => !('X-Empresa' in chamada.cabecalhos))).toBe(true)
+  })
+
+  it('mostra as versões da interface e da API no rodapé', async () => {
+    montarApp({ rotasApi: rotasAutenticado() })
 
     expect(await screen.findByText('API: v9.9.9')).toBeInTheDocument()
     expect(screen.getByText(`Interface: v${__VERSAO_APP__}`)).toBeInTheDocument()
   })
 
   it('avisa quando a API está indisponível', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('sem rede')))
-
-    render(<App />)
+    montarApp({ rotasApi: rotasAutenticado({ extras: { 'GET /api/versao/': { status: 503, dados: null } } }) })
 
     expect(await screen.findByText('API indisponível')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Consultar novamente' })).toBeInTheDocument()
+  })
+
+  it('o seletor de tema alterna a classe dark', async () => {
+    montarApp({ rotasApi: rotasAutenticado() })
+    await screen.findByLabelText('Empresa em operação')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Tema escuro' }))
+
+    expect(document.documentElement).toHaveClass('dark')
+    expect(window.localStorage.getItem('freenfse-tema')).toBe('escuro')
   })
 })

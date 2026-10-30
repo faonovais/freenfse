@@ -14,7 +14,11 @@ export default defineConfig({
   },
   server: {
     // Em desenvolvimento, a API roda fora do Nginx.
-    proxy: { '/api': 'http://localhost:8000' },
+    proxy: {
+      '/api': 'http://localhost:8000',
+      '/_allauth': 'http://localhost:8000',
+      '/accounts': 'http://localhost:8000',
+    },
   },
   test: {
     environment: 'jsdom',
