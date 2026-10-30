@@ -223,7 +223,7 @@ registrar_permissao("nfse.cancelar", "Cancelar NFS-e", perfis=[Perfil.EMISSOR])
 
 **Campo criptografado.** Declare o campo e use normalmente; a chave atual grava e todas as chaves leem. Rotação: nova chave na frente em `FREENFSE_CHAVES`, reiniciar, `python manage.py recriptografar` (use `--dry-run` antes) e só então retirar a chave antiga.
 
-**Autenticação.** Não crie endpoint de login, cadastro ou senha: use o `allauth` headless (`/_allauth/browser/v1/`). Cadastro público fica fechado nos adapters de `core/auth/adapters.py`.
+**Autenticação.** Não crie endpoint de login, cadastro ou senha: use o `allauth` headless (`/_allauth/browser/v1/`). Cadastro público fica fechado nos adapters de `core/auth/adapters.py`. O login social passa pelas mesmas etapas do login por senha, inclusive o 2FA: não crie atalho que abra a sessão a partir do provedor (a prova está em `core/tests/test_login_social_2fa.py`).
 
 ---
 

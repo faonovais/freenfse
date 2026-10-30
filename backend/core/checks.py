@@ -24,3 +24,19 @@ def verificar_chaves_de_criptografia(app_configs, **kwargs):
     except crypto.ErroDeConfiguracaoDeChaves as erro:
         return [Error(str(erro), id="core.E001")]
     return []
+
+
+@register()
+def verificar_cookies_seguros(app_configs, **kwargs):
+    """Avisa quando a instalação não é de desenvolvimento e os cookies não exigem HTTPS."""
+    if settings.DEBUG or getattr(settings, "COOKIES_SEGUROS", False):
+        return []
+    return [
+        Warning(
+            "COOKIES_SEGUROS está desligado com DEBUG desligado.",
+            hint="Em produção com HTTPS, defina COOKIES_SEGUROS=true (e PROXY_TLS=true atrás "
+            "de um proxy que termina o TLS). Sem isso, os cookies de sessão e CSRF podem "
+            "trafegar em HTTP. Em HTTP local, ignore este aviso.",
+            id="core.W002",
+        )
+    ]

@@ -174,3 +174,69 @@ describe('login', () => {
     expect(roteador.state.location.pathname).toBe('/')
   })
 })
+
+describe('login social com 2FA pendente', () => {
+  const SESSAO_COM_2FA_PENDENTE = {
+    status: 401,
+    dados: {
+      status: 401,
+      data: { flows: [{ id: 'login' }, { id: 'mfa_authenticate', is_pending: true, types: ['totp'] }] },
+      meta: { is_authenticated: false },
+    },
+  }
+
+  it('depois do retorno do Google, quem tem 2FA cai direto na tela do código, não na da senha', async () => {
+    let logado = false
+    const { chamadas, roteador } = montarApp({
+      rota: '/',
+      rotasApi: {
+        ...rotasAnonimo(),
+        [`GET ${BASE}/auth/session`]: () => (logado ? SESSAO_AUTENTICADA : SESSAO_COM_2FA_PENDENTE),
+        [`POST ${BASE}/auth/2fa/authenticate`]: (chamada) => {
+          if (chamada.corpo.code !== '123456') {
+            return { status: 400, dados: { errors: [{ code: 'incorrect_code', message: 'x' }] } }
+          }
+          logado = true
+          return { status: 200, dados: {} }
+        },
+        'GET /api/eu/': respostaEu(),
+      },
+    })
+
+    const campo = await screen.findByLabelText('Código de verificação')
+    expect(roteador.state.location.pathname).toBe('/login')
+    expect(screen.queryByLabelText('Senha')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('E-mail')).not.toBeInTheDocument()
+
+    fireEvent.change(campo, { target: { value: '000000' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Verificar' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('Código incorreto')
+    expect(screen.queryByLabelText('Empresa em operação')).not.toBeInTheDocument()
+
+    fireEvent.change(screen.getByLabelText('Código de verificação'), { target: { value: '123456' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Verificar' }))
+
+    expect(await screen.findByLabelText('Empresa em operação')).toBeInTheDocument()
+    expect(chamadas.filter((chamada) => chamada.caminho === `${BASE}/auth/2fa/authenticate`)).toHaveLength(2)
+  })
+
+  it('permite voltar ao login por senha em vez de informar o código', async () => {
+    montarApp({
+      rota: '/login',
+      rotasApi: { ...rotasAnonimo(), [`GET ${BASE}/auth/session`]: SESSAO_COM_2FA_PENDENTE },
+    })
+    await screen.findByLabelText('Código de verificação')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Voltar ao login' }))
+
+    expect(await screen.findByLabelText('Senha')).toBeInTheDocument()
+    expect(screen.queryByLabelText('Código de verificação')).not.toBeInTheDocument()
+  })
+
+  it('sessão anônima sem etapa pendente mostra o login normal', async () => {
+    montarApp({ rota: '/login', rotasApi: rotasAnonimo() })
+
+    expect(await screen.findByLabelText('Senha')).toBeInTheDocument()
+    expect(screen.queryByLabelText('Código de verificação')).not.toBeInTheDocument()
+  })
+})

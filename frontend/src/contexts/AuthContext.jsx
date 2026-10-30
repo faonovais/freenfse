@@ -5,7 +5,7 @@ import { mensagemErro } from '../utils/erros.js'
 
 const AuthContext = createContext(null)
 
-const VAZIO = { carregando: true, usuario: null, mfa: null, empresas: [] }
+const VAZIO = { carregando: true, usuario: null, mfa: null, empresas: [], mfaPendente: false }
 
 function escolherEmpresa(empresas, preferida) {
   if (empresas.some((empresa) => empresa.id === preferida)) return preferida
@@ -25,7 +25,11 @@ export function AuthProvider({ children }) {
     if (situacao.status !== 200) {
       limparEmpresaAtiva()
       setEmpresaId(null)
-      setEstado({ ...VAZIO, carregando: false })
+      // Após o login social de quem tem 2FA, o servidor mantém a sessão anônima com o
+      // segundo fator pendente: a tela de login deve pedir o código, não a senha.
+      const fluxos = situacao.dados?.data?.flows ?? []
+      const mfaPendente = fluxos.some((fluxo) => fluxo.id === 'mfa_authenticate' && fluxo.is_pending)
+      setEstado({ ...VAZIO, carregando: false, mfaPendente })
       return
     }
     const resposta = await api.eu()
@@ -38,7 +42,7 @@ export function AuthProvider({ children }) {
     if (escolhida) definirEmpresaAtiva(escolhida)
     else limparEmpresaAtiva()
     setEmpresaId(escolhida)
-    setEstado({ carregando: false, usuario, mfa, empresas })
+    setEstado({ carregando: false, usuario, mfa, empresas, mfaPendente: false })
   }, [])
 
   useEffect(() => {

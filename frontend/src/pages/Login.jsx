@@ -21,10 +21,13 @@ function useProvedores() {
 }
 
 export default function Login() {
-  const { autenticado, carregando, entrar, autenticar2fa } = useAuth()
+  const { autenticado, carregando, mfaPendente, entrar, autenticar2fa } = useAuth()
   const [params] = useSearchParams()
   const provedores = useProvedores()
-  const [etapa, setEtapa] = useState('credenciais')
+  // Sem escolha local, a etapa vem do servidor: após o login com Google de quem tem 2FA,
+  // a sessão fica com o código pendente e a tela já abre pedindo-o.
+  const [etapaEscolhida, setEtapaEscolhida] = useState(null)
+  const etapa = etapaEscolhida ?? (mfaPendente ? '2fa' : 'credenciais')
   const [email, setEmail] = useState('')
   const [senha, setSenha] = useState('')
   const [codigo, setCodigo] = useState('')
@@ -39,7 +42,7 @@ export default function Login() {
     setErro('')
     const resultado = await entrar(email.trim(), senha)
     setEnviando(false)
-    if (resultado.etapa === '2fa') setEtapa('2fa')
+    if (resultado.etapa === '2fa') setEtapaEscolhida('2fa')
     else if (!resultado.ok) setErro(resultado.erro)
   }
 
@@ -129,6 +132,16 @@ export default function Login() {
             </p>
             <button type="submit" className="botao w-full" disabled={enviando}>
               Verificar
+            </button>
+            <button
+              type="button"
+              className="botao-leve w-full"
+              onClick={() => {
+                setErro('')
+                setEtapaEscolhida('credenciais')
+              }}
+            >
+              Voltar ao login
             </button>
           </form>
         )}
