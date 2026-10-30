@@ -8,7 +8,8 @@ import pytest
 from allauth.account.models import EmailAddress
 from rest_framework.test import APIClient
 
-from core.models import Empresa, Usuario, VinculoUsuarioEmpresa
+from core.models import Empresa, Municipio, Usuario, VinculoUsuarioEmpresa
+from core.municipios import ler_arquivo
 from core.permissoes import Perfil
 from core.validators import calcular_digitos_cnpj
 
@@ -25,12 +26,40 @@ CNPJ_B = cnpj_de_teste("114447770001")  # 11444777000161
 CNPJ_C = cnpj_de_teste("112223330002")
 
 
+def cpf_de_teste(base9):
+    """Completa uma base de 9 dígitos com os dois dígitos verificadores do CPF."""
+    cpf = base9
+    for tamanho in (9, 10):
+        soma = sum(int(d) * p for d, p in zip(cpf, range(tamanho + 1, 1, -1), strict=True))
+        cpf += str((soma * 10) % 11 % 10)
+    return cpf
+
+
+CPF_A = cpf_de_teste("529982247")  # 52998224725
+CPF_B = cpf_de_teste("111444777")  # 11144477735
+CODIGOS_DE_MUNICIPIOS_BASICOS = (
+    "3550308",  # São Paulo/SP
+    "1721000",  # Palmas/TO
+    "2101400",  # Balsas/MA
+    "2903201",  # Barreiras/BA
+    "2211001",  # Teresina/PI
+)
+
+
 def criar_usuario_de_teste(email, *, master=False, perfil_senha=SENHA_DE_TESTE, **extra):
     """Cria um usuário já com e-mail verificado no allauth."""
     fabrica = Usuario.objects.create_superuser if master else Usuario.objects.create_user
     usuario = fabrica(email=email, password=perfil_senha, nome=email.split("@")[0], **extra)
     EmailAddress.objects.create(user=usuario, email=usuario.email, verified=True, primary=True)
     return usuario
+
+
+@pytest.fixture
+def municipios_basicos(db):
+    """Alguns municípios reais (do arquivo versionado do IBGE) no schema público."""
+    linhas = [m for m in ler_arquivo() if m[0] in CODIGOS_DE_MUNICIPIOS_BASICOS]
+    Municipio.objects.bulk_create([Municipio(codigo=c, nome=n, uf=u) for c, n, u in linhas])
+    return {codigo: nome for codigo, nome, _ in linhas}
 
 
 @pytest.fixture
