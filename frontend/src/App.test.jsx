@@ -2,7 +2,7 @@ import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/re
 import { afterEach, describe, expect, it } from 'vitest'
 import { http } from './api/http.js'
 import { limparEmpresaAtiva, obterEmpresaAtiva } from './api/empresaAtiva.js'
-import { EMPRESA_A, EMPRESA_B, respostaEu } from './testes/apiFalsa.js'
+import { EMPRESA_A, EMPRESA_B, IDENTIDADE_PADRAO, respostaEu } from './testes/apiFalsa.js'
 import { BASE, montarApp, rotasAnonimo, rotasAutenticado } from './testes/montarApp.jsx'
 
 afterEach(() => {
@@ -133,15 +133,125 @@ describe('layout e empresa ativa por aba', () => {
     expect(screen.getByText('nfse.consultar')).toBeInTheDocument()
   })
 
-  it('exibe o emblema de produção restrita quando a empresa está nesse ambiente', async () => {
-    const restrita = { ...EMPRESA_A, ambiente: 'producao_restrita' }
-    montarApp({ rotasApi: rotasAutenticado({ eu: respostaEu({ empresas: [restrita, EMPRESA_B] }) }) })
+  it('exibe o emblema de produção restrita conforme o ambiente da empresa ativa', async () => {
+    const identidade = (chamada) => ({
+      status: 200,
+      dados: {
+        ...IDENTIDADE_PADRAO.dados,
+        ambiente: chamada.cabecalhos['X-Empresa'] === '1' ? 'producao_restrita' : 'producao',
+      },
+    })
+    montarApp({ rotasApi: rotasAutenticado({ extras: { 'GET /api/fiscal/identidade/': identidade } }) })
 
     expect(await screen.findByText('Produção restrita')).toBeInTheDocument()
 
     await trocarEmpresaPara('Empresa Beta')
 
     await waitFor(() => expect(screen.queryByText('Produção restrita')).not.toBeInTheDocument())
+  })
+
+  it('mostra o logo da empresa ativa, buscado com o X-Empresa, e some ao trocar para uma sem logo', async () => {
+    const identidade = (chamada) => ({
+      status: 200,
+      dados: {
+        ...IDENTIDADE_PADRAO.dados,
+        logo: chamada.cabecalhos['X-Empresa'] === '1' ? { claro: 'abc123' } : {},
+      },
+    })
+    const { chamadas } = montarApp({
+      rotasApi: rotasAutenticado({
+        extras: {
+          'GET /api/fiscal/identidade/': identidade,
+          'GET /api/fiscal/logo/claro/': { status: 200, blob: new Blob(['x'], { type: 'image/png' }) },
+        },
+      }),
+    })
+
+    const imagem = await screen.findByRole('img', { name: 'Logo de Empresa Alfa Ltda' })
+    expect(imagem).toHaveAttribute('src', 'blob:logo-falso')
+    const download = chamadas.find((chamada) => chamada.caminho === '/api/fiscal/logo/claro/')
+    expect(download.cabecalhos['X-Empresa']).toBe('1')
+
+    await trocarEmpresaPara('Empresa Beta')
+
+    await waitFor(() => expect(screen.queryByRole('img', { name: /Logo de/ })).not.toBeInTheDocument())
+  })
+
+  it('no tema escuro busca o logo escuro', async () => {
+    window.localStorage.setItem('freenfse-tema', 'escuro')
+    const { chamadas } = montarApp({
+      rotasApi: rotasAutenticado({
+        extras: {
+          'GET /api/fiscal/identidade/': {
+            status: 200,
+            dados: { ...IDENTIDADE_PADRAO.dados, logo: { claro: 'a', escuro: 'b' } },
+          },
+          'GET /api/fiscal/logo/escuro/': { status: 200, blob: new Blob(['x']) },
+        },
+      }),
+    })
+
+    await screen.findByRole('img', { name: /Logo de/ })
+
+    expect(chamadas.some((chamada) => chamada.caminho === '/api/fiscal/logo/escuro/')).toBe(true)
+    expect(chamadas.some((chamada) => chamada.caminho === '/api/fiscal/logo/claro/')).toBe(false)
+  })
+
+  it('avisa quando o certificado está para vencer, com link para quem pode ver a configuração', async () => {
+    const empresaComConfig = { ...EMPRESA_A, permissoes: [...EMPRESA_A.permissoes, 'config.consultar'] }
+    montarApp({
+      rotasApi: rotasAutenticado({
+        eu: respostaEu({ empresas: [empresaComConfig] }),
+        extras: {
+          'GET /api/fiscal/identidade/': {
+            status: 200,
+            dados: {
+              ...IDENTIDADE_PADRAO.dados,
+              certificado: { existe: true, vencido: false, dias_para_vencer: 12, faixa_alerta: 15 },
+            },
+          },
+        },
+      }),
+    })
+
+    expect(await screen.findByText(/vence em 12 dia\(s\)/)).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Ver certificado' })).toHaveAttribute('href', '/fiscal/certificado')
+  })
+
+  it('certificado vencido aparece como erro', async () => {
+    montarApp({
+      rotasApi: rotasAutenticado({
+        extras: {
+          'GET /api/fiscal/identidade/': {
+            status: 200,
+            dados: {
+              ...IDENTIDADE_PADRAO.dados,
+              certificado: { existe: true, vencido: true, dias_para_vencer: -3, faixa_alerta: 0 },
+            },
+          },
+        },
+      }),
+    })
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(/venceu/)
+  })
+
+  it('o menu mostra Cadastros e Configuração fiscal conforme as permissões da empresa ativa', async () => {
+    const admin = {
+      ...EMPRESA_A,
+      permissoes: ['cadastro.consultar', 'cadastro.editar', 'config.consultar', 'config.editar'],
+    }
+    const consulta = { ...EMPRESA_B, permissoes: ['nfse.consultar'] }
+    montarApp({ rotasApi: rotasAutenticado({ eu: respostaEu({ empresas: [admin, consulta] }) }) })
+    const menu = await screen.findByRole('navigation', { name: 'Menu principal' })
+    for (const nome of ['Pessoas', 'Serviços', 'Parâmetros fiscais', 'Certificado A1', 'Logo da empresa']) {
+      expect(within(menu).getByRole('link', { name: nome })).toBeInTheDocument()
+    }
+
+    await trocarEmpresaPara('Empresa Beta')
+
+    await waitFor(() => expect(within(menu).queryByRole('link', { name: 'Pessoas' })).not.toBeInTheDocument())
+    expect(within(menu).queryByRole('link', { name: 'Certificado A1' })).not.toBeInTheDocument()
   })
 
   it('quem não tem empresa vê o aviso e nenhum cabeçalho X-Empresa é enviado', async () => {

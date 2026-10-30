@@ -4,7 +4,12 @@ import RotaProtegida from './components/RotaProtegida.jsx'
 import Empresas from './pages/admin/Empresas.jsx'
 import Usuarios from './pages/admin/Usuarios.jsx'
 import Vinculos from './pages/admin/Vinculos.jsx'
+import Pessoas from './pages/cadastros/Pessoas.jsx'
+import Servicos from './pages/cadastros/Servicos.jsx'
 import Config2FA from './pages/Config2FA.jsx'
+import Certificado from './pages/fiscal/Certificado.jsx'
+import Logo from './pages/fiscal/Logo.jsx'
+import Parametros from './pages/fiscal/Parametros.jsx'
 import Inicio from './pages/Inicio.jsx'
 import Login from './pages/Login.jsx'
 import NaoEncontrada from './pages/NaoEncontrada.jsx'
@@ -19,6 +24,11 @@ export const rotas = [
         children: [
           { index: true, element: <Inicio /> },
           { path: 'seguranca/2fa', element: <Config2FA /> },
+          { path: 'cadastros/pessoas', element: <Pessoas /> },
+          { path: 'cadastros/servicos', element: <Servicos /> },
+          { path: 'fiscal/parametros', element: <Parametros /> },
+          { path: 'fiscal/certificado', element: <Certificado /> },
+          { path: 'fiscal/logo', element: <Logo /> },
           {
             element: <RotaMaster />,
             children: [

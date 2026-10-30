@@ -1,11 +1,7 @@
+import { consulta } from './consulta.js'
 import { http } from './http.js'
 
 const BASE = '/api/admin-global'
-
-function consulta(parametros) {
-  const limpos = Object.entries(parametros ?? {}).filter(([, valor]) => valor !== '' && valor != null)
-  return limpos.length ? `?${new URLSearchParams(limpos)}` : ''
-}
 
 const recurso = (nome) => ({
   listar: (filtros) => http(`${BASE}/${nome}/${consulta(filtros)}`, { semEmpresa: true }),

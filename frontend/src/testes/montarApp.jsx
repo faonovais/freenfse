@@ -3,6 +3,7 @@ import { createMemoryRouter } from 'react-router-dom'
 import App from '../App.jsx'
 import { rotas } from '../routes.jsx'
 import {
+  IDENTIDADE_PADRAO,
   instalarApiFalsa,
   respostaEu,
   SESSAO_ANONIMA,
@@ -19,6 +20,7 @@ export function rotasAutenticado({ eu = respostaEu(), extras = {} } = {}) {
     [`GET ${BASE}/config`]: { status: 200, dados: { data: { socialaccount: { providers: [] } } } },
     'GET /api/eu/': eu,
     'GET /api/versao/': VERSAO_FALSA,
+    'GET /api/fiscal/identidade/': IDENTIDADE_PADRAO,
     ...extras,
   }
 }

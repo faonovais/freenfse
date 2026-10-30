@@ -24,7 +24,9 @@ export async function http(url, { metodo = 'GET', corpo, cabecalhos = {}, semEmp
   if (empresa && !semEmpresa) headers['X-Empresa'] = String(empresa)
 
   let body
-  if (corpo !== undefined) {
+  if (corpo instanceof FormData) {
+    body = corpo // envio de arquivo: o navegador define o Content-Type com o limite (boundary)
+  } else if (corpo !== undefined) {
     headers['Content-Type'] = 'application/json'
     body = JSON.stringify(corpo)
   }
@@ -40,5 +42,22 @@ export async function http(url, { metodo = 'GET', corpo, cabecalhos = {}, semEmp
     return { ok: resposta.ok, status: resposta.status, dados }
   } catch {
     return { ok: false, status: 0, dados: null }
+  }
+}
+
+/**
+ * Baixa um arquivo binário (por exemplo, o logo) com os mesmos cabeçalhos do `http()`.
+ * Um `<img src>` não enviaria o X-Empresa, por isso a imagem é buscada aqui e exibida por URL local.
+ * NUNCA lança: devolve `{ ok, status, blob }`.
+ */
+export async function baixarBinario(url) {
+  const headers = {}
+  const empresa = obterEmpresaAtiva()
+  if (empresa) headers['X-Empresa'] = String(empresa)
+  try {
+    const resposta = await fetch(url, { method: 'GET', headers, credentials: 'same-origin' })
+    return { ok: resposta.ok, status: resposta.status, blob: resposta.ok ? await resposta.blob() : null }
+  } catch {
+    return { ok: false, status: 0, blob: null }
   }
 }

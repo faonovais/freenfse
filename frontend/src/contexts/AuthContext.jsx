@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import * as api from '../api/auth.js'
+import { identidade as buscarIdentidade } from '../api/fiscal.js'
 import { definirEmpresaAtiva, limparEmpresaAtiva, obterEmpresaAtiva } from '../api/empresaAtiva.js'
 import { mensagemErro } from '../utils/erros.js'
 
@@ -19,6 +20,8 @@ function escolherEmpresa(empresas, preferida) {
 export function AuthProvider({ children }) {
   const [estado, setEstado] = useState(VAZIO)
   const [empresaId, setEmpresaId] = useState(obterEmpresaAtiva)
+  const [identidadeCarregada, setIdentidadeCarregada] = useState({ empresaId: null, dados: null })
+  const [versaoIdentidade, setVersaoIdentidade] = useState(0)
 
   const carregar = useCallback(async () => {
     const situacao = await api.sessao() // também emite o cookie CSRF
@@ -50,6 +53,22 @@ export function AuthProvider({ children }) {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     carregar()
   }, [carregar])
+
+  // Ambiente, logo e situação do certificado da empresa ativa (todos os vinculados veem).
+  const empresaDaIdentidade = estado.empresas.some((empresa) => empresa.id === empresaId) ? empresaId : null
+  useEffect(() => {
+    if (empresaDaIdentidade === null) return undefined
+    let ativo = true
+    buscarIdentidade().then((resposta) => {
+      if (ativo) {
+        setIdentidadeCarregada({ empresaId: empresaDaIdentidade, dados: resposta.ok ? resposta.dados : null })
+      }
+    })
+    return () => {
+      ativo = false
+    }
+  }, [empresaDaIdentidade, versaoIdentidade])
+  const recarregarIdentidade = useCallback(() => setVersaoIdentidade((atual) => atual + 1), [])
 
   const entrar = useCallback(
     async (email, senha) => {
@@ -101,6 +120,9 @@ export function AuthProvider({ children }) {
       ...estado,
       autenticado: estado.usuario !== null,
       empresaAtiva,
+      // Só vale para a empresa ativa: ao trocar, some até chegar a da nova (nunca mostra a anterior).
+      identidade: identidadeCarregada.empresaId === empresaId ? identidadeCarregada.dados : null,
+      recarregarIdentidade,
       recarregar: carregar,
       entrar,
       autenticar2fa,
@@ -108,7 +130,18 @@ export function AuthProvider({ children }) {
       trocarEmpresa,
       temPermissao: (nome) => empresaAtiva?.permissoes.includes(nome) ?? false,
     }),
-    [estado, empresaAtiva, carregar, entrar, autenticar2fa, sair, trocarEmpresa],
+    [
+      estado,
+      empresaAtiva,
+      empresaId,
+      identidadeCarregada,
+      recarregarIdentidade,
+      carregar,
+      entrar,
+      autenticar2fa,
+      sair,
+      trocarEmpresa,
+    ],
   )
 
   return <AuthContext value={valor}>{children}</AuthContext>

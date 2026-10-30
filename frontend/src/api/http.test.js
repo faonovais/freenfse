@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { definirEmpresaAtiva, limparEmpresaAtiva } from './empresaAtiva.js'
-import { http } from './http.js'
+import { baixarBinario, http } from './http.js'
 
 afterEach(() => {
   limparEmpresaAtiva()
@@ -70,5 +70,38 @@ describe('cliente HTTP', () => {
     })
 
     await expect(http('/api/x/', { metodo: 'DELETE' })).resolves.toEqual({ ok: true, status: 204, dados: null })
+  })
+
+  it('envia arquivos (FormData) sem fixar o Content-Type, para o navegador incluir o boundary', async () => {
+    const fetchFalso = simular()
+    const formulario = new FormData()
+    formulario.append('arquivo', new File(['x'], 'logo.png'))
+
+    await http('/api/fiscal/logo/claro/', { metodo: 'PUT', corpo: formulario })
+
+    const opcoes = fetchFalso.mock.calls[0][1]
+    expect(opcoes.body).toBe(formulario)
+    expect(opcoes.headers).not.toHaveProperty('Content-Type')
+  })
+})
+
+describe('baixarBinario', () => {
+  it('baixa o arquivo com o X-Empresa da aba e devolve o blob', async () => {
+    const blob = new Blob(['x'])
+    const fetchFalso = simular({ ok: true, status: 200, blob: async () => blob })
+    definirEmpresaAtiva(8)
+
+    const resposta = await baixarBinario('/api/fiscal/logo/claro/')
+
+    expect(resposta).toEqual({ ok: true, status: 200, blob })
+    expect(fetchFalso.mock.calls[0][1].headers['X-Empresa']).toBe('8')
+  })
+
+  it('devolve ok=false sem blob quando o servidor recusa, e status 0 sem rede', async () => {
+    simular({ ok: false, status: 404, blob: async () => new Blob([]) })
+    expect(await baixarBinario('/x')).toEqual({ ok: false, status: 404, blob: null })
+
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('sem rede')))
+    expect(await baixarBinario('/x')).toEqual({ ok: false, status: 0, blob: null })
   })
 })

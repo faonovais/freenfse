@@ -1,9 +1,12 @@
 import { useCallback, useEffect, useState } from 'react'
-import { NavLink, Outlet } from 'react-router-dom'
+import { Link, NavLink, Outlet } from 'react-router-dom'
 import { buscarVersaoApi } from '../api/versao.js'
 import { useAuth } from '../contexts/AuthContext.jsx'
 import { useConfirmacao } from '../contexts/ConfirmacaoContext.jsx'
+import { useTema } from '../contexts/TemaContext.jsx'
 import { haFormularioSujo } from '../hooks/useFormularioSujo.js'
+import { useLogoUrl } from '../hooks/useLogoUrl.js'
+import Aviso from './Aviso.jsx'
 import EmblemaAmbiente from './EmblemaAmbiente.jsx'
 import SelectBusca from './SelectBusca.jsx'
 import SeletorTema from './SeletorTema.jsx'
@@ -50,8 +53,12 @@ function VersaoDoSistema() {
  * CNPJ ficam sempre visíveis no topo para que ninguém opere na empresa errada.
  */
 export default function Layout() {
-  const { usuario, empresas, empresaAtiva, trocarEmpresa, sair } = useAuth()
+  const { usuario, empresas, empresaAtiva, identidade, trocarEmpresa, sair, temPermissao } = useAuth()
   const confirmar = useConfirmacao()
+  const { escuro } = useTema()
+  const tema = escuro ? 'escuro' : 'claro'
+  const urlDoLogo = useLogoUrl(tema, identidade?.logo?.[tema] ?? identidade?.logo?.claro)
+  const certificado = identidade?.certificado
 
   async function aoTrocarEmpresa(id) {
     if (haFormularioSujo()) {
@@ -78,6 +85,9 @@ export default function Layout() {
       <header className="border-b border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900">
         <div className="flex flex-wrap items-center gap-4 px-4 py-3">
           <span className="font-title text-xl text-gray-900 dark:text-gray-100">freenfse</span>
+          {urlDoLogo && (
+            <img src={urlDoLogo} alt={`Logo de ${empresaAtiva?.razao_social ?? 'a empresa'}`} className="h-8 max-w-40 object-contain" />
+          )}
 
           <div className="flex min-w-0 flex-1 flex-wrap items-center gap-3">
             {empresas.length > 0 ? (
@@ -99,7 +109,7 @@ export default function Layout() {
                 <span className="ml-2 text-gray-600 dark:text-gray-400">{empresaAtiva.cnpj_formatado}</span>
               </p>
             )}
-            <EmblemaAmbiente ambiente={empresaAtiva?.ambiente} />
+            <EmblemaAmbiente ambiente={identidade?.ambiente} />
           </div>
 
           <SeletorTema />
@@ -134,6 +144,31 @@ export default function Layout() {
               </NavLink>
             </>
           )}
+          {temPermissao('cadastro.consultar') && (
+            <>
+              <p className="titulo-grupo-menu mt-4 px-3">Cadastros</p>
+              <NavLink to="/cadastros/pessoas" className={classeLink}>
+                Pessoas
+              </NavLink>
+              <NavLink to="/cadastros/servicos" className={classeLink}>
+                Serviços
+              </NavLink>
+            </>
+          )}
+          {temPermissao('config.consultar') && (
+            <>
+              <p className="titulo-grupo-menu mt-4 px-3">Configuração fiscal</p>
+              <NavLink to="/fiscal/parametros" className={classeLink}>
+                Parâmetros fiscais
+              </NavLink>
+              <NavLink to="/fiscal/certificado" className={classeLink}>
+                Certificado A1
+              </NavLink>
+              <NavLink to="/fiscal/logo" className={classeLink}>
+                Logo da empresa
+              </NavLink>
+            </>
+          )}
           <p className="titulo-grupo-menu mt-4 px-3">Conta</p>
           <NavLink to="/seguranca/2fa" className={classeLink}>
             Verificação em duas etapas
@@ -141,6 +176,18 @@ export default function Layout() {
         </nav>
 
         <main className="flex-1 p-4 md:p-8">
+          {certificado?.faixa_alerta != null && (
+            <Aviso tipo={certificado.vencido ? 'erro' : 'atencao'} className="mb-4">
+              {certificado.vencido
+                ? 'O certificado digital da empresa venceu: não é possível emitir notas até enviar um novo. '
+                : `O certificado digital da empresa vence em ${certificado.dias_para_vencer} dia(s). `}
+              {temPermissao('config.consultar') && (
+                <Link className="underline" to="/fiscal/certificado">
+                  Ver certificado
+                </Link>
+              )}
+            </Aviso>
+          )}
           {/* A chave remonta a tela ao trocar de empresa: nenhum dado da empresa anterior sobra. */}
           <Outlet key={empresaAtiva?.id ?? 'sem-empresa'} />
         </main>
