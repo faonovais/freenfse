@@ -250,6 +250,9 @@ FREENFSE_EXPORTACOES_DIR = env(
 FREENFSE_LOTE_MAX_NOTAS = env.int("FREENFSE_LOTE_MAX_NOTAS", default=500)
 FREENFSE_LOTE_MAX_MB = env.int("FREENFSE_LOTE_MAX_MB", default=200)
 FREENFSE_LOTE_RETENCAO_HORAS = env.int("FREENFSE_LOTE_RETENCAO_HORAS", default=24)
+# Agendamentos (Fase 5): atraso máximo com que uma data ainda é executada se o sistema ficou fora
+# do ar. Acima disso a data vira aviso, não rascunho. Limitado a 23 h no código (ver ADR 0006).
+FREENFSE_AGENDAMENTO_TOLERANCIA_HORAS = env.int("FREENFSE_AGENDAMENTO_TOLERANCIA_HORAS", default=12)
 
 CELERY_BROKER_URL = REDIS_URL
 CELERY_RESULT_BACKEND = REDIS_URL
@@ -271,6 +274,16 @@ CELERY_BEAT_SCHEDULE = {
     "despachar-documentos-pendentes": {
         "task": "documentos.tasks.despachar_pendentes",
         "schedule": crontab(minute="*"),
+    },
+    # Dispatcher ÚNICO dos agendamentos: varre todas as empresas a cada minuto e gera rascunhos.
+    "despachar-agendamentos": {
+        "task": "agendamentos.tasks.despachar_agendamentos",
+        "schedule": crontab(minute="*"),
+    },
+    # Alerta diário (08:20, Brasília) dos rascunhos agendados que esperam aprovação.
+    "alertar-rascunhos-pendentes": {
+        "task": "agendamentos.tasks.alertar_rascunhos_pendentes",
+        "schedule": crontab(hour=8, minute=20),
     },
     # Expurgo dos ZIPs do download em lote vencidos: de hora em hora.
     "expurgar-exportacoes": {

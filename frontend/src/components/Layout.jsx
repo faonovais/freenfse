@@ -152,6 +152,29 @@ export default function Layout() {
               </NavLink>
             </>
           )}
+          {(temPermissao('nfse.consultar') || temPermissao('agendamento.consultar')) && (
+            <>
+              <p className="titulo-grupo-menu mt-4 px-3">Agendamentos</p>
+              {temPermissao('nfse.consultar') && (
+                <NavLink to="/agendamentos/rascunhos" className={classeLink}>
+                  Rascunhos
+                </NavLink>
+              )}
+              {temPermissao('agendamento.consultar') && (
+                <>
+                  <NavLink to="/agendamentos" end className={classeLink}>
+                    Agendamentos
+                  </NavLink>
+                  <NavLink to="/agendamentos/modelos" className={classeLink}>
+                    Modelos de NFS-e
+                  </NavLink>
+                  <NavLink to="/agendamentos/historico" className={classeLink}>
+                    Histórico de execuções
+                  </NavLink>
+                </>
+              )}
+            </>
+          )}
           {temPermissao('documentos.exportar') && (
             <>
               <p className="titulo-grupo-menu mt-4 px-3">Documentos</p>

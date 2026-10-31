@@ -142,17 +142,19 @@ def _ibs_cbs(bruto, servico, erros):
     return None
 
 
-def preparar(dados):
+def preparar(dados, *, hoje=None):
     """Valida a entrada e devolve o `Preparo` (sem gravar nada).
 
-    Levanta `ErroDeNota` com um erro por campo. Serve ao rascunho e à prévia da tela.
+    Levanta `ErroDeNota` com um erro por campo. Serve ao rascunho e à prévia da tela. `hoje` é a
+    data de referência da competência (os agendamentos informam a data da execução).
     """
+    hoje = hoje or timezone.localdate()
     erros = {}
     pessoa = Pessoa.objects.filter(pk=dados.get("tomador"), ativo=True).first()
     if pessoa is None:
         erros["tomador"] = "Escolha um tomador ativo do cadastro de pessoas."
     competencia = _data(dados.get("competencia"), "competencia", erros)
-    if competencia is not None and competencia > timezone.localdate():
+    if competencia is not None and competencia > hoje:
         erros["competencia"] = "A competência não pode ser uma data futura."
 
     servico = None
@@ -200,7 +202,7 @@ def preparar(dados):
             "O serviço tem classificação de IBS/CBS, mas o indicador da operação não foi "
             "informado: a nota será emitida sem o grupo de IBS/CBS."
         )
-    if competencia.replace(day=1) != timezone.localdate().replace(day=1):
+    if competencia.replace(day=1) != hoje.replace(day=1):
         avisos.append("A competência é de outro mês. Confira se é isso mesmo.")
 
     return Preparo(
@@ -238,9 +240,9 @@ def _campos_da_nota(preparo):
     }
 
 
-def criar_rascunho(dados, *, usuario):
+def criar_rascunho(dados, *, usuario, hoje=None):
     """Cria o rascunho com o snapshot dos cadastros. Ambiente e série vêm dos parâmetros."""
-    preparo = preparar(dados)
+    preparo = preparar(dados, hoje=hoje)
     parametros = ParametrosFiscais.obter()
     return Nfse.objects.create(
         ambiente=parametros.ambiente,

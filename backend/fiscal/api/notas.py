@@ -238,6 +238,8 @@ class NotaViewSet(viewsets.GenericViewSet):
             consulta = consulta.filter(competencia__lte=_data_ou_erro(fim, "periodo_fim"))
         if situacao := filtros.get("situacao"):
             consulta = consulta.filter(situacao=situacao)
+        else:  # rascunho descartado só aparece quando se pede a situação "descartada"
+            consulta = consulta.exclude(situacao=Nfse.Situacao.DESCARTADA)
         if tomador := filtros.get("tomador", "").strip():
             condicao = Q(tomador_nome__icontains=tomador)
             if digitos := _digitos(tomador):
