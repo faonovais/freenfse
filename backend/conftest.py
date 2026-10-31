@@ -4,8 +4,11 @@ CNPJs de teste têm dígito verificador válido (gerados por `calcular_digitos_c
 e-mails usam o domínio reservado `.test`; senhas são descartáveis.
 """
 
+import datetime as dt
+
 import pytest
 from allauth.account.models import EmailAddress
+from django.utils import timezone
 from rest_framework.test import APIClient
 
 from core.models import Empresa, Municipio, Usuario, VinculoUsuarioEmpresa
@@ -121,3 +124,21 @@ def _cache_limpo():
     cache.clear()
     yield
     cache.clear()
+
+
+@pytest.fixture
+def agora_fixo(request, monkeypatch):
+    """Congela o relógio do Django (`timezone.now()`) no instante que o teste parametriza.
+
+    Uso: `@pytest.mark.parametrize("agora_fixo", ["2026-11-01T02:30:00Z"], indirect=True)` e peça
+    `agora_fixo` **antes** dos fixtures de login e de certificado na assinatura do teste: a sessão
+    (que expira em minutos) e a validade do certificado de teste nascem no instante simulado, em
+    vez de no relógio real.
+
+    Os testes que dependem do dia não podem usar o relógio real: entre 21h e 0h em Brasília o dia
+    UTC já é o seguinte (issue #24). O instante vai com fuso (`Z` ou `-03:00`).
+    """
+    instante = dt.datetime.fromisoformat(request.param)
+    assert instante.tzinfo is not None, "informe o fuso (Z ou -03:00)"
+    monkeypatch.setattr(timezone, "now", lambda: instante)
+    return instante

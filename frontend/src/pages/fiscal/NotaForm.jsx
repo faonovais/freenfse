@@ -9,16 +9,13 @@ import SelectBusca from '../../components/SelectBusca.jsx'
 import { useConfirmacao } from '../../contexts/ConfirmacaoContext.jsx'
 import { useFormularioSujo } from '../../hooks/useFormularioSujo.js'
 import { errosPorCampo, mensagemErro } from '../../utils/erros.js'
-import { formatarData } from '../../utils/formatar.js'
+import { formatarData, primeiroDiaDoMes } from '../../utils/formatar.js'
 import { BloqueiosDeEmissao } from './Notas.jsx'
 import { AMBIENTES, dinheiro } from './situacoes.js'
 
-const primeiroDiaDoMes = () => {
-  const hoje = new Date()
-  return `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, '0')}-01`
-}
-
-const VAZIO = {
+// Calculado a cada abertura da tela (não uma vez na carga do módulo): a aba pode ficar aberta de um mês
+// para o outro, e o mês é o de Brasília, que é o que o servidor usa para recusar competência futura.
+const vazio = () => ({
   tomador: null,
   servico: null,
   competencia: primeiroDiaDoMes(),
@@ -31,7 +28,7 @@ const VAZIO = {
   percentual_simples: '',
   indicador_operacao: '',
   indicador_destinatario: '0',
-}
+})
 
 function formularioDe(nota) {
   const valores = nota.valores ?? {}
@@ -125,8 +122,8 @@ export default function NotaForm() {
   const { id } = useParams()
   const navegar = useNavigate()
   const confirmar = useConfirmacao()
-  const [f, setF] = useState(VAZIO)
-  const [inicial, setInicial] = useState(VAZIO)
+  const [f, setF] = useState(vazio)
+  const [inicial, setInicial] = useState(f)
   const [pessoas, setPessoas] = useState([])
   const [servicos, setServicos] = useState([])
   const [prontidao, setProntidao] = useState(null)
