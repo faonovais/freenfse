@@ -291,12 +291,22 @@ CELERY_BEAT_SCHEDULE = {
         "task": "operacao.tasks.fazer_backup",
         "schedule": crontab(hour=2, minute=30),
     },
+    # Expurgo dos registros de envio de e-mail com mais de 5 anos (nenhum documento fiscal).
+    "expurgar-envios-de-email": {
+        "task": "documentos.tasks.expurgar_envios_email",
+        "schedule": crontab(hour=3, minute=10),
+    },
     # Expurgo dos ZIPs do download em lote vencidos: de hora em hora.
     "expurgar-exportacoes": {
         "task": "documentos.tasks.expurgar_exportacoes",
         "schedule": crontab(minute=17),
     },
 }
+
+# --- Retenção (Fase 6, ADR 0008) ----------------------------------------------------
+# Registros de envio de e-mail: 5 anos (decisão #18), depois expurgo automático diário. XML e
+# documentos fiscais NÃO têm expurgo automático.
+FREENFSE_RETENCAO_ENVIOS_ANOS = env.int("FREENFSE_RETENCAO_ENVIOS_ANOS", default=5)
 
 # --- Backup (Fase 6, ADR 0008) --------------------------------------------------
 # Pasta dos backups cifrados (volume próprio; copie para fora do servidor). O destinatário é a
