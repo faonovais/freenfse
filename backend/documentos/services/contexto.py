@@ -1,11 +1,16 @@
 """Apoio comum dos serviços de documentos: empresa ativa, relógio e intervalos de retentativa."""
 
 import datetime as dt
+import zoneinfo
 
 from django.db import connection
 from django.utils import timezone
 
 from core.models import Empresa
+
+# Datas e horas que o usuário lê (e-mail, CSV, nome do arquivo) são as de Brasília; o instante é
+# guardado em UTC e, entre 21h e 0h em Brasília, o dia UTC já é o seguinte (issue #24).
+FUSO = zoneinfo.ZoneInfo("America/Sao_Paulo")
 
 # Esperas antes da 2ª, 3ª, 4ª… tentativa (a 1ª é imediata). Persistidas em `proxima_tentativa`.
 INTERVALOS_DE_RETENTATIVA = (
@@ -22,6 +27,11 @@ RESERVA_DA_TENTATIVA = dt.timedelta(minutes=10)
 def empresa_atual():
     """Empresa do schema ativo (os sinais e as tarefas já rodam dentro dele)."""
     return Empresa.objects.get(schema_name=connection.schema_name)
+
+
+def em_brasilia(instante):
+    """O mesmo instante, escrito no horário de Brasília (para tirar dia e hora de texto)."""
+    return timezone.localtime(instante, FUSO)
 
 
 def agora():

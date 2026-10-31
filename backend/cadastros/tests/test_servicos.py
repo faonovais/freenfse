@@ -173,6 +173,25 @@ def test_lista_filtra_por_data_de_vigencia(api_de, empresa_a):
     assert api.get(URL, vigente_em="ontem").status_code == 400
 
 
+@pytest.mark.parametrize(
+    ("agora_fixo", "aliquota"),
+    [
+        # 23:30 de 31/10 em Brasília já é 01/11 em UTC: o "hoje" do usuário ainda é 31/10.
+        ("2026-11-01T02:30:00Z", "3.00"),
+        ("2026-11-01T03:00:00Z", "2.00"),  # meia-noite em Brasília: virou o dia
+    ],
+    indirect=["agora_fixo"],
+)
+def test_vigente_sem_data_usa_o_dia_de_hoje_em_brasilia(agora_fixo, api_de, empresa_a, aliquota):
+    api = api_de(empresa_a)
+    api.post(URL, servico_json(vigencia_inicio="2026-01-01", vigencia_fim="2026-10-31"))
+    api.post(URL, servico_json(vigencia_inicio="2026-11-01", aliquota_iss="2.00"))
+
+    resposta = api.get(f"{URL}vigente/", codigo_nacional="170101", codigo_municipal="")
+
+    assert resposta.json()["aliquota_iss"] == aliquota
+
+
 def test_consulta_vigente_exige_codigo_e_data_validos(api_de, empresa_a):
     api = api_de(empresa_a)
 
