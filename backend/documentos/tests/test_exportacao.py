@@ -320,10 +320,14 @@ def test_o_expurgo_apaga_arquivo_orfao_antigo_mas_preserva_o_recente(empresa_ati
     antigo, recente = pasta / "antigo.zip", pasta / "recente.zip"
     antigo.write_bytes(b"x")
     recente.write_bytes(b"x")
-    velho = (contexto.agora() - dt.timedelta(days=3)).timestamp()
+    # Os dois mtimes saem do MESMO relógio que o expurgo usa (`contexto.agora()`): o relógio do
+    # sistema de arquivos pode divergir dele (relógio simulado nos testes de virada de mês).
+    agora = contexto.agora()
+    velho = (agora - dt.timedelta(days=3)).timestamp()
     os.utime(antigo, (velho, velho))
+    os.utime(recente, (agora.timestamp(), agora.timestamp()))
 
-    assert exportacao.expurgar() == 1
+    assert exportacao.expurgar(agora=agora) == 1
 
     assert not antigo.exists() and recente.exists()
 
