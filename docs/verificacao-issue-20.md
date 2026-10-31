@@ -202,7 +202,7 @@ parâmetros da empresa) foram **reexecutadas** (S1–S3).
 
 Observações honestas:
 
-- **C1** foi detectada por um erro 500, não por uma recusa: sem a pendência, o código seguiria para o certificado inexistente e quebraria. O teste falha do mesmo jeito, mas o sintoma é uma exceção.
+- **C1** foi detectada por um erro 500 na primeira rodada (sem a pendência, o código seguia para o certificado inexistente e quebrava). A pedido do Supervisor, a consulta do convênio ganhou uma segunda trava (`_consultar_convenio` recusa quando não há certificado) com teste próprio (`test_sem_certificado_a_consulta_nao_sai_nem_se_a_conferencia_local_deixar_passar`); reexecutada, a C1 agora falha pela recusa explícita (400 `producao_nao_liberada` com `convenio_nao_verificado` no lugar de `sem_certificado`), não por exceção.
 - Uma mutação do arquivo de testes da issue #24 (certificado de teste no relógio real) só é detectada quando o relógio do processo é avançado; ver o roteiro da #24 no PR #17.
 - **Não foram feitas mutações nas telas desta issue** (Parâmetros e emissão guiada): elas têm testes de comportamento (Vitest), mas a sabotagem de propósito só foi aplicada ao backend. É uma lacuna conhecida.
 - **N9 e P2 sobreviveram** ao primeiro lote: eram caminhos que a tela usa (`""` para "Herdar" e o indDest da prontidão) e que os testes não pisavam. Foram tratados como lacuna de teste, não de código, e só entraram na contagem depois de detectados.

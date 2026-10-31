@@ -16,6 +16,7 @@ from core.models import LogAuditoria
 from core.permissoes import Perfil
 from fiscal import gateway
 from fiscal.models import Certificado, ParametrosFiscais
+from fiscal.services import producao as servico_producao
 from fiscal.services.certificado import divergencia_de_cnpj
 from fiscal.services.producao import (
     ProducaoNaoLiberada,
@@ -127,6 +128,26 @@ def test_sem_certificado_nao_troca_e_nao_consulta_a_rede(
     assert corpo["codigo"] == "producao_nao_liberada" and _codigos(resposta) == ["sem_certificado"]
     assert corpo["pendencias"][0]["tela"] == "/fiscal/certificado"
     assert "certificado digital A1" in corpo["detalhe"]
+    assert falso.chamadas == []
+    _nada_mudou(empresa_a, antes)
+
+
+def test_sem_certificado_a_consulta_nao_sai_nem_se_a_conferencia_local_deixar_passar(
+    api_de, empresa_a, municipios_basicos, transporte, monkeypatch
+):
+    """Segunda trava: se a conferência local falhasse, a consulta ainda recusaria (nunca um 500)."""
+    monkeypatch.setattr(servico_producao, "pendencias_locais", lambda **_: [])
+    api = api_de(empresa_a)
+    api.patch(URL, {"codigo_municipio_emissor": "2101400"})
+    falso = transporte({"/convenio": convenio_aderente()})
+    antes = _no_banco(empresa_a)[0]
+
+    resposta = api.patch(URL, TROCAR)
+
+    assert resposta.status_code == 400
+    assert resposta.json()["codigo"] == "producao_nao_liberada"
+    assert _codigos(resposta) == ["convenio_nao_verificado"]
+    assert "não tem certificado A1" in resposta.json()["detalhe"]
     assert falso.chamadas == []
     _nada_mudou(empresa_a, antes)
 

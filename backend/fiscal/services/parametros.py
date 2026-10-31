@@ -166,6 +166,10 @@ def _consultar_convenio(
     *, cnpj, codigo_municipio, ambiente_producao, certificado, transporte=None, pausa=None
 ):
     """Consulta o convênio via `freedfe` com o certificado da empresa; não grava nada."""
+    if certificado is None:
+        # Segunda trava (a primeira é a pendência `sem_certificado`): sem certificado não há como
+        # se identificar na consulta, e isso vira uma recusa explícita, nunca um erro interno.
+        raise ErroDeConsultaExterna("a empresa não tem certificado A1 para se identificar.")
     try:
         a1 = abrir_em_memoria(certificado)
         resultado = gateway.verificar_convenio(
