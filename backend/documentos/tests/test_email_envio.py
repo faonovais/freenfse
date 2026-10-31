@@ -153,6 +153,36 @@ def test_variaveis_com_html_e_quebras_de_linha_sao_neutralizadas(
     assert "<br>" in corpo_html  # quebras de linha viram <br>, o resto é texto
 
 
+@pytest.mark.parametrize(
+    ("emitida_em", "esperado"),
+    [
+        (dt.datetime(2026, 11, 2, 15, 0, tzinfo=dt.UTC), "02/11/2026"),
+        # 23:30 de 31/10 em Brasília é 02:30 de 01/11 em UTC: o e-mail diz 31/10 (issue #24).
+        (dt.datetime(2026, 11, 1, 2, 30, tzinfo=dt.UTC), "31/10/2026"),
+        (dt.datetime(2026, 11, 1, 2, 59, 59, tzinfo=dt.UTC), "31/10/2026"),
+        (dt.datetime(2026, 11, 1, 3, 0, tzinfo=dt.UTC), "01/11/2026"),
+        (dt.datetime(2027, 1, 1, 1, 0, tzinfo=dt.UTC), "31/12/2026"),  # virada do ano
+    ],
+)
+def test_data_de_emissao_no_email_e_a_de_brasilia(empresa_ativa, emitida_em, esperado):
+    from documentos.tests.apoio import nota_avulsa
+
+    nota = nota_avulsa(1, emitida_em=emitida_em)
+
+    valores = envio_email.valores_da_nota(nota, contexto.empresa_atual())
+
+    assert valores["data_emissao"] == esperado
+
+
+def test_nota_sem_data_de_emissao_deixa_a_variavel_vazia(empresa_ativa):
+    from documentos.tests.apoio import nota_avulsa
+
+    nota = nota_avulsa(1, situacao="rascunho", emitida_em=None)
+    nota.emitida_em = None
+
+    assert envio_email.valores_da_nota(nota, contexto.empresa_atual())["data_emissao"] == ""
+
+
 def test_variavel_desconhecida_e_chave_solta_sao_recusadas_ao_validar(empresa_ativa):
     erros = envio_email.validar_modelos("Nota {numero}", "Olá {nome_tomador} {valor")
 

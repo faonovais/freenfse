@@ -59,7 +59,7 @@ registrar_variavel("cnpj_emitente", "CNPJ da empresa emitente", lambda n, e: e.c
 registrar_variavel(
     "data_emissao",
     "Data de emissão (DD/MM/AAAA)",
-    lambda n, e: f"{n.emitida_em:%d/%m/%Y}" if n.emitida_em else "",
+    lambda n, e: f"{contexto.em_brasilia(n.emitida_em):%d/%m/%Y}" if n.emitida_em else "",
 )
 
 

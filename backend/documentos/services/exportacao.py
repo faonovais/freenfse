@@ -177,7 +177,7 @@ def gerar(exportacao_id, *, agora=None):
         Exportacao.objects.filter(pk=exportacao.pk).update(
             situacao=S.PRONTA,
             arquivo=caminho.name,
-            nome_download=f"notas-{agora:%Y%m%d-%H%M}.zip",
+            nome_download=f"notas-{contexto.em_brasilia(agora):%Y%m%d-%H%M}.zip",
             tamanho_bytes=caminho.stat().st_size,
             concluido_em=agora,
             expira_em=agora + retencao(),
@@ -224,7 +224,7 @@ def _montar_zip(exportacao, caminho):
 
 def _linha_do_csv(nfse, nome_xml, nome_pdf, observacao):
     totais = nfse.totais or {}
-    emissao_em = nfse.emitida_em.date().isoformat() if nfse.emitida_em else ""
+    emissao_em = contexto.em_brasilia(nfse.emitida_em).date().isoformat() if nfse.emitida_em else ""
     return {
         "numero_nfse": nfse.numero_nfse,
         "chave": nfse.chave,
