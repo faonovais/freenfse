@@ -12,6 +12,7 @@ export const SITUACOES = [
   },
   { valor: 'cancelada', rotulo: 'Cancelada', ajuda: 'Cancelada na Sefin.' },
   { valor: 'substituida', rotulo: 'Substituída', ajuda: 'Trocada por outra nota.' },
+  { valor: 'descartada', rotulo: 'Descartada', ajuda: 'Rascunho descartado; nunca foi enviado à Sefin.' },
 ]
 
 const POR_VALOR = Object.fromEntries(SITUACOES.map((s) => [s.valor, s]))
