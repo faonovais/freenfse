@@ -598,6 +598,27 @@ def test_ligar_a_opcao_sem_indicador_e_recusado_com_a_explicacao(api_admin):
     assert api_admin.get(PARAMETROS).json()["ibs_cbs_informar"] is False  # nada foi gravado
 
 
+def test_administrador_muda_o_destinatario_padrao_da_empresa(api_admin):
+    corpo = api_admin.patch(PARAMETROS, {"ibs_cbs_indicador_destinatario": 1}).json()
+
+    assert corpo["ibs_cbs_indicador_destinatario"] == 1
+    assert api_admin.get(PARAMETROS).json()["ibs_cbs_indicador_destinatario"] == 1
+    alterados = LogAuditoria.objects.get(acao=LogAuditoria.Acao.PARAMETROS_ALTERADOS).detalhes[
+        "alterados"
+    ]
+    assert alterados["ibs_cbs_indicador_destinatario"] == {"de": 0, "para": 1}
+
+
+def test_destinatario_padrao_da_empresa_so_aceita_0_ou_1(api_admin):
+    assert api_admin.patch(PARAMETROS, {"ibs_cbs_indicador_destinatario": 2}).status_code == 400
+    from django.core.exceptions import ValidationError
+
+    invalido = ParametrosFiscais(ibs_cbs_indicador_destinatario=2)  # fora da API também
+    with pytest.raises(ValidationError) as erro:
+        invalido.clean()
+    assert "ibs_cbs_indicador_destinatario" in erro.value.message_dict
+
+
 @pytest.mark.parametrize("indicador", ["12345", "1234567"])
 def test_indicador_padrao_da_empresa_tem_6_digitos(api_admin, indicador):
     resposta = api_admin.patch(PARAMETROS, {"ibs_cbs_indicador_operacao": indicador})
