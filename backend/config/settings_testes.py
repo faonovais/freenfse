@@ -25,3 +25,6 @@ AUTH_EXIGIR_2FA_TODOS = False
 # O pytest-django envolve cada teste numa transação; a trava de emissão só recusa transação
 # aberta fora dos testes (ver fiscal/persistencia/trava.py).
 FREENFSE_EMISSAO_EM_TRANSACAO_PERMITIDA = True
+
+# Idem para as travas de sessão genéricas (core/travas.py).
+FREENFSE_TRAVA_EM_TRANSACAO_PERMITIDA = True
