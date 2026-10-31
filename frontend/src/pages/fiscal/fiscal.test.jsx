@@ -2,6 +2,7 @@ import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/re
 import { afterEach, describe, expect, it } from 'vitest'
 import { limparEmpresaAtiva } from '../../api/empresaAtiva.js'
 import {
+  EMPRESA_A,
   EMPRESA_ADMIN,
   EMPRESA_SO_CONSULTA,
   IDENTIDADE_PADRAO,
@@ -49,6 +50,40 @@ const CONVENIO = {
   avisos: [], contribuinte: {},
 }  // fmt: skip
 const BALSAS = { codigo: '2101400', nome: 'Balsas', uf: 'MA' }
+// Emissor (issue #14/#20): lê a configuração, não edita.
+const EMPRESA_EMISSOR = {
+  ...EMPRESA_A,
+  perfil: 'emissor',
+  permissoes: ['nfse.consultar', 'nfse.emitir', 'cadastro.consultar', 'cadastro.editar', 'config.consultar'],
+}
+const PENDENCIAS = [
+  {
+    codigo: 'sem_certificado',
+    mensagem: 'Envie o certificado digital A1 da empresa: sem ele não é possível assinar nem enviar notas.',
+    tela: '/fiscal/certificado',
+  },
+  {
+    codigo: 'sem_municipio',
+    mensagem: 'Informe o município emissor da empresa nos parâmetros fiscais.',
+    tela: '/fiscal/parametros',
+  },
+]
+const NAO_LIBERADA = (pendencias) => ({
+  status: 400,
+  dados: {
+    codigo: 'producao_nao_liberada',
+    detalhe: 'Ainda não é possível trocar para o ambiente de produção.',
+    pendencias,
+    ambiente: ['Ainda não é possível trocar para o ambiente de produção.'],
+  },
+})
+const PEDE_CONFIRMACAO = {
+  status: 400,
+  dados: { codigo: 'confirmacao_necessaria', detalhe: 'Confirme a troca.', ambiente: ['Confirme a troca.'] },
+}
+// A API de verdade: sem `confirmar_producao` pede a confirmação; com ela, troca.
+const TROCA_COM_CONFIRMACAO = (chamada) =>
+  chamada.corpo.confirmar_producao ? { status: 200, dados: { ...PARAMS, ambiente: 'producao' } } : PEDE_CONFIRMACAO
 
 function abrir(rota, extras = {}, empresas = [EMPRESA_ADMIN]) {
   return montarApp({
@@ -112,9 +147,7 @@ describe('Parâmetros fiscais', () => {
   })
 
   it('trocar para produção exige confirmação digitando PRODUÇÃO e envia confirmar_producao', async () => {
-    const { chamadas } = abrirParametros({
-      [`PATCH ${PARAMETROS}`]: { status: 200, dados: { ...PARAMS, ambiente: 'producao' } },
-    })
+    const { chamadas } = abrirParametros({ [`PATCH ${PARAMETROS}`]: TROCA_COM_CONFIRMACAO })
     await screen.findByLabelText('Regime tributário')
 
     escolher('Ambiente de emissão', 'producao')
@@ -128,9 +161,12 @@ describe('Parâmetros fiscais', () => {
     fireEvent.change(within(dialogo).getByLabelText(/Digite/), { target: { value: 'PRODUÇÃO' } })
     fireEvent.click(botao)
 
-    await waitFor(() => expect(chamadas.find((c) => c.metodo === 'PATCH')?.corpo).toMatchObject({
-      ambiente: 'producao', confirmar_producao: true,
-    }))  // fmt: skip
+    // A primeira tentativa vai SEM confirmação (a API diz antes o que falta); a segunda, com ela.
+    await waitFor(() => expect(chamadas.filter((c) => c.metodo === 'PATCH')).toHaveLength(2))
+    const [primeira, segunda] = chamadas.filter((c) => c.metodo === 'PATCH')
+    expect(primeira.corpo).toMatchObject({ ambiente: 'producao' })
+    expect(primeira.corpo).not.toHaveProperty('confirmar_producao')
+    expect(segunda.corpo).toMatchObject({ ambiente: 'producao', confirmar_producao: true })
     // O selo de ambiente do cabeçalho é recarregado.
     await waitFor(() =>
       expect(chamadas.filter((c) => c.caminho === '/api/fiscal/identidade/').length).toBeGreaterThan(1),
@@ -138,7 +174,7 @@ describe('Parâmetros fiscais', () => {
   })
 
   it('cancelar a confirmação de produção não altera nada', async () => {
-    const { chamadas } = abrirParametros()
+    const { chamadas } = abrirParametros({ [`PATCH ${PARAMETROS}`]: PEDE_CONFIRMACAO })
     await screen.findByLabelText('Regime tributário')
     escolher('Ambiente de emissão', 'producao')
 
@@ -146,7 +182,44 @@ describe('Parâmetros fiscais', () => {
     fireEvent.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Cancelar' }))
 
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
-    expect(chamadas.some((c) => c.metodo === 'PATCH')).toBe(false)
+    const envios = chamadas.filter((c) => c.metodo === 'PATCH')
+    expect(envios).toHaveLength(1) // só a tentativa sem confirmação
+    expect(envios[0].corpo).not.toHaveProperty('confirmar_producao')
+  })
+
+  it('produção não liberada: lista o que falta com o caminho para resolver, sem pedir a confirmação', async () => {
+    const { chamadas } = abrirParametros({ [`PATCH ${PARAMETROS}`]: NAO_LIBERADA(PENDENCIAS) })
+    await screen.findByLabelText('Regime tributário')
+    escolher('Ambiente de emissão', 'producao')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Salvar parâmetros' }))
+
+    const lista = await screen.findByRole('region', { name: 'O que falta para a produção' })
+    expect(within(lista).getByText(/Envie o certificado digital A1 da empresa/)).toBeInTheDocument()
+    expect(within(lista).getByText(/Informe o município emissor/)).toBeInTheDocument()
+    const links = within(lista).getAllByRole('link', { name: 'Resolver' })
+    expect(links.map((link) => link.getAttribute('href'))).toEqual(['/fiscal/certificado', '/fiscal/parametros'])
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument() // nem pede para digitar PRODUÇÃO
+    expect(chamadas.filter((c) => c.metodo === 'PATCH')).toHaveLength(1)
+  })
+
+  it('convênio recusado na hora da troca (depois de confirmar) também lista o motivo', async () => {
+    const convenio = [{ codigo: 'convenio_nao_aderente', mensagem: 'O município Balsas/MA NÃO tem convênio com a NFS-e Nacional no ambiente de produção.', tela: '/fiscal/parametros' }]
+    abrirParametros({
+      [`PATCH ${PARAMETROS}`]: (chamada) =>
+        chamada.corpo.confirmar_producao ? NAO_LIBERADA(convenio) : PEDE_CONFIRMACAO,
+    })
+    await screen.findByLabelText('Regime tributário')
+    escolher('Ambiente de emissão', 'producao')
+    fireEvent.click(screen.getByRole('button', { name: 'Salvar parâmetros' }))
+    const dialogo = await screen.findByRole('dialog')
+    fireEvent.change(within(dialogo).getByLabelText(/Digite/), { target: { value: 'PRODUÇÃO' } })
+    fireEvent.click(within(dialogo).getByRole('button', { name: 'Trocar para produção' }))
+
+    const lista = await screen.findByRole('region', { name: 'O que falta para a produção' })
+    expect(within(lista).getByText(/NÃO tem convênio/)).toBeInTheDocument()
+    // O formulário continua como estava: nada foi salvo.
+    expect(screen.getByLabelText('Ambiente de emissão')).toHaveValue('producao')
   })
 
   it('mostra o erro de validação do servidor junto do campo', async () => {
@@ -168,6 +241,16 @@ describe('Parâmetros fiscais', () => {
     abrirParametros({}, [EMPRESA_SO_CONSULTA])
 
     expect(await screen.findByLabelText('Série da DPS')).toBeDisabled()
+    expect(screen.queryByRole('button', { name: 'Salvar parâmetros' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Verificar convênio do município' })).not.toBeInTheDocument()
+    expect(screen.getByText(/pode consultar os parâmetros, mas não alterá-los/)).toBeInTheDocument()
+  })
+
+  it('o Emissor vê os parâmetros e o certificado, mas não altera nem verifica o convênio', async () => {
+    abrirParametros({}, [EMPRESA_EMISSOR])
+
+    expect(await screen.findByLabelText('Série da DPS')).toBeDisabled()
+    expect(screen.getByLabelText('Ambiente de emissão')).toBeDisabled()
     expect(screen.queryByRole('button', { name: 'Salvar parâmetros' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Verificar convênio do município' })).not.toBeInTheDocument()
     expect(screen.getByText(/pode consultar os parâmetros, mas não alterá-los/)).toBeInTheDocument()

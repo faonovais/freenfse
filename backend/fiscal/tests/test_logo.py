@@ -367,8 +367,9 @@ def test_identidade_e_visivel_para_todos_os_vinculados(api_de, empresa_a, perfil
     }  # fmt: skip
 
 
-def test_identidade_acompanha_o_ambiente_e_os_logos(api_de, empresa_a):
+def test_identidade_acompanha_o_ambiente_e_os_logos(api_de, empresa_a, liberar_producao):
     api = api_de(empresa_a)
+    liberar_producao(api)
     api.patch("/api/fiscal/parametros/", {"ambiente": "producao", "confirmar_producao": True})
     sha = _enviar(api, "claro", png()).json()["sha256"]
 

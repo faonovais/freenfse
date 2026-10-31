@@ -9,11 +9,9 @@ from django_tenants.utils import schema_context
 from conftest import CNPJ_A
 from core.models import LogAuditoria
 from core.permissoes import Perfil
-from fiscal import gateway
 from fiscal.models import Certificado, ParametrosFiscais
 from fiscal.tests.apoio import (
     SENHA_DO_PFX,
-    TransporteFalso,
     convenio_aderente,
     convenio_nao_aderente,
     falha_de_rede,
@@ -30,23 +28,6 @@ pytestmark = pytest.mark.django_db
 @pytest.fixture(autouse=True)
 def _municipios(municipios_basicos):
     """O município emissor é validado e nomeado pela tabela de municípios."""
-
-
-@pytest.fixture
-def transporte(monkeypatch):
-    """`transporte(rotas)`: troca só o HTTP do gateway; o resto da freedfe roda de verdade."""
-    original = gateway.verificar_convenio  # a de verdade, mesmo se instalar mais de uma vez
-
-    def _instalar(rotas):
-        falso = TransporteFalso(rotas)
-        monkeypatch.setattr(
-            gateway,
-            "verificar_convenio",
-            lambda **kw: original(**{**kw, "transporte": falso, "pausa": lambda segundos: None}),
-        )
-        return falso
-
-    return _instalar
 
 
 @pytest.fixture
@@ -183,13 +164,19 @@ def test_falha_nos_parametros_do_contribuinte_nao_impede_o_convenio(
 
 
 def test_producao_consulta_o_host_de_producao(empresa_configurada, transporte):
-    empresa_configurada.patch(PARAMETROS, {"ambiente": "producao", "confirmar_producao": True})
     falso = transporte({"/convenio": convenio_aderente(), f"/{CNPJ_A}": (200, {})})
+    troca = empresa_configurada.patch(
+        PARAMETROS, {"ambiente": "producao", "confirmar_producao": True}
+    )
 
     resposta = empresa_configurada.post(VERIFICAR)
 
-    assert resposta.status_code == 200
-    assert falso.chamadas[0][1].startswith("https://adn.nfse.gov.br/parametrizacao/")
+    assert troca.status_code == 200 and resposta.status_code == 200
+    # A consulta da troca e a verificação seguinte foram ao host de PRODUÇÃO, nunca ao da restrita.
+    assert falso.chamadas
+    assert all(
+        url.startswith("https://adn.nfse.gov.br/parametrizacao/") for _, url in falso.chamadas
+    )
     assert resposta.json()["convenio"]["ambiente"] == "producao"
 
 
@@ -201,13 +188,18 @@ def test_resultado_deixa_de_valer_se_o_municipio_ou_o_ambiente_mudam(
 
     outro_municipio = empresa_configurada.patch(PARAMETROS, {"codigo_municipio_emissor": "1721000"})
     voltou = empresa_configurada.patch(PARAMETROS, {"codigo_municipio_emissor": BALSAS})
-    outro_ambiente = empresa_configurada.patch(
+    # A troca para produção consulta o convênio de produção e já o deixa válido para o novo
+    # ambiente; voltar à restrita faz esse resultado (de produção) deixar de valer.
+    em_producao = empresa_configurada.patch(
         PARAMETROS, {"ambiente": "producao", "confirmar_producao": True}
     )
+    de_volta_a_restrita = empresa_configurada.patch(PARAMETROS, {"ambiente": "producao_restrita"})
 
     assert outro_municipio.json()["convenio"]["atual"] is False
     assert voltou.json()["convenio"]["atual"] is True
-    assert outro_ambiente.json()["convenio"]["atual"] is False
+    assert em_producao.json()["convenio"]["atual"] is True
+    assert em_producao.json()["convenio"]["ambiente"] == "producao"
+    assert de_volta_a_restrita.json()["convenio"]["atual"] is False
 
 
 def test_sem_municipio_emissor_pede_para_informar(api_de, empresa_a):
