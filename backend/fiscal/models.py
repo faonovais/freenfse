@@ -237,3 +237,204 @@ class LogoEmpresa(models.Model):
 
     def __str__(self):
         return f"Logo ({self.get_tema_display()})"
+
+
+class TransicaoInvalida(Exception):
+    """Mudança de situação da nota que a máquina de estados não permite."""
+
+
+class Nfse(models.Model):
+    """NFS-e do freenfse: do rascunho até a nota autorizada, cancelada ou substituída.
+
+    A **situação** só muda por `fiscal.services.nfse_estados.transicionar`, que confere a
+    tabela de transições e registra o histórico. Tomador, serviço e valores ficam como
+    **snapshot** no momento da emissão: editar o cadastro depois nunca altera uma nota emitida.
+    O XML da NFS-e é o original da Sefin, com o hash SHA-256 gravado ao autorizar.
+    """
+
+    class Direcao(models.TextChoices):
+        """Só há notas emitidas por enquanto; as tomadas chegam com a sincronização pelo ADN."""
+
+        EMITIDA = "emitida", "Emitida"
+
+    class Situacao(models.TextChoices):
+        """Situação da nota para o usuário."""
+
+        RASCUNHO = "rascunho", "Rascunho"
+        ENVIANDO = "enviando", "Enviando à Sefin"
+        AUTORIZADA = "autorizada", "Autorizada"
+        REJEITADA = "rejeitada", "Rejeitada"
+        INCERTA = "incerta", "Resultado incerto (a conferir na Sefin)"
+        CANCELADA = "cancelada", "Cancelada"
+        SUBSTITUIDA = "substituida", "Substituída"
+
+    direcao = models.CharField(max_length=10, choices=Direcao, default=Direcao.EMITIDA)
+    situacao = models.CharField(
+        max_length=12, choices=Situacao, default=Situacao.RASCUNHO, db_index=True
+    )
+    ambiente = models.CharField(
+        max_length=20,
+        choices=ParametrosFiscais.Ambiente,
+        help_text="Ambiente em que a nota foi (ou será) emitida, fixado ao criar o rascunho.",
+    )
+    leiaute = models.CharField(
+        max_length=20, blank=True, help_text="Leiaute usado no envio (NT 004 ou NT 009)."
+    )
+
+    # Identificação da DPS e da NFS-e.
+    serie = models.PositiveIntegerField()
+    numero_dps = models.BigIntegerField(null=True, blank=True)
+    id_dps = models.CharField(max_length=45, null=True, blank=True, unique=True)
+    chave = models.CharField(max_length=50, null=True, blank=True, unique=True)
+    numero_nfse = models.CharField(max_length=15, blank=True)
+    competencia = models.DateField()
+    emitida_em = models.DateTimeField(null=True, blank=True)
+
+    # Snapshots do momento da criação do rascunho (a fonte de verdade do que foi emitido).
+    tomador = models.JSONField(default=dict)
+    servico = models.JSONField(default=dict)
+    valores = models.JSONField(default=dict)
+    totais = models.JSONField(default=dict)
+    complementos = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="Informações complementares, percentual do Simples e dados de IBS/CBS.",
+    )
+    tomador_nome = models.CharField(max_length=300, blank=True, db_index=True)
+    tomador_documento = models.CharField(max_length=14, blank=True, db_index=True)
+    valor_servico = models.DecimalField(max_digits=17, decimal_places=2)
+    tomador_ref = models.ForeignKey(
+        "cadastros.Pessoa", on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
+    servico_ref = models.ForeignKey(
+        "cadastros.Servico", on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
+
+    xml_dps = models.BinaryField(null=True, blank=True)
+    xml_nfse = models.BinaryField(null=True, blank=True)
+    hash_xml_nfse = models.CharField(max_length=64, blank=True)
+
+    erros = models.JSONField(default=list, blank=True)
+    mensagem = models.TextField(blank=True)
+
+    substitui = models.ForeignKey(
+        "self",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="substitutas",
+        help_text="Nota que esta substitui (só preenchida na nota substituta).",
+    )
+    substituicao_motivo = models.CharField(max_length=2, blank=True)
+    substituicao_texto = models.CharField(max_length=255, blank=True)
+
+    # O usuário vive no schema público: sem chave estrangeira entre schemas (GUIDELINES §1).
+    # Guarda-se o id e o e-mail (que sobrevive à exclusão do usuário).
+    criado_por_id = models.PositiveBigIntegerField(null=True, blank=True)
+    criado_por_email = models.CharField(max_length=254, blank=True)
+    criado_em = models.DateTimeField(auto_now_add=True)
+    atualizado_em = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "NFS-e"
+        verbose_name_plural = "NFS-e"
+        ordering = ["-criado_em", "-id"]
+        indexes = [models.Index(fields=["competencia"])]
+
+    def __str__(self):
+        return f"NFS-e {self.numero_nfse or self.numero_dps or 'rascunho'} ({self.situacao})"
+
+    def __init__(self, *args, **kwargs):
+        """Guarda a situação lida do banco para detectar mudança fora de `transicionar`."""
+        super().__init__(*args, **kwargs)
+        self._situacao_gravada = self.situacao
+
+    def save(self, *args, **kwargs):
+        """Recusa mudar a situação fora de `transicionar` (a única porta autorizada)."""
+        existente = not self._state.adding
+        if existente and self.situacao != self._situacao_gravada:
+            if not self.__dict__.pop("_transicao_autorizada", False):
+                raise TransicaoInvalida(
+                    f"A situação da nota não pode ser alterada diretamente "
+                    f"({self._situacao_gravada} → {self.situacao}). Use as ações da nota."
+                )
+        super().save(*args, **kwargs)
+        self._situacao_gravada = self.situacao
+
+    @property
+    def criado_por(self):
+        """Usuário que criou a nota (do schema público), ou `None` se não existir mais."""
+        from core.models import Usuario
+
+        return Usuario.objects.filter(pk=self.criado_por_id).first() if self.criado_por_id else None
+
+    @property
+    def editavel(self):
+        """Só rascunho e nota rejeitada podem ser corrigidas e enviadas de novo."""
+        return self.situacao in (self.Situacao.RASCUNHO, self.Situacao.REJEITADA)
+
+
+class EventoNfse(models.Model):
+    """Evento de uma nota confirmado pela Sefin (cancelamento, substituição…)."""
+
+    class Tipo(models.TextChoices):
+        """Eventos que o freenfse reconhece pelo nome."""
+
+        CANCELAMENTO = "101101", "Cancelamento"
+        CANCELAMENTO_POR_ANALISE = "105104", "Cancelamento deferido por análise fiscal"
+        CANCELAMENTO_DE_OFICIO = "305101", "Cancelamento de ofício"
+        SUBSTITUICAO = "105102", "Cancelamento por substituição"
+
+    nfse = models.ForeignKey(Nfse, on_delete=models.CASCADE, related_name="eventos")
+    tipo_evento = models.CharField(max_length=6)
+    identificador = models.CharField(max_length=80, blank=True)
+    descricao = models.CharField(max_length=255, blank=True)
+    registrado_em = models.DateTimeField(null=True, blank=True)
+    xml = models.BinaryField(null=True, blank=True)
+    hash_xml = models.CharField(max_length=64, blank=True)
+    criado_em = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "evento da NFS-e"
+        verbose_name_plural = "eventos da NFS-e"
+        ordering = ["registrado_em", "id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["nfse", "tipo_evento", "identificador"], name="evento_nfse_unico"
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.tipo_evento} da nota {self.nfse_id}"
+
+    @property
+    def rotulo(self):
+        """Nome do evento em português, quando conhecido."""
+        try:
+            return self.Tipo(self.tipo_evento).label
+        except ValueError:
+            return f"Evento {self.tipo_evento}"
+
+
+class TransicaoNfse(models.Model):
+    """Histórico das mudanças de situação da nota (quem, quando, por quê)."""
+
+    nfse = models.ForeignKey(Nfse, on_delete=models.CASCADE, related_name="transicoes")
+    de = models.CharField(max_length=12)
+    para = models.CharField(max_length=12)
+    motivo = models.CharField(max_length=255, blank=True)
+    usuario_email = models.CharField(max_length=254, blank=True)
+    momento = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "transição da NFS-e"
+        verbose_name_plural = "transições da NFS-e"
+        ordering = ["id"]
+
+    def __str__(self):
+        return f"{self.de} → {self.para}"
+
+
+# As tabelas da persistência da freedfe pertencem ao app fiscal e precisam ser importadas aqui
+# para o Django conhecê-las.
+from fiscal.persistencia import modelos as _modelos_da_persistencia  # noqa: E402,F401

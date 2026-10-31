@@ -59,7 +59,11 @@ def empresa_configurada(api_de, empresa_a):
     return api
 
 
-def test_municipio_aderente_guarda_o_resultado_com_a_data(empresa_configurada, transporte):
+# 23:30 em Brasília de 31/10 = 02:30 UTC de 01/11: o caso que derrubou o CI (issue #24).
+@pytest.mark.parametrize("agora_fixo", ["2026-11-01T02:30:00Z"], indirect=True)
+def test_municipio_aderente_guarda_o_resultado_com_a_data(
+    agora_fixo, empresa_configurada, transporte
+):
     falso = transporte(
         {"/convenio": convenio_aderente(), f"/{CNPJ_A}": (200, {"retencoes": {"iss": "nao"}})}
     )
@@ -74,7 +78,8 @@ def test_municipio_aderente_guarda_o_resultado_com_a_data(empresa_configurada, t
     assert convenio["data_ativacao"] == "2024-05-02"
     assert convenio["contribuinte"] == {"retencoes": {"iss": "nao"}}
     assert convenio["atual"] is True and convenio["codigo_municipio"] == BALSAS
-    assert dt.datetime.fromisoformat(convenio["verificado_em"]).date() == dt.date.today()
+    # A data que o usuário lê é a de Brasília (31/10), não a do dia UTC (01/11).
+    assert convenio["verificado_em"] == "2026-10-31T23:30:00-03:00"
     # A consulta foi ao ambiente nacional de PRODUÇÃO RESTRITA (o padrão), pelo transporte falso.
     assert [
         (m, u.split("nfse.gov.br")[0], u.split("nfse.gov.br")[1]) for m, u in falso.chamadas
@@ -82,6 +87,31 @@ def test_municipio_aderente_guarda_o_resultado_com_a_data(empresa_configurada, t
         ("GET", "https://adn.producaorestrita.", f"/parametrizacao/{BALSAS}/convenio"),
         ("GET", "https://adn.producaorestrita.", f"/parametrizacao/{BALSAS}/{CNPJ_A}"),
     ]
+
+
+@pytest.mark.parametrize(
+    ("agora_fixo", "em_brasilia"),
+    [
+        ("2026-10-31T12:00:00Z", "2026-10-31T09:00:00-03:00"),
+        ("2026-11-01T02:30:00Z", "2026-10-31T23:30:00-03:00"),
+        ("2026-11-01T02:59:59Z", "2026-10-31T23:59:59-03:00"),  # último segundo do dia em Brasília
+        ("2026-11-01T03:00:00Z", "2026-11-01T00:00:00-03:00"),  # virada do dia em Brasília
+        ("2026-12-31T23:30:00-03:00", "2026-12-31T23:30:00-03:00"),  # virada do ano, em Brasília
+    ],
+    indirect=["agora_fixo"],
+)
+def test_data_da_verificacao_e_sempre_a_de_brasilia(
+    agora_fixo, empresa_configurada, transporte, em_brasilia
+):
+    transporte({"/convenio": convenio_aderente(), f"/{CNPJ_A}": (200, {})})
+
+    verificada = empresa_configurada.post(VERIFICAR).json()["convenio"]["verificado_em"]
+    consultada = empresa_configurada.get(PARAMETROS).json()["convenio"]["verificado_em"]
+
+    assert verificada == consultada == em_brasilia
+    # É o mesmo instante, só escrito em Brasília; e a data (os 10 primeiros caracteres) é a de lá.
+    assert dt.datetime.fromisoformat(verificada) == agora_fixo
+    assert verificada[:10] == em_brasilia[:10]
 
 
 def test_resultado_fica_gravado_e_aparece_na_consulta_seguinte(empresa_configurada, transporte):
@@ -281,19 +311,3 @@ def test_verificacao_da_empresa_a_nao_aparece_na_b(
     assert api_do_master(empresa_b).get(PARAMETROS).json()["convenio"] is None
     with schema_context(empresa_b.schema_name):
         assert ParametrosFiscais.obter().convenio_verificado_em is None
-
-
-def test_o_gateway_recusa_a_emissao_na_fase_2():
-    """As peças de persistência da emissão ainda não existem: ninguém emite por engano."""
-    from freedfe.certificado import CertificadoA1
-
-    servico = gateway._criar_servico(
-        cnpj=CNPJ_A,
-        ambiente_producao=False,
-        certificado=CertificadoA1(gerar_pfx(CNPJ_A), SENHA_DO_PFX),
-        transporte=TransporteFalso({}),
-        pausa=lambda s: None,
-    )
-
-    with pytest.raises(gateway.NaoDisponivelNaFase2):
-        servico.emissoes()

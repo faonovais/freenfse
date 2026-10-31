@@ -252,7 +252,7 @@ describe('Parâmetros fiscais', () => {
 describe('Certificado A1', () => {
   const EXISTENTE = {
     existe: true, titular: 'O=ICP-Brasil (teste),CN=EMPRESA TESTE:11222333000181', cnpj_titular: '11222333000181',
-    cnpj_formatado: '11.222.333/0001-81', valido_de: '2026-01-01T00:00:00Z', valido_ate: '2027-01-01T00:00:00Z',
+    cnpj_formatado: '11.222.333/0001-81', valido_de: '2026-01-01T00:00:00-03:00', valido_ate: '2027-01-01T00:00:00-03:00',
     dias_para_vencer: 200, vencido: false, faixa_alerta: null, impressao_digital: 'a'.repeat(64),
     mesma_raiz_autorizada: false, enviado_por: 'ana@example.com', enviado_em: '2026-10-30T12:00:00Z',
   }  // fmt: skip

@@ -251,6 +251,11 @@ CELERY_BEAT_SCHEDULE = {
         "task": "fiscal.tasks.verificar_vencimento_certificados",
         "schedule": crontab(hour=6, minute=40),
     },
+    # Notas com resultado incerto: só consulta a Sefin (nunca reenvia), a cada 5 minutos.
+    "reconciliar-notas-incertas": {
+        "task": "fiscal.tasks.reconciliar_notas_incertas",
+        "schedule": crontab(minute="*/5"),
+    },
 }
 
 # --- Internacionalização ------------------------------------------------------

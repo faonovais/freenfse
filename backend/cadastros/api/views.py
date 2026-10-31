@@ -4,6 +4,7 @@ import datetime as dt
 
 from django.core.exceptions import ValidationError as ErroDjango
 from django.db import IntegrityError
+from django.utils import timezone
 from rest_framework import mixins, serializers, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.pagination import PageNumberPagination
@@ -161,7 +162,7 @@ class ServicoViewSet(
         """Versão vigente de um serviço numa data: `?codigo_nacional=&codigo_municipal=&data=`."""
         params = request.query_params
         try:
-            data = dt.date.fromisoformat(params.get("data") or dt.date.today().isoformat())
+            data = dt.date.fromisoformat(params.get("data") or timezone.localdate().isoformat())
         except ValueError:
             raise serializers.ValidationError(
                 {"data": "Use a data no formato AAAA-MM-DD."}

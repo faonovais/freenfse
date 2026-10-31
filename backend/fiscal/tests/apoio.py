@@ -13,6 +13,7 @@ from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.primitives.serialization import BestAvailableEncryption, pkcs12
 from cryptography.x509.oid import NameOID
+from django.utils import timezone
 from freedfe.excecoes import ComunicacaoErro
 from freedfe.transporte import RespostaHttp, TransporteRest
 
@@ -42,7 +43,7 @@ def gerar_pfx(
     nome="EMPRESA DE TESTE LTDA",
 ):
     """Gera um `.pfx` A1 fictício. `cnpj=None` simula um certificado de pessoa física (e-CPF)."""
-    agora = dt.datetime.now(dt.UTC)
+    agora = timezone.now()  # o relógio do Django: acompanha o `agora_fixo` dos testes
     valido_de = valido_de or agora - dt.timedelta(days=1)
     valido_ate = valido_ate or agora + dt.timedelta(days=365)
     chave = _chave_rsa()
@@ -112,3 +113,97 @@ def convenio_nao_aderente():
 def falha_de_rede():
     """Falha de transporte (DNS, TLS, timeout)."""
     return ComunicacaoErro("falha de rede simulada")
+
+
+def preparar_empresa_para_emitir(empresa, *, ambiente="producao_restrita", municipio="2903201"):
+    """Deixa a empresa **do schema ativo** pronta para emitir: certificado, parâmetros e convênio.
+
+    Chamar dentro de `schema_context(empresa.schema_name)`. O certificado é gerado na hora, com
+    o CNPJ da empresa, e guardado cifrado como no sistema real.
+    """
+    from fiscal.models import Certificado, ParametrosFiscais
+
+    agora = timezone.now()
+    Certificado.objects.all().delete()
+    Certificado.objects.create(
+        arquivo_pfx=gerar_pfx(empresa.cnpj),
+        senha=SENHA_DO_PFX,
+        titular="EMPRESA DE TESTE LTDA",
+        cnpj_titular=empresa.cnpj,
+        valido_de=agora - dt.timedelta(days=1),
+        valido_ate=agora + dt.timedelta(days=365),
+        impressao_digital="a" * 64,
+    )
+    parametros = ParametrosFiscais.obter()
+    parametros.regime_tributario = ParametrosFiscais.RegimeTributario.OUTRO
+    parametros.serie_dps = 900
+    parametros.ambiente = ambiente
+    parametros.codigo_municipio_emissor = municipio
+    parametros.convenio_verificado_em = agora
+    parametros.convenio_codigo_municipio = municipio
+    parametros.convenio_ambiente = ambiente
+    parametros.convenio_resultado = {"aderente": True, "mensagem": "Convênio ativo."}
+    parametros.save()
+    return parametros
+
+
+class RelogioControlavel:
+    """Relógio UTC que só anda quando o teste manda (`avancar(minutes=5)`)."""
+
+    def __init__(self, inicio=None):
+        self.agora = inicio or dt.datetime(2026, 11, 2, 15, 0, tzinfo=dt.UTC)
+
+    def __call__(self):
+        return self.agora
+
+    def avancar(self, **intervalo):
+        """Avança o relógio."""
+        self.agora += dt.timedelta(**intervalo)
+
+
+def criar_cadastros_de_teste():
+    """Tomador (PJ) e serviço vigente de teste, no schema ativo; devolve `(tomador, servico)`."""
+    from decimal import Decimal
+
+    from cadastros.models import Pessoa, Servico
+    from conftest import CNPJ_C
+
+    tomador, _ = Pessoa.objects.get_or_create(
+        documento=CNPJ_C,
+        defaults={
+            "tipo": Pessoa.Tipo.PESSOA_JURIDICA,
+            "nome": "TOMADOR FICTICIO LTDA",
+            "logradouro": "Rua das Flores",
+            "numero": "100",
+            "bairro": "Centro",
+            "codigo_municipio": "2903201",
+            "cep": "47800000",
+            "emails_envio": ["financeiro@tomador.test"],
+        },
+    )
+    servico, _ = Servico.objects.get_or_create(
+        codigo_tributacao_nacional="170101",
+        codigo_tributacao_municipal="001",
+        defaults={
+            "nome": "Consultoria",
+            "descricao": "Consultoria em gestão agrícola.",
+            "aliquota_iss": Decimal("2.00"),
+            "vigencia_inicio": dt.date(2026, 1, 1),
+        },
+    )
+    return tomador, servico
+
+
+def criar_rascunho_de_teste(*, valor="1000.00", competencia=None, usuario=None, **extra):
+    """Cria (no schema ativo) um tomador, um serviço vigente e o rascunho da nota."""
+    from fiscal.services import nfse as servico_nfse
+
+    tomador, servico = criar_cadastros_de_teste()
+    dados = {
+        "tomador": tomador.pk,
+        "servico": servico.pk,
+        "competencia": competencia or dt.date(2026, 10, 1),
+        "valores": {"servico": valor},
+    }
+    dados.update(extra)
+    return servico_nfse.criar_rascunho(dados, usuario=usuario)

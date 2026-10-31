@@ -52,6 +52,21 @@ Depois de criar a empresa e o vínculo, o Administrador da empresa configura, em
 (`carregar_municipios`). O roteiro para validar com um certificado real está em
 [`docs/verificacao-fase-2.md`](docs/verificacao-fase-2.md).
 
+### Emissão de NFS-e
+
+Com a empresa pronta (certificado, município e **convênio verificado**), o Emissor usa **Notas fiscais › NFS-e emitidas**:
+escolhe o tomador e o serviço vigente na competência, informa os valores, **confere** o cálculo e envia. A emissão roda
+na fila (Celery), **uma por vez por empresa**, e a tela acompanha o resultado.
+
+- Se a Sefin não responder (timeout, 5xx), a nota fica **"resultado incerto"**: o sistema só *consulta* a Sefin (a cada 5
+  minutos ou em "Conferir agora") e **nunca reenvia por conta própria**. "Tentar enviar de novo" reaproveita o mesmo número.
+- O leiaute da DPS segue a data: **NT 004** em produção até 30/11/2026 e **NT 009** depois (produção restrita: sempre NT 009).
+- Cancelamento e substituição só mudam a nota depois que a Sefin confirma o evento.
+- O DANFSe é gerado na hora (com marca d'água se a nota estiver cancelada ou substituída); o XML original fica guardado com hash.
+
+O roteiro para validar tudo isto com um certificado real, incluindo o teste de timeout, está em
+[`docs/verificacao-fase-3.md`](docs/verificacao-fase-3.md); as decisões, em [`docs/adr/0004-nucleo-fiscal.md`](docs/adr/0004-nucleo-fiscal.md).
+
 ### Chaves de criptografia
 
 `FREENFSE_CHAVES` guarda as chaves que cifram dados sensíveis (certificados, senhas, tokens). Gere uma com `docker compose run --rm backend python manage.py gerar_chave` e use o formato `1:<chave>`. **Guarde-a fora do servidor e do repositório**: sem ela, o que foi cifrado não pode ser recuperado. A rotação de chaves está descrita no `.env.example`.
