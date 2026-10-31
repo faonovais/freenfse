@@ -297,12 +297,22 @@ def test_quem_so_consulta_ve_os_metadados_mas_nao_altera(api_de, api_do_master, 
     assert api.delete(URL).status_code == 403
 
 
-def test_emissor_nao_tem_acesso_a_configuracao(api_de, api_do_master, empresa_a):
-    _enviar(api_do_master(empresa_a), gerar_pfx(CNPJ_A))
+def test_emissor_ve_os_dados_do_certificado_mas_nao_o_altera_nem_ve_o_segredo(
+    api_de, api_do_master, empresa_a
+):
+    """Issue #14/#20: somente leitura dos metadados; nunca o .pfx nem a senha."""
+    pfx = gerar_pfx(CNPJ_A)
+    _enviar(api_do_master(empresa_a), pfx)
     api = api_de(empresa_a, Perfil.EMISSOR)
 
-    assert api.get(URL).status_code == 403
+    leitura = api.get(URL)
+
+    assert leitura.status_code == 200
+    assert leitura.json()["existe"] is True and leitura.json()["cnpj_titular"] == CNPJ_A
+    assert _vazamentos(leitura.content.decode(), pfx) == []
     assert _enviar(api, gerar_pfx(CNPJ_A)).status_code == 403
+    assert api.delete(URL).status_code == 403
+    assert api_do_master(empresa_a).get(URL).json()["existe"] is True  # nada foi removido
 
 
 def test_administrador_sem_config_editar_nao_envia(api_de, empresa_a):
