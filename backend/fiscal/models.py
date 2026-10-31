@@ -347,8 +347,10 @@ class Nfse(models.Model):
         "cadastros.Servico", on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
     )
 
-    xml_dps = models.BinaryField(null=True, blank=True)
-    xml_nfse = models.BinaryField(null=True, blank=True)
+    # XMLs cifrados em repouso (ADR 0008): o banco guarda só o token AES-256-GCM; o hash abaixo
+    # é sempre o do XML em claro.
+    xml_dps = CampoBinarioCriptografado(null=True, blank=True)
+    xml_nfse = CampoBinarioCriptografado(null=True, blank=True)
     hash_xml_nfse = models.CharField(max_length=64, blank=True)
 
     erros = models.JSONField(default=list, blank=True)
@@ -427,7 +429,7 @@ class EventoNfse(models.Model):
     identificador = models.CharField(max_length=80, blank=True)
     descricao = models.CharField(max_length=255, blank=True)
     registrado_em = models.DateTimeField(null=True, blank=True)
-    xml = models.BinaryField(null=True, blank=True)
+    xml = CampoBinarioCriptografado(null=True, blank=True)
     hash_xml = models.CharField(max_length=64, blank=True)
     criado_em = models.DateTimeField(auto_now_add=True)
 

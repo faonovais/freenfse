@@ -8,6 +8,8 @@ municipais, o estado da sequência de NSU e a trilha técnica das chamadas. A pa
 
 from django.db import models
 
+from core.fields import CampoBinarioCriptografado
+
 
 class SerieDps(models.Model):
     """Uma linha por série de DPS: é o cadeado de `reservar_proximo`.
@@ -102,7 +104,7 @@ class EvidenciaFiscal(models.Model):
     versao = models.PositiveIntegerField(
         default=1, help_text="Conteúdo diferente para a mesma tentativa vira nova versão."
     )
-    conteudo = models.BinaryField()
+    conteudo = CampoBinarioCriptografado()
     sha256 = models.CharField(max_length=64)
     criado_em = models.DateTimeField(auto_now_add=True)
 
@@ -123,7 +125,7 @@ class DocumentoFiscal(models.Model):
     tipo_xml = models.CharField(max_length=30)
     xml_completo = models.BooleanField(default=True)
     resumo = models.JSONField(help_text="`ResumoDocumento.para_dict()` da biblioteca.")
-    xml = models.BinaryField()
+    xml = CampoBinarioCriptografado()
     sha256 = models.CharField(max_length=64)
     nsu = models.CharField(max_length=15, blank=True)
     atualizado_em = models.DateTimeField(auto_now=True)
@@ -147,7 +149,7 @@ class EventoFiscal(models.Model):
     tipo_evento = models.CharField(max_length=6)
     identificador = models.CharField(max_length=80)
     resumo = models.JSONField(help_text="`EventoDocumento.para_dict()` da biblioteca.")
-    xml = models.BinaryField()
+    xml = CampoBinarioCriptografado()
     sha256 = models.CharField(max_length=64)
     nsu = models.CharField(max_length=15, blank=True)
     criado_em = models.DateTimeField(auto_now_add=True)
@@ -185,7 +187,7 @@ class XmlNaoReconhecido(models.Model):
 
     nsu = models.CharField(max_length=15, blank=True)
     esquema = models.CharField(max_length=120, blank=True)
-    xml = models.BinaryField()
+    xml = CampoBinarioCriptografado()
     sha256 = models.CharField(max_length=64)
     criado_em = models.DateTimeField(auto_now_add=True)
 

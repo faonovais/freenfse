@@ -13,7 +13,7 @@ from core.permissoes import Perfil
 from documentos import tasks
 from documentos.models import Exportacao
 from documentos.services import contexto, exportacao
-from documentos.tests.apoio import emitir, nota_avulsa
+from documentos.tests.apoio import emitir, nota_avulsa, xml_bruto
 from fiscal.models import Nfse
 from fiscal.services import emissao
 
@@ -55,6 +55,21 @@ def test_data_de_emissao_e_nome_do_arquivo_sao_os_de_brasilia(empresa_pronta, do
     assert pedido.nome_download == "notas-20261031-2330.zip"
     linhas = _linhas(_zip(pedido))
     assert [linha["data_emissao"] for linha in linhas] == ["2026-10-31", "2026-11-01"]
+
+
+def test_o_zip_leva_o_xml_em_claro_mesmo_com_a_coluna_cifrada(
+    empresa_pronta, nova_nota, sefin, dono
+):
+    nota = emitir(empresa_pronta, nova_nota)
+    original = sefin.nfses[nota.chave]
+    bruto = xml_bruto(nota)
+    assert bruto.startswith(b"v1:") and original not in bruto  # no banco só há o token
+    pedido = _pedir(dono)
+
+    assert exportacao.gerar(pedido.pk) == "pronta"
+
+    arquivo = _zip(pedido)
+    assert arquivo.read(next(n for n in arquivo.namelist() if n.startswith("xml/"))) == original
 
 
 def test_o_zip_tem_o_xml_o_pdf_e_o_csv_de_cada_nota(empresa_pronta, nova_nota, sefin, dono):

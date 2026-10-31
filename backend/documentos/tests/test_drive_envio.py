@@ -12,7 +12,7 @@ from documentos.models import ArquivoDrive, ConfiguracaoDrive, PastaDrive
 from documentos.services import contexto
 from documentos.services.drive import envio
 from documentos.services.drive.cliente import ErroDrive
-from documentos.tests.apoio import ativar_drive, emitir, nota_avulsa
+from documentos.tests.apoio import ativar_drive, emitir, nota_avulsa, xml_bruto
 from documentos.tests.simulados import DriveSimulado, conta_de_servico_json
 from fiscal.services import emissao
 
@@ -147,6 +147,21 @@ def test_nota_autorizada_vai_ao_drive_na_pasta_e_no_nome_do_modelo(
     pdf = next(a for a in drive.arquivos() if a["nome"].endswith(".pdf"))
     assert pdf["conteudo"].startswith(b"%PDF")
     assert {a.situacao for a in nota.arquivos_drive.all()} == {"enviado"}
+
+
+def test_o_drive_recebe_o_xml_em_claro_mesmo_com_a_coluna_cifrada(
+    empresa_pronta, nova_nota, sefin, drive, trocas
+):
+    ativar_drive()
+    nota = emitir(empresa_pronta, nova_nota)
+    original = sefin.nfses[nota.chave]
+    bruto = xml_bruto(nota)
+    assert bruto.startswith(b"v1:") and original not in bruto  # no banco só há o token
+
+    envio.enviar_nota(nota, trocas=trocas)
+
+    xml = next(a for a in drive.arquivos() if a["nome"].endswith(".xml"))
+    assert xml["conteudo"] == original
 
 
 def test_reenviar_sobrescreve_pelo_file_id_e_nao_duplica(
