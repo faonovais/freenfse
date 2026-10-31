@@ -170,6 +170,21 @@ def test_tomador_inativo_removido_ou_modelo_inativo_nao_geram(empresa_pronta, re
     assert Nfse.objects.count() == 0
 
 
+def test_ibs_cbs_nao_e_do_modelo_o_rascunho_nunca_leva_o_grupo(empresa_pronta, responsavel):
+    modelo = criar_modelo(
+        complementos={
+            "informacoes_complementares": "x",
+            "ibs_cbs": {"codigo_indicador_operacao": "000001", "indicador_destinatario": 0},
+        }
+    )
+
+    dados = modelos.dados_do_rascunho(modelo, data_execucao=EXECUCAO)
+    nota = modelos.gerar_rascunho(modelo, usuario=responsavel, data_execucao=EXECUCAO)
+
+    assert "ibs_cbs" not in dados
+    assert nota.complementos["ibs_cbs"] is None
+
+
 # -- validação do modelo -------------------------------------------------------------------
 
 

@@ -34,7 +34,7 @@ O usuário vive no schema público: o responsável é guardado por `responsavel_
 - **Texto com variáveis.** As informações complementares aceitam `{competencia}`, `{mes}`, `{ano}` e `{data_execucao}` (mesmo analisador do e-mail e do Drive: variável desconhecida e chave solta são recusadas ao salvar).
 - **Competência padrão:** mês da execução (D12) ou mês anterior (serviço cobrado no mês seguinte). Editável no rascunho.
 - **Modelo inativo pode ficar incompleto**; ativo precisa gerar um rascunho válido hoje. Alterar só o e-mail de um modelo com o serviço vencido não é bloqueado (a prova de geração só roda quando o campo alterado afeta a geração).
-- A **API** aceita o grupo IBS/CBS no modelo, mas a **tela ainda não o expõe** (item aberto; o grupo já era opcional na emissão).
+- **IBS/CBS não é do modelo.** A opção pelo IBS/CBS e o indicador da operação são **da empresa** (parâmetros fiscais; decisão do usuário nas issues #14, #16 e #18), não do serviço nem do modelo. Por isso o modelo **não tem** campo de IBS/CBS: o rascunho nasce com o padrão que a emissão já aplica, e a mudança para o nível da empresa é a tarefa da issue #20 (depois desta fase).
 
 ### 3. Sobreposição de e-mail por modelo (D21)
 
@@ -94,7 +94,7 @@ Mudanças fora do app novo, todas pequenas e cobertas por testes: `fiscal` ganha
 
 ## Itens abertos e decisões que não são desta fase
 
-1. **IBS/CBS no modelo** pela tela (hoje só pela API).
+1. **IBS/CBS por empresa** (issue #20): o modelo herdará o padrão da empresa, sem campo próprio.
 2. **Calendário de feriados** (D17 manda executar mesmo assim; um dia pode pedir "dia útil").
 3. **Central de notificações** dentro do sistema (hoje: e-mail + histórico + avisos nas telas).
 4. **Aprovação por dupla** (quem gerou não aprova): não pedido.

@@ -50,7 +50,7 @@ class ModeloNfse(models.Model):
         blank=True,
         help_text=(
             "informacoes_complementares (aceita {competencia} {mes} {ano} {data_execucao}), "
-            "percentual_total_tributos_simples e ibs_cbs."
+            "percentual_total_tributos_simples."
         ),
     )
     competencia_padrao = models.CharField(

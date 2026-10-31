@@ -40,7 +40,7 @@ const OPCOES = {
 const MODELO = {
   id: 1, nome: 'Mensalidade', ativo: true, tomador: 4, tomador_nome: 'TOMADOR FICTICIO LTDA', servico: 3,
   servico_nome: 'Consultoria', valores: { servico: '1500.00' }, informacoes_complementares: 'Referente a {competencia}.',
-  percentual_total_tributos_simples: null, ibs_cbs: null, competencia_padrao: 'mes_da_execucao',
+  percentual_total_tributos_simples: null, competencia_padrao: 'mes_da_execucao',
   email_envio_automatico: null, email_avisar_cancelamento: null, email_anexar_pdf: null, email_anexar_xml: null,
   email_assunto_modelo: '', email_corpo_modelo: '', email_copias_fixas: null, agendamentos_em_uso: 2, problemas: {},
   atualizado_em: '2026-11-01T12:00:00Z',

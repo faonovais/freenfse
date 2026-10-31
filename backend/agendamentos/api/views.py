@@ -28,7 +28,7 @@ from fiscal.services.nfse import ErroDeNota
 
 CAMPOS_QUE_AFETAM_A_GERACAO = {
     "ativo", "tomador", "servico", "valores", "competencia_padrao",
-    "informacoes_complementares", "percentual_total_tributos_simples", "ibs_cbs",
+    "informacoes_complementares", "percentual_total_tributos_simples",
 }  # fmt: skip
 LIMITE_DAS_LISTAS = 200
 PREVIA_PADRAO = 5

@@ -182,7 +182,7 @@ class Migration(migrations.Migration):
                     models.JSONField(
                         blank=True,
                         default=dict,
-                        help_text="informacoes_complementares (aceita {competencia} {mes} {ano} {data_execucao}), percentual_total_tributos_simples e ibs_cbs.",
+                        help_text="informacoes_complementares (aceita {competencia} {mes} {ano} {data_execucao}), percentual_total_tributos_simples.",
                     ),
                 ),
                 (

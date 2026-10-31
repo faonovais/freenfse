@@ -76,8 +76,8 @@ def dados_do_rascunho(modelo, *, data_execucao):
             )
     if erros:
         raise ErroDeNota(erros)
-    complementos = dict(modelo.complementos or {})
-    complementos["informacoes_complementares"] = modelos_texto.renderizar(
+    complementos = modelo.complementos or {}
+    texto = modelos_texto.renderizar(
         complementos.get("informacoes_complementares", ""),
         _valores_do_texto(competencia, data_execucao),
     ).strip()
@@ -86,7 +86,9 @@ def dados_do_rascunho(modelo, *, data_execucao):
         "servico": servico.pk,
         "competencia": competencia,
         "valores": dict(modelo.valores or {}),
-        **complementos,
+        "informacoes_complementares": texto,
+        "percentual_total_tributos_simples": complementos.get("percentual_total_tributos_simples"),
+        # IBS/CBS não é do modelo: a opção e o indicador são da empresa (ADR 0006).
     }
 
 

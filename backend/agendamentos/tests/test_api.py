@@ -169,6 +169,16 @@ def test_alterar_o_modelo_nao_muda_o_rascunho_ja_gerado(emissor, empresa_pronta,
         assert Nfse.objects.get(pk=novo.json()["id"]).valor_servico == Decimal("9000.00")
 
 
+def test_a_api_do_modelo_nao_aceita_nem_devolve_ibs_cbs(emissor, dados_do_modelo):
+    corpo = {**dados_do_modelo, "ibs_cbs": {"codigo_indicador_operacao": "000001"}}
+
+    criado = emissor.post(MODELOS, corpo)
+
+    assert criado.status_code == 201
+    assert "ibs_cbs" not in criado.json()
+    assert "ibs_cbs" not in emissor.get(f"{MODELOS}{criado.json()['id']}/").json()
+
+
 def test_a_lista_mostra_o_que_impede_o_modelo_de_gerar_rascunho(
     emissor, empresa_pronta, modelo_criado
 ):

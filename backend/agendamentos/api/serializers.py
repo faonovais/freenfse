@@ -30,7 +30,6 @@ class ModeloEntrada(serializers.Serializer):
     percentual_total_tributos_simples = serializers.CharField(
         required=False, allow_null=True, allow_blank=True
     )
-    ibs_cbs = serializers.DictField(required=False, allow_null=True)
     competencia_padrao = serializers.ChoiceField(
         choices=ModeloNfse.Competencia.choices, required=False
     )
@@ -70,7 +69,7 @@ def aplicar_modelo(modelo, dados):
             if campo in dados["valores"]
         }
     complementos = dict(modelo.complementos or {})
-    for campo in ("informacoes_complementares", "percentual_total_tributos_simples", "ibs_cbs"):
+    for campo in ("informacoes_complementares", "percentual_total_tributos_simples"):
         if campo in dados:
             complementos[campo] = dados[campo]
     modelo.complementos = complementos
@@ -91,7 +90,6 @@ def modelo_saida(modelo, *, problemas=None, em_uso=0):
         "valores": modelo.valores or {},
         "informacoes_complementares": complementos.get("informacoes_complementares", ""),
         "percentual_total_tributos_simples": complementos.get("percentual_total_tributos_simples"),
-        "ibs_cbs": complementos.get("ibs_cbs"),
         "competencia_padrao": modelo.competencia_padrao,
         "email_envio_automatico": modelo.email_envio_automatico,
         "email_avisar_cancelamento": modelo.email_avisar_cancelamento,
