@@ -114,6 +114,7 @@ class EnvioEmail(models.Model):
         ALERTA_CERTIFICADO = "alerta_certificado", "Alerta de certificado"
         AVISO_AGENDAMENTO = "aviso_agendamento", "Aviso de agendamento"
         RASCUNHOS_PENDENTES = "rascunhos_pendentes", "Rascunhos pendentes"
+        ALERTA_OPERACIONAL = "alerta_operacional", "Alerta operacional"
 
     class Situacao(models.TextChoices):
         """Andamento do envio."""

@@ -47,9 +47,8 @@ class Command(BaseCommand):
                 conferidos += total
                 if claros:
                     em_claro += claros
-                    self.stderr.write(
-                        f"EM CLARO: {modelo._meta.label}.{campo.name} [{schema}]: {claros} de {total}"
-                    )
+                    local = f"{modelo._meta.label}.{campo.name} [{schema}]"
+                    self.stderr.write(f"EM CLARO: {local}: {claros} de {total}")
 
         if em_claro:
             raise CommandError(

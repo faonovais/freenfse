@@ -286,6 +286,16 @@ CELERY_BEAT_SCHEDULE = {
         "task": "agendamentos.tasks.alertar_rascunhos_pendentes",
         "schedule": crontab(hour=8, minute=20),
     },
+    # Batimento do agendador: prova que beat -> fila -> worker funcionam (saúde e healthcheck).
+    "batimento-do-agendador": {
+        "task": "operacao.tasks.batimento",
+        "schedule": crontab(minute="*"),
+    },
+    # Alertas operacionais por e-mail (emissão incerta prolongada, falhas permanentes, backup).
+    "verificar-alertas-operacionais": {
+        "task": "operacao.tasks.verificar_alertas",
+        "schedule": crontab(minute=35),
+    },
     # Backup cifrado do banco inteiro: todo dia às 02:30 (Brasília). Falha = log crítico + alerta.
     "fazer-backup": {
         "task": "operacao.tasks.fazer_backup",
@@ -308,6 +318,22 @@ CELERY_BEAT_SCHEDULE = {
 # documentos fiscais NÃO têm expurgo automático.
 FREENFSE_RETENCAO_ENVIOS_ANOS = env.int("FREENFSE_RETENCAO_ENVIOS_ANOS", default=5)
 
+# --- Alertas operacionais (Fase 6) -----------------------------------------------
+# Por empresa: pelo e-mail configurado da empresa (Fase 4), para os administradores. Horas sem
+# resposta definitiva da Sefin até alertar uma nota "enviando"/"incerta".
+FREENFSE_ALERTA_EMISSAO_HORAS = env.int("FREENFSE_ALERTA_EMISSAO_HORAS", default=2)
+# Da plataforma (backup que falhou): não pertencem a uma empresa, então saem por um SMTP do
+# sistema (ALERTAS_SMTP_*; recomendado: caixa dedicada com senha de app). Sem ALERTAS_SMTP_HOST
+# o alerta fica só no log (CRITICAL) e no endpoint de saúde. ALERTAS_EMAIL_PARA vazio = os
+# usuários Master ativos.
+ALERTAS_EMAIL_PARA = env.list("ALERTAS_EMAIL_PARA", default=[])
+ALERTAS_SMTP_HOST = env("ALERTAS_SMTP_HOST", default="")
+ALERTAS_SMTP_PORTA = env.int("ALERTAS_SMTP_PORTA", default=587)
+ALERTAS_SMTP_SEGURANCA = env("ALERTAS_SMTP_SEGURANCA", default="starttls")  # starttls|ssl|nenhuma
+ALERTAS_SMTP_USUARIO = env("ALERTAS_SMTP_USUARIO", default="")
+ALERTAS_SMTP_SENHA = env("ALERTAS_SMTP_SENHA", default="")
+ALERTAS_EMAIL_DE = env("ALERTAS_EMAIL_DE", default=ALERTAS_SMTP_USUARIO or "freenfse@localhost")
+
 # --- Backup (Fase 6, ADR 0008) --------------------------------------------------
 # Pasta dos backups cifrados (volume próprio; copie para fora do servidor). O destinatário é a
 # chave PÚBLICA age (age1...): a privada fica fora do servidor e só serve para restaurar.
@@ -321,10 +347,27 @@ TIME_ZONE = "America/Sao_Paulo"
 USE_I18N = True
 USE_TZ = True
 
-# --- Logs (saída padrão, capturada pelo Docker) -------------------------------
+# --- Logs (saída padrão, capturada pelo Docker/journald) --------------------------
+# Estruturados (JSON, uma linha por evento) e SEM segredos nem CPF/e-mail: a máscara é feita
+# pelo formatador e pelo filtro (operacao/logs.py), não por quem chama o log. LOG_FORMATO=texto
+# serve só ao desenvolvimento; o filtro de segredos vale nos dois formatos.
+LOG_FORMATO = env("LOG_FORMATO", default="json")
 LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,
-    "handlers": {"console": {"class": "logging.StreamHandler"}},
+    "filters": {"segredos": {"()": "operacao.logs.FiltroDeSegredos"}},
+    "formatters": {
+        "json": {"()": "operacao.logs.FormatadorJson"},
+        "texto": {"format": "%(asctime)s %(levelname)s %(name)s %(message)s"},
+    },
+    "handlers": {
+        "console": {
+            "class": "logging.StreamHandler",
+            "formatter": LOG_FORMATO if LOG_FORMATO in ("json", "texto") else "json",
+            "filters": ["segredos"],
+        }
+    },
     "root": {"handlers": ["console"], "level": env("LOG_LEVEL", default="INFO")},
 }
+# O worker e o beat usam esta mesma configuração (sem o formato próprio do Celery).
+CELERY_WORKER_HIJACK_ROOT_LOGGER = False
