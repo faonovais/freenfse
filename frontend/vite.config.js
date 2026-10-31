@@ -23,5 +23,6 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     setupFiles: ['./src/setupTests.js'],
+    globalSetup: ['./src/testes/fusoDosTestes.js'],
   },
 })

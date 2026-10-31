@@ -1,5 +1,6 @@
 """Serializers fiscais. O certificado é só de saída e nunca expõe o `.pfx` nem a senha."""
 
+from django.utils import timezone
 from rest_framework import serializers
 
 from core.models import Municipio
@@ -36,7 +37,9 @@ class ParametrosFiscaisSerializer(serializers.Serializer):
         if not parametros.convenio_verificado_em:
             return None
         return {
-            "verificado_em": parametros.convenio_verificado_em,
+            # Em horário de Brasília (America/Sao_Paulo), como os demais campos de data e hora da
+            # API: o instante é o mesmo, mas a data que o usuário lê não pula de dia às 21h.
+            "verificado_em": timezone.localtime(parametros.convenio_verificado_em),
             "codigo_municipio": parametros.convenio_codigo_municipio,
             "ambiente": parametros.convenio_ambiente,
             "atual": parametros.convenio_atual,

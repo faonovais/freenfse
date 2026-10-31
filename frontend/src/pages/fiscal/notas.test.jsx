@@ -187,6 +187,15 @@ describe('Emissão guiada', () => {
     expect(await screen.findByText(/Produção restrita \(testes, sem valor fiscal\)/)).toBeInTheDocument()
   })
 
+  it('sugere a competência do mês de Brasília às 23:30 do último dia do mês (issue #24)', async () => {
+    // Em UTC já é 01/11; o servidor recusaria a competência de novembro como futura.
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date('2026-11-01T02:30:00Z'))
+    abrir('/fiscal/notas/nova', rotas())
+
+    expect(await screen.findByLabelText('Competência')).toHaveValue('2026-10-01')
+  })
+
   it('só oferece serviços vigentes na competência escolhida', async () => {
     const { chamadas } = abrir('/fiscal/notas/nova', rotas())
     await screen.findByRole('combobox', { name: 'Serviço' })

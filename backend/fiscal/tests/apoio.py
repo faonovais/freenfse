@@ -13,6 +13,7 @@ from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.primitives.serialization import BestAvailableEncryption, pkcs12
 from cryptography.x509.oid import NameOID
+from django.utils import timezone
 from freedfe.excecoes import ComunicacaoErro
 from freedfe.transporte import RespostaHttp, TransporteRest
 
@@ -42,7 +43,7 @@ def gerar_pfx(
     nome="EMPRESA DE TESTE LTDA",
 ):
     """Gera um `.pfx` A1 fictício. `cnpj=None` simula um certificado de pessoa física (e-CPF)."""
-    agora = dt.datetime.now(dt.UTC)
+    agora = timezone.now()  # o relógio do Django: acompanha o `agora_fixo` dos testes
     valido_de = valido_de or agora - dt.timedelta(days=1)
     valido_ate = valido_ate or agora + dt.timedelta(days=365)
     chave = _chave_rsa()
@@ -120,8 +121,6 @@ def preparar_empresa_para_emitir(empresa, *, ambiente="producao_restrita", munic
     Chamar dentro de `schema_context(empresa.schema_name)`. O certificado é gerado na hora, com
     o CNPJ da empresa, e guardado cifrado como no sistema real.
     """
-    from django.utils import timezone
-
     from fiscal.models import Certificado, ParametrosFiscais
 
     agora = timezone.now()
