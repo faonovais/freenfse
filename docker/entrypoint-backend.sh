@@ -6,6 +6,8 @@ set -eu
 
 if [ "${EXECUTAR_MIGRACOES:-0}" = "1" ]; then
     python manage.py migrate_schemas --noinput
+    # Municípios do IBGE (schema público): idempotente, segundos.
+    python manage.py carregar_municipios
 fi
 
 exec "$@"

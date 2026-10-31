@@ -109,6 +109,7 @@ jobs:
           cp .env.example .env
           sed -i "s|^SECRET_KEY=.*|SECRET_KEY=$(python3 -c 'import secrets; print(secrets.token_urlsafe(64))')|" .env
           sed -i "s|^POSTGRES_PASSWORD=.*|POSTGRES_PASSWORD=$(python3 -c 'import secrets; print(secrets.token_urlsafe(24))')|" .env
+          sed -i "s|^FREENFSE_CHAVES=.*|FREENFSE_CHAVES=1:$(python3 -c 'import base64, os; print(base64.urlsafe_b64encode(os.urandom(32)).decode())')|" .env
       - name: Subir a pilha
         run: docker compose up -d --build --wait --wait-timeout 300
       - name: /api/versao/ responde pelo Nginx com a versão do arquivo VERSION
@@ -118,6 +119,27 @@ jobs:
           test "${resposta}" = "{\"versao\":\"$(cat VERSION)\"}"
       - name: Interface é servida
         run: curl -fsS http://localhost:8080/ | grep -q '<title>freenfse</title>'
+      - name: Autenticação (allauth) responde pelo Nginx
+        run: |
+          curl -fsS http://localhost:8080/_allauth/browser/v1/config | grep -q '"status": *200'
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8080/_allauth/browser/v1/auth/session)" = "401"
+      - name: Rotas protegidas recusam quem não está autenticado
+        run: |
+          # sem login: a API de empresa responde 401 e a de administração, 403
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8080/api/qualquer/)" = "401"
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8080/api/eu/)" = "403"
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8080/api/admin-global/empresas/)" = "403"
+          # rotas de cadastros e fiscal são de empresa: sem login, 401
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8080/api/cadastros/pessoas/)" = "401"
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8080/api/fiscal/identidade/)" = "401"
+      - name: Municípios do IBGE foram carregados na subida
+        run: |
+          docker compose exec -T backend python manage.py shell -c \
+            "import sys; from core.models import Municipio; sys.exit(0 if Municipio.objects.count() == 5571 else 1)"
+      - name: Primeiro Master é criado pela linha de comando
+        run: |
+          docker compose exec -T -e DJANGO_SUPERUSER_PASSWORD="$(python3 -c 'import secrets; print(secrets.token_urlsafe(24))')" \
+            backend python manage.py createsuperuser --noinput --email master@example.com --nome Master
       - name: Worker Celery está de pé
         run: docker compose exec -T worker celery -A config inspect ping
       - name: Logs (em caso de falha)

@@ -1,7 +1,7 @@
-# freenfse — ambiente completo (aplicação vazia da Fase 0).
+# freenfse — ambiente completo.
 #
 # Uso:
-#   cp .env.example .env     # preencha SECRET_KEY e POSTGRES_PASSWORD
+#   cp .env.example .env     # preencha SECRET_KEY, POSTGRES_PASSWORD e FREENFSE_CHAVES
 #   docker compose up --build
 #   curl http://localhost:8080/api/versao/
 #
@@ -92,6 +92,9 @@ services:
       POSTGRES_PORT: "5432"
       REDIS_URL: redis://redis:6379/0
       EXECUTAR_MIGRACOES: "1"
+      # O backend só é alcançável pelo Nginx (nenhuma porta publicada), que escreve
+      # X-Real-IP com o IP da conexão: seguro para auditoria e bloqueio por IP.
+      IP_CABECALHO_CONFIAVEL: X-Real-IP
     depends_on:
       postgres:
         condition: service_healthy
