@@ -148,7 +148,7 @@ codigo_ibge,nome,uf
 1400456,Pacaraima,RR
 1400472,Rorainópolis,RR
 1400506,São João da Baliza,RR
-1400605,São Luiz,RR
+1400605,São Luiz do Anauá,RR
 1400704,Uiramutã,RR
 1500107,Abaetetuba,PA
 1500131,Abel Figueiredo,PA
@@ -240,7 +240,7 @@ codigo_ibge,nome,uf
 1505494,Palestina do Pará,PA
 1505502,Paragominas,PA
 1505536,Parauapebas,PA
-1505551,Pau d'Arco,PA
+1505551,Pau D'Arco,PA
 1505601,Peixe-Boi,PA
 1505635,Piçarra,PA
 1505650,Placas,PA
@@ -363,7 +363,7 @@ codigo_ibge,nome,uf
 1707652,Figueirópolis,TO
 1707702,Filadélfia,TO
 1708205,Formoso do Araguaia,TO
-1708254,Fortaleza do Tabocão,TO
+1708254,Tabocão,TO
 1708304,Goianorte,TO
 1709005,Goiatins,TO
 1709302,Guaraí,TO
@@ -944,7 +944,7 @@ codigo_ibge,nome,uf
 2304236,Croatá,CE
 2304251,Cruz,CE
 2304269,Deputado Irapuan Pinheiro,CE
-2304277,Ererê,CE
+2304277,Ereré,CE
 2304285,Eusébio,CE
 2304301,Farias Brito,CE
 2304350,Forquilha,CE
@@ -1075,7 +1075,7 @@ codigo_ibge,nome,uf
 2314003,Várzea Alegre,CE
 2314102,Viçosa do Ceará,CE
 2400109,Acari,RN
-2400208,Açu,RN
+2400208,Assú,RN
 2400307,Afonso Bezerra,RN
 2400406,Água Nova,RN
 2400505,Alexandria,RN
@@ -1085,8 +1085,8 @@ codigo_ibge,nome,uf
 2400901,Antônio Martins,RN
 2401008,Apodi,RN
 2401107,Areia Branca,RN
-2401206,Arês,RN
-2401305,Augusto Severo (Campo Grande),RN
+2401206,Arez,RN
+2401305,Campo Grande,RN
 2401404,Baía Formosa,RN
 2401453,Baraúna,RN
 2401503,Barcelona,RN
@@ -1132,7 +1132,7 @@ codigo_ibge,nome,uf
 2405009,Jaçanã,RN
 2405108,Jandaíra,RN
 2405207,Janduís,RN
-2405306,Januário Cicco (Boa Saúde),RN
+2405306,Januário Cicco,RN
 2405405,Japi,RN
 2405504,Jardim de Angicos,RN
 2405603,Jardim de Piranhas,RN
@@ -1165,7 +1165,7 @@ codigo_ibge,nome,uf
 2408102,Natal,RN
 2408201,Nísia Floresta,RN
 2408300,Nova Cruz,RN
-2408409,Olho-d'Água do Borges,RN
+2408409,Olho d'Água do Borges,RN
 2408508,Ouro Branco,RN
 2408607,Paraná,RN
 2408706,Paraú,RN
@@ -1396,7 +1396,7 @@ codigo_ibge,nome,uf
 2512309,Princesa Isabel,PB
 2512408,Puxinanã,PB
 2512507,Queimadas,PB
-2512606,Quixabá,PB
+2512606,Quixaba,PB
 2512705,Remígio,PB
 2512721,Pedro Régis,PB
 2512747,Riachão,PB
@@ -1613,14 +1613,14 @@ codigo_ibge,nome,uf
 2612802,Santa Terezinha,PE
 2612901,São Benedito do Sul,PE
 2613008,São Bento do Una,PE
-2613107,São Caetano,PE
+2613107,São Caitano,PE
 2613206,São João,PE
 2613305,São Joaquim do Monte,PE
 2613404,São José da Coroa Grande,PE
 2613503,São José do Belmonte,PE
 2613602,São José do Egito,PE
 2613701,São Lourenço da Mata,PE
-2613800,São Vicente Ferrer,PE
+2613800,São Vicente Férrer,PE
 2613909,Serra Talhada,PE
 2614006,Serrita,PE
 2614105,Sertânia,PE
@@ -1751,7 +1751,7 @@ codigo_ibge,nome,uf
 2709202,Traipu,AL
 2709301,União dos Palmares,AL
 2709400,Viçosa,AL
-2800100,Amparo de São Francisco,SE
+2800100,Amparo do São Francisco,SE
 2800209,Aquidabã,SE
 2800308,Aracaju,SE
 2800407,Arauá,SE
@@ -1774,7 +1774,7 @@ codigo_ibge,nome,uf
 2802304,Frei Paulo,SE
 2802403,Gararu,SE
 2802502,General Maynard,SE
-2802601,Gracho Cardoso,SE
+2802601,Graccho Cardoso,SE
 2802700,Ilha das Flores,SE
 2802809,Indiaroba,SE
 2802908,Itabaiana,SE
@@ -1850,7 +1850,7 @@ codigo_ibge,nome,uf
 2901908,Aporá,BA
 2901957,Apuarema,BA
 2902005,Aracatu,BA
-2902054,Araças,BA
+2902054,Araçás,BA
 2902104,Araci,BA
 2902203,Aramari,BA
 2902252,Arataca,BA
@@ -2030,7 +2030,7 @@ codigo_ibge,nome,uf
 2917102,Itororó,BA
 2917201,Ituaçu,BA
 2917300,Ituberá,BA
-2917334,Iuiú,BA
+2917334,Iuiu,BA
 2917359,Jaborandi,BA
 2917409,Jacaraci,BA
 2917508,Jacobina,BA
@@ -2094,7 +2094,7 @@ codigo_ibge,nome,uf
 2922052,Mulungu do Morro,BA
 2922102,Mundo Novo,BA
 2922201,Muniz Ferreira,BA
-2922250,Muquém de São Francisco,BA
+2922250,Muquém do São Francisco,BA
 2922300,Muritiba,BA
 2922409,Mutuípe,BA
 2922508,Nazaré,BA
@@ -2173,7 +2173,7 @@ codigo_ibge,nome,uf
 2928208,Santana,BA
 2928307,Santanópolis,BA
 2928406,Santa Rita de Cássia,BA
-2928505,Santa Teresinha,BA
+2928505,Santa Terezinha,BA
 2928604,Santo Amaro,BA
 2928703,Santo Antônio de Jesus,BA
 2928802,Santo Estêvão,BA
@@ -2302,7 +2302,7 @@ codigo_ibge,nome,uf
 3105202,Bandeira,MG
 3105301,Bandeira do Sul,MG
 3105400,Barão de Cocais,MG
-3105509,Barão de Monte Alto,MG
+3105509,Barão do Monte Alto,MG
 3105608,Barbacena,MG
 3105707,Barra Longa,MG
 3105905,Barroso,MG
@@ -2498,7 +2498,7 @@ codigo_ibge,nome,uf
 3122603,Dom Joaquim,MG
 3122702,Dom Silvério,MG
 3122801,Dom Viçoso,MG
-3122900,Dona Eusébia,MG
+3122900,Dona Euzébia,MG
 3123007,Dores de Campos,MG
 3123106,Dores de Guanhães,MG
 3123205,Dores do Indaiá,MG
@@ -2772,7 +2772,7 @@ codigo_ibge,nome,uf
 3145356,Novo Oriente de Minas,MG
 3145372,Novorizonte,MG
 3145406,Olaria,MG
-3145455,Olhos d'Água,MG
+3145455,Olhos-d'Água,MG
 3145505,Olímpio Noronha,MG
 3145604,Oliveira,MG
 3145703,Oliveira Fortes,MG
@@ -2800,7 +2800,7 @@ codigo_ibge,nome,uf
 3147501,Passabém,MG
 3147600,Passa Quatro,MG
 3147709,Passa Tempo,MG
-3147808,Passa-Vinte,MG
+3147808,Passa Vinte,MG
 3147907,Passos,MG
 3147956,Patis,MG
 3148004,Patos de Minas,MG
@@ -3007,7 +3007,7 @@ codigo_ibge,nome,uf
 3164902,São Sebastião do Rio Verde,MG
 3165008,São Tiago,MG
 3165107,São Tomás de Aquino,MG
-3165206,São Thomé das Letras,MG
+3165206,São Tomé das Letras,MG
 3165305,São Vicente de Minas,MG
 3165404,Sapucaí-Mirim,MG
 3165503,Sardoá,MG
@@ -3105,7 +3105,7 @@ codigo_ibge,nome,uf
 3200409,Anchieta,ES
 3200508,Apiacá,ES
 3200607,Aracruz,ES
-3200706,Atilio Vivacqua,ES
+3200706,Atílio Vivácqua,ES
 3200805,Baixo Guandu,ES
 3200904,Barra de São Francisco,ES
 3201001,Boa Esperança,ES
@@ -3340,7 +3340,7 @@ codigo_ibge,nome,uf
 3506359,Bertioga,SP
 3506409,Bilac,SP
 3506508,Birigui,SP
-3506607,Biritiba-Mirim,SP
+3506607,Biritiba Mirim,SP
 3506706,Boa Esperança do Sul,SP
 3506805,Bocaina,SP
 3506904,Bofete,SP
@@ -3450,7 +3450,7 @@ codigo_ibge,nome,uf
 3515806,Flora Rica,SP
 3515905,Floreal,SP
 3516002,Flórida Paulista,SP
-3516101,Florínia,SP
+3516101,Florínea,SP
 3516200,Franca,SP
 3516309,Francisco Morato,SP
 3516408,Franco da Rocha,SP
@@ -3519,7 +3519,7 @@ codigo_ibge,nome,uf
 3521903,Itajobi,SP
 3522000,Itaju,SP
 3522109,Itanhaém,SP
-3522158,Itaóca,SP
+3522158,Itaoca,SP
 3522208,Itapecerica da Serra,SP
 3522307,Itapetininga,SP
 3522406,Itapeva,SP
@@ -4407,7 +4407,7 @@ codigo_ibge,nome,uf
 4205803,Garuva,SC
 4205902,Gaspar,SC
 4206009,Governador Celso Ramos,SC
-4206108,Grão Pará,SC
+4206108,Grão-Pará,SC
 4206207,Gravatal,SC
 4206306,Guabiruba,SC
 4206405,Guaraciaba,SC
@@ -4454,7 +4454,7 @@ codigo_ibge,nome,uf
 4209409,Laguna,SC
 4209458,Lajeado Grande,SC
 4209508,Laurentino,SC
-4209607,Lauro Muller,SC
+4209607,Lauro Müller,SC
 4209706,Lebon Régis,SC
 4209805,Leoberto Leal,SC
 4209854,Lindóia do Sul,SC
@@ -4550,7 +4550,7 @@ codigo_ibge,nome,uf
 4215802,São Bento do Sul,SC
 4215901,São Bonifácio,SC
 4216008,São Carlos,SC
-4216057,São Cristovão do Sul,SC
+4216057,São Cristóvão do Sul,SC
 4216107,São Domingos,SC
 4216206,São Francisco do Sul,SC
 4216255,São João do Oeste,SC
@@ -5302,7 +5302,7 @@ codigo_ibge,nome,uf
 5107768,Santa Rita do Trivelato,MT
 5107776,Santa Terezinha,MT
 5107792,Santo Antônio do Leste,MT
-5107800,Santo Antônio do Leverger,MT
+5107800,Santo Antônio de Leverger,MT
 5107859,São Félix do Araguaia,MT
 5107875,Sapezal,MT
 5107883,Serra Nova Dourada,MT
