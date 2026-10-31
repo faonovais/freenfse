@@ -396,6 +396,24 @@ def test_vazio_nao_define_nada_e_a_empresa_de_agora_e_que_vale():
     assert depois[1] == ORIGENS_EMPRESA
 
 
+@pytest.mark.parametrize("nivel", ["nota", "modelo"])
+def test_destinatario_vazio_herda_da_empresa_em_vez_de_virar_erro(nivel):
+    """A tela envia "" para "Herdar": não é valor inválido, é campo sem definição."""
+    definicao = {"indicador_destinatario": ""}
+    empresa = _empresa(destinatario=1)
+
+    valores, origens = _resolver(
+        nota=definicao if nivel == "nota" else None,
+        modelo=definicao if nivel == "modelo" else None,
+        empresa=empresa,
+    )
+
+    assert valores["indicador_destinatario"] == 1  # o da empresa, não 0 nem erro
+    assert origens["indicador_destinatario"] == "empresa"
+    # E o ajuste guardado na nota não leva o campo vazio.
+    assert servico_nfse.ajuste_da_nota(definicao) is None
+
+
 @pytest.mark.parametrize(
     ("nota", "trecho"),
     [
@@ -665,6 +683,11 @@ def test_prontidao_expoe_o_padrao_da_empresa_para_a_tela_preencher(api_de, empre
         "codigo_indicador_operacao": PADRAO,
         "indicador_destinatario": 0,
     }
+    # O destinatário padrão também vem da empresa (a tela mostra "Herdar da empresa: …").
+    with schema_context(empresa_a.schema_name):
+        ParametrosFiscais.objects.update(ibs_cbs_indicador_destinatario=1)
+
+    assert emissor.get(f"{NOTAS}prontidao/").json()["ibs_cbs"]["indicador_destinatario"] == 1
 
 
 # -- prévia e criação pela API --------------------------------------------------------------
