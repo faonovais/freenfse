@@ -51,6 +51,7 @@ SHARED_APPS = [
     "allauth.headless",
     "rest_framework",
     "core",
+    "operacao",
 ]
 TENANT_APPS = [
     "cadastros",
@@ -285,12 +286,24 @@ CELERY_BEAT_SCHEDULE = {
         "task": "agendamentos.tasks.alertar_rascunhos_pendentes",
         "schedule": crontab(hour=8, minute=20),
     },
+    # Backup cifrado do banco inteiro: todo dia às 02:30 (Brasília). Falha = log crítico + alerta.
+    "fazer-backup": {
+        "task": "operacao.tasks.fazer_backup",
+        "schedule": crontab(hour=2, minute=30),
+    },
     # Expurgo dos ZIPs do download em lote vencidos: de hora em hora.
     "expurgar-exportacoes": {
         "task": "documentos.tasks.expurgar_exportacoes",
         "schedule": crontab(minute=17),
     },
 }
+
+# --- Backup (Fase 6, ADR 0008) --------------------------------------------------
+# Pasta dos backups cifrados (volume próprio; copie para fora do servidor). O destinatário é a
+# chave PÚBLICA age (age1...): a privada fica fora do servidor e só serve para restaurar.
+FREENFSE_BACKUP_DIR = env("FREENFSE_BACKUP_DIR", default="/var/lib/freenfse/backups")
+FREENFSE_BACKUP_DESTINATARIO = env("FREENFSE_BACKUP_DESTINATARIO", default="")
+FREENFSE_BACKUP_RETENCAO_DIAS = env.int("FREENFSE_BACKUP_RETENCAO_DIAS", default=14)
 
 # --- Internacionalização ------------------------------------------------------
 LANGUAGE_CODE = "pt-br"

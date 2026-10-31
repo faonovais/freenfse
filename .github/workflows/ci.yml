@@ -71,6 +71,19 @@ jobs:
           cache: pip
           cache-dependency-path: backend/requirements-dev.txt
       - run: pip install -r requirements-dev.txt
+      - name: Ferramentas do backup (pg_dump da série 18, igual ao servidor, e age)
+        working-directory: .
+        run: |
+          # O pg_dump precisa ser da mesma série (ou mais nova) que o servidor do job (18).
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl -fsSL -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc \
+            https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          . /etc/os-release
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt ${VERSION_CODENAME}-pgdg main" \
+            | sudo tee /etc/apt/sources.list.d/pgdg.list > /dev/null
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends postgresql-client-18 age
+          echo "/usr/lib/postgresql/18/bin" >> "$GITHUB_PATH"
       - name: ruff (lint)
         run: ruff check .
       - name: ruff (formatação)
