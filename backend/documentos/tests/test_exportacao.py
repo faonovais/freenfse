@@ -43,6 +43,20 @@ def dono(db):
 # -- conteúdo ------------------------------------------------------------------------------
 
 
+def test_data_de_emissao_e_nome_do_arquivo_sao_os_de_brasilia(empresa_pronta, dono):
+    """Às 23:30 de 31/10 em Brasília já é 01/11 em UTC (issue #24)."""
+    nota_avulsa(1, emitida_em=dt.datetime(2026, 11, 1, 2, 30, tzinfo=dt.UTC))
+    nota_avulsa(2, emitida_em=dt.datetime(2026, 11, 1, 3, 0, tzinfo=dt.UTC))  # já é 01/11 lá também
+    pedido = _pedir(dono)
+
+    exportacao.gerar(pedido.pk, agora=dt.datetime(2026, 11, 1, 2, 30, tzinfo=dt.UTC))
+
+    pedido.refresh_from_db()
+    assert pedido.nome_download == "notas-20261031-2330.zip"
+    linhas = _linhas(_zip(pedido))
+    assert [linha["data_emissao"] for linha in linhas] == ["2026-10-31", "2026-11-01"]
+
+
 def test_o_zip_tem_o_xml_o_pdf_e_o_csv_de_cada_nota(empresa_pronta, nova_nota, sefin, dono):
     primeira = emitir(empresa_pronta, nova_nota, valor="1500.00")
     segunda = emitir(empresa_pronta, nova_nota, valor="250.50")

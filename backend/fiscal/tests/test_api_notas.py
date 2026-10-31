@@ -3,6 +3,7 @@
 import datetime as dt
 
 import pytest
+from django.utils import timezone
 from django_tenants.utils import schema_context
 
 from core.models import LogAuditoria
@@ -278,7 +279,10 @@ def test_criar_rascunho_guarda_o_snapshot_e_editar_cadastro_nao_altera_a_nota(em
         ({"tomador": 999999}, "tomador"),
         ({"valores": {"servico": "-1"}}, "valores.servico"),
         ({"valores": {"servico": ""}}, "valores.servico"),
-        ({"competencia": (dt.date.today() + dt.timedelta(days=40)).isoformat()}, "competencia"),
+        (
+            {"competencia": (timezone.localdate() + dt.timedelta(days=40)).isoformat()},
+            "competencia",
+        ),
     ],
 )
 def test_dados_invalidos_voltam_400_apontando_o_campo(emissor, empresa_a, ajuste, campo):
