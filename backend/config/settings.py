@@ -334,6 +334,11 @@ ALERTAS_SMTP_USUARIO = env("ALERTAS_SMTP_USUARIO", default="")
 ALERTAS_SMTP_SENHA = env("ALERTAS_SMTP_SENHA", default="")
 ALERTAS_EMAIL_DE = env("ALERTAS_EMAIL_DE", default=ALERTAS_SMTP_USUARIO or "freenfse@localhost")
 
+# --- BI (Fase 6) -------------------------------------------------------------------
+# Usuário de banco SOMENTE LEITURA que enxerga apenas o schema "bi" (views consolidadas, sem XML
+# nem credenciais). Criado por `python manage.py criar_usuario_bi`.
+FREENFSE_BI_USUARIO = env("FREENFSE_BI_USUARIO", default="freenfse_bi")
+
 # --- Backup (Fase 6, ADR 0008) --------------------------------------------------
 # Pasta dos backups cifrados (volume próprio; copie para fora do servidor). O destinatário é a
 # chave PÚBLICA age (age1...): a privada fica fora do servidor e só serve para restaurar.
