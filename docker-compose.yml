@@ -25,10 +25,19 @@
 
 name: freenfse
 
+# Rotação dos logs dos contêineres (política de retenção, ADR 0008): 5 arquivos de 10 MB por
+# serviço. Os logs da aplicação são JSON, sem segredos e sem CPF/e-mail.
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
+
 services:
   postgres:
     image: postgres:18
     restart: unless-stopped
+    logging: *logging
     mem_limit: ${MEM_LIMIT_POSTGRES:-512m}
     environment:
       POSTGRES_DB: ${POSTGRES_DB}
@@ -52,6 +61,7 @@ services:
   redis:
     image: redis:7
     restart: unless-stopped
+    logging: *logging
     mem_limit: ${MEM_LIMIT_REDIS:-64m}
     command: ["redis-server", "--appendonly", "yes"]
     # Publicado só no loopback do host (ver nota do postgres). Para expor em dev,
@@ -72,6 +82,7 @@ services:
       dockerfile: docker/Dockerfile.backend
     image: freenfse-backend:local
     restart: unless-stopped
+    logging: *logging
     mem_limit: ${MEM_LIMIT_BACKEND:-512m}
     # GUNICORN_WORKERS: ajuste conforme a RAM e os núcleos do host.
     command:
@@ -80,6 +91,8 @@ services:
       - --bind=0.0.0.0:8000
       - --workers=${GUNICORN_WORKERS:-2}
       - --access-logfile=-
+      # Sem a query string (%(U)s é só o caminho): filtros da tela podem carregar CPF/CNPJ.
+      - '--access-logformat={"ts":"%(t)s","ip":"%(h)s","metodo":"%(m)s","caminho":"%(U)s","status":%(s)s,"bytes":%(b)s,"ms":%(M)s}'
       # O socket de controle do Gunicorn 26 grava em $HOME, que não existe para o
       # usuário de sistema, e não é usado aqui.
       - --no-control-socket
@@ -94,11 +107,17 @@ services:
       EXECUTAR_MIGRACOES: "1"
       # ZIPs do download em lote: o worker gera, o backend entrega (mesmo volume).
       FREENFSE_EXPORTACOES_DIR: /var/lib/freenfse/exportacoes
+      FREENFSE_BACKUP_DIR: /var/lib/freenfse/backups
       # O backend só é alcançável pelo Nginx (nenhuma porta publicada), que escreve
       # X-Real-IP com o IP da conexão: seguro para auditoria e bloqueio por IP.
       IP_CABECALHO_CONFIAVEL: X-Real-IP
     volumes:
       - exportacoes:/var/lib/freenfse/exportacoes
+      - backups:/var/lib/freenfse/backups
+    # /tmp só em memória: nada que o processo grave ali (arquivos temporários, certificado
+    # aberto para assinar) sobrevive ao contêiner.
+    tmpfs:
+      - /tmp
     depends_on:
       postgres:
         condition: service_healthy
@@ -118,6 +137,7 @@ services:
   worker:
     image: freenfse-backend:local
     restart: unless-stopped
+    logging: *logging
     mem_limit: ${MEM_LIMIT_WORKER:-512m}
     # CELERY_CONCURRENCY: sem a variável o Celery abriria um processo por núcleo
     # do host, o que estoura o teto de memória em servidores grandes.
@@ -128,8 +148,12 @@ services:
       POSTGRES_PORT: "5432"
       REDIS_URL: redis://redis:6379/0
       FREENFSE_EXPORTACOES_DIR: /var/lib/freenfse/exportacoes
+      FREENFSE_BACKUP_DIR: /var/lib/freenfse/backups
     volumes:
       - exportacoes:/var/lib/freenfse/exportacoes
+      - backups:/var/lib/freenfse/backups
+    tmpfs:
+      - /tmp
     depends_on:
       backend:
         condition: service_healthy
@@ -141,11 +165,12 @@ services:
       retries: 6
       start_period: 30s
 
-  # Agendador do Celery: o estado do scheduler fica em /tmp (efêmero, recriado a
-  # cada início). Sem healthcheck: o Celery não oferece sonda simples para o beat.
+  # Agendador do Celery: o estado do scheduler fica em /tmp (efêmero, recriado a cada início).
+  # Saudável = o batimento que ele enfileira todo minuto chegou ao Redis (beat -> fila -> worker).
   beat:
     image: freenfse-backend:local
     restart: unless-stopped
+    logging: *logging
     mem_limit: ${MEM_LIMIT_BEAT:-192m}
     command: celery -A config beat --loglevel=info --schedule=/tmp/celerybeat-schedule
     env_file: .env
@@ -153,9 +178,17 @@ services:
       POSTGRES_HOST: postgres
       POSTGRES_PORT: "5432"
       REDIS_URL: redis://redis:6379/0
+    tmpfs:
+      - /tmp
     depends_on:
       backend:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "manage.py", "verificar_batimento", "--max-idade", "240"]
+      interval: 30s
+      timeout: 15s
+      retries: 6
+      start_period: 150s
 
   nginx:
     build:
@@ -163,6 +196,7 @@ services:
       dockerfile: docker/Dockerfile.nginx
     image: freenfse-nginx:local
     restart: unless-stopped
+    logging: *logging
     mem_limit: ${MEM_LIMIT_NGINX:-32m}
     ports:
       - "${HTTP_PORT:-8080}:80"
@@ -175,3 +209,6 @@ volumes:
   redis_data:
   # ZIPs temporários do download em lote (apagados pelo expurgo periódico do worker).
   exportacoes:
+  # Backups cifrados (age) do banco inteiro, feitos todo dia pelo worker. Copie-os para FORA
+  # do servidor (outro disco ou provedor): um backup só no mesmo servidor não protege de perdê-lo.
+  backups:

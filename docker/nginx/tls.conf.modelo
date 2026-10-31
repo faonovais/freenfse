@@ -1,0 +1,48 @@
+# Servidor HTTPS do freenfse (modelo preenchido pelo instalador: __DOMINIO__, __CERTIFICADO__,
+# __CHAVE__, __RAIZ__ e __ERROS__). O Nginx termina o TLS; a porta 80 só renova o certificado
+# (desafio HTTP-01) e redireciona para HTTPS.
+
+# Com o TLS terminado aqui, o esquema da conexão é a única fonte da verdade: nunca confie num
+# X-Forwarded-Proto enviado pelo cliente.
+map $scheme $proto_encaminhado {
+    default $scheme;
+}
+
+server {
+    listen 80;
+    server_name __DOMINIO__;
+
+    location /.well-known/acme-challenge/ {
+        root /var/www/certbot;
+    }
+
+    location / {
+        return 301 https://$host$request_uri;
+    }
+}
+
+server {
+    listen 443 ssl;
+    server_name __DOMINIO__;
+
+    ssl_certificate __CERTIFICADO__;
+    ssl_certificate_key __CHAVE__;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_prefer_server_ciphers off;
+    ssl_session_timeout 1d;
+    ssl_session_cache shared:SSL:10m;
+    ssl_session_tickets off;
+
+    add_header Strict-Transport-Security "max-age=31536000" always;
+
+    root __RAIZ__;
+    index index.html;
+
+    # Páginas de erro (só alcançáveis por error_page).
+    location /erros/ {
+        internal;
+        alias __ERROS__/;
+    }
+
+    include /etc/nginx/freenfse/locais.conf;
+}
