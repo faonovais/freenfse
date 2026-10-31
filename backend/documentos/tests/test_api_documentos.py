@@ -75,6 +75,20 @@ def test_emissor_le_a_configuracao_de_email_sem_nenhuma_credencial(api_de, empre
     assert leitura.json()["credenciais_configuradas"]["smtp_senha"] is True
 
 
+def test_emissor_le_a_configuracao_do_drive_sem_a_credencial(api_de, empresa_a):
+    with schema_context(empresa_a.schema_name):
+        ativar_drive()
+    api = api_de(empresa_a, Perfil.EMISSOR)
+
+    leitura = api.get(DRIVE)
+
+    assert leitura.status_code == 200
+    texto = leitura.content.decode()
+    for segredo in ("private_key", "BEGIN PRIVATE KEY", SEGREDO_DE_TESTE):
+        assert segredo not in texto
+    assert leitura.json()["pasta_raiz_id"] == "RAIZ"  # a configuração (não secreta) aparece
+
+
 def test_sem_vinculo_com_a_empresa_nao_ha_acesso(
     cliente_de, usuario, empresa_a, empresa_b, vincular
 ):

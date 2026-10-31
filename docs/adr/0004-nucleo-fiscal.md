@@ -70,7 +70,7 @@ A biblioteca escolhe pela data de **recebimento** (Brasília): produção usa a 
 
 - `Decimal` com arredondamento "meio para cima"; ISS sobre a base (valor − desconto incondicionado − dedução); retenções de IR, CSLL e INSS sobre a mesma base; ISS retido reduz o líquido. A regra de arredondamento de cada prefeitura pode divergir; se divergir, a Sefin devolve a rejeição e a regra muda num lugar só (`calculo.py`).
 - **Retenção de PIS/COFINS no serviço bloqueia a emissão** com explicação: a semântica de `tpRetPisCofins`/CST não está confirmada, e enviar valores incorretos seria pior que não emitir.
-- **IBS/CBS:** o `Servico` não tem o indicador da operação (`cIndOp`), obrigatório no grupo. O grupo só é enviado se o usuário informar o indicador na emissão; caso contrário a prévia avisa que a nota segue sem ele. **Decisão pendente** (ver abaixo).
+- **IBS/CBS:** o `Servico` não tem o indicador da operação (`cIndOp`), obrigatório no grupo. O grupo só é enviado se o usuário informar o indicador na emissão; caso contrário a prévia avisa que a nota segue sem ele. **Resolvida pela issue #20** ([ADR 0007](0007-ajustes-da-issue-20.md) §1): a opção e o `cIndOp` são da empresa (`ParametrosFiscais`), a nota herda o padrão e pode ajustá-lo; a classificação continua no serviço.
 - `pAliq` é informado só para não optante, ou ME/EPP com ISSQN fora do Simples; MEI nunca. **Hipótese a confirmar** em produção restrita.
 - `totTrib`: "não informado" por padrão; ME/EPP pode informar o percentual do Simples.
 
@@ -88,7 +88,7 @@ A `freedfe` só é importada em `fiscal/gateway.py`, `fiscal/persistencia/` (que
 
 ## Itens abertos e decisões que não são desta fase
 
-1. **`cIndOp` no cadastro de serviço** (IBS/CBS): propõe-se um campo no `Servico`; depende de confirmar os valores válidos da tabela de operações.
+1. ~~**`cIndOp` no cadastro de serviço** (IBS/CBS)~~ — **decidido na issue #20**: `cIndOp` por empresa, com ajuste pontual na nota ([ADR 0007](0007-ajustes-da-issue-20.md) §1). Segue aberto confirmar os valores válidos da tabela de operações e se uma empresa precisa de indicador por serviço.
 2. **Retenção de PIS/COFINS** na DPS: confirmar a semântica antes de liberar.
 3. **`pAliq`** por regime: confirmar na produção restrita (roteiro manual).
 4. **Pedido de análise fiscal para cancelamento** (evento próprio): fora da API pública da biblioteca; hoje é orientação.

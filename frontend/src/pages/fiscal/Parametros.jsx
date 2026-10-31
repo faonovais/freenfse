@@ -22,6 +22,8 @@ function formularioDe(dados) {
     serie_dps: String(dados.serie_dps),
     ambiente: dados.ambiente,
     codigo_municipio_emissor: dados.codigo_municipio_emissor,
+    ibs_cbs_informar: Boolean(dados.ibs_cbs_informar),
+    ibs_cbs_indicador_operacao: dados.ibs_cbs_indicador_operacao ?? '',
   }
 }
 
@@ -119,6 +121,8 @@ export default function Parametros() {
       serie_dps: Number(f.serie_dps),
       ambiente: f.ambiente,
       codigo_municipio_emissor: f.codigo_municipio_emissor,
+      ibs_cbs_informar: f.ibs_cbs_informar,
+      ibs_cbs_indicador_operacao: f.ibs_cbs_indicador_operacao,
     }
     const indoParaProducao = f.ambiente === 'producao' && dados.ambiente !== 'producao'
 
@@ -228,6 +232,34 @@ export default function Parametros() {
               aoMudar={(codigo) => setF((atual) => ({ ...atual, codigo_municipio_emissor: codigo }))}
               erro={erros.codigo_municipio_emissor}
               dica="Onde a empresa está estabelecida e emite as notas."
+            />
+          </div>
+
+          <div className="max-w-md space-y-2">
+            <h2 className="text-base text-gray-900 dark:text-gray-100">
+              IBS e CBS{' '}
+              <BotaoAjuda rotulo="IBS e CBS">
+                A opção e o indicador da operação valem para a empresa toda: cada nota nova usa este padrão e, se
+                preciso, dá para ajustar numa nota específica. A classificação (NBS, CST e cClassTrib) continua no
+                cadastro de cada serviço.
+              </BotaoAjuda>
+            </h2>
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={f.ibs_cbs_informar}
+                onChange={(evento) => setF((atual) => ({ ...atual, ibs_cbs_informar: evento.target.checked }))}
+              />
+              Informar o IBS/CBS nas notas desta empresa
+            </label>
+            <Campo
+              rotulo="Indicador da operação padrão (cIndOp)"
+              inputMode="numeric"
+              maxLength={6}
+              value={f.ibs_cbs_indicador_operacao}
+              onChange={mudar('ibs_cbs_indicador_operacao')}
+              erro={erros.ibs_cbs_indicador_operacao}
+              dica="6 dígitos. Só vai na nota de serviço que tem NBS, CST e cClassTrib no cadastro."
             />
           </div>
 

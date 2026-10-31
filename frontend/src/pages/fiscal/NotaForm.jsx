@@ -29,6 +29,7 @@ const VAZIO = {
   deducao_percentual: '',
   informacoes: '',
   percentual_simples: '',
+  ibs_nao_informar: false,
   indicador_operacao: '',
   indicador_destinatario: '0',
 }
@@ -47,9 +48,24 @@ function formularioDe(nota) {
     deducao_percentual: valores.deducao_percentual ?? '',
     informacoes: complementos.informacoes_complementares ?? '',
     percentual_simples: complementos.percentual_total_tributos_simples ?? '',
-    indicador_operacao: complementos.ibs_cbs?.codigo_indicador_operacao ?? '',
+    ibs_nao_informar: false,
+    // Em branco = a nota usa o padrão da empresa. Só um indicador digitado nesta nota (ajuste pontual)
+    // volta preenchido; o que veio do padrão da empresa continua herdando.
+    indicador_operacao:
+      complementos.ibs_cbs && complementos.ibs_cbs.origem !== 'empresa'
+        ? complementos.ibs_cbs.codigo_indicador_operacao
+        : '',
     indicador_destinatario: String(complementos.ibs_cbs?.indicador_destinatario ?? 0),
   }
+}
+
+/** Ajuste pontual de IBS/CBS: `null` = nada a ajustar (vale o padrão da empresa). */
+function ibsCbsDe(f) {
+  if (f.ibs_nao_informar) return { informar: false }
+  const ajuste = {}
+  if (f.indicador_operacao) ajuste.codigo_indicador_operacao = f.indicador_operacao
+  if (f.indicador_destinatario !== '0') ajuste.indicador_destinatario = Number(f.indicador_destinatario)
+  return Object.keys(ajuste).length > 0 ? ajuste : null
 }
 
 /** Corpo da API: campos numéricos vazios vão como nulos. */
@@ -68,9 +84,7 @@ function corpoDe(f) {
     },
     informacoes_complementares: f.informacoes,
     percentual_total_tributos_simples: numero(f.percentual_simples),
-    ibs_cbs: f.indicador_operacao
-      ? { codigo_indicador_operacao: f.indicador_operacao, indicador_destinatario: Number(f.indicador_destinatario) }
-      : null,
+    ibs_cbs: ibsCbsDe(f),
   }
 }
 
@@ -80,6 +94,22 @@ function Linha({ rotulo, children }) {
       <dt>{rotulo}</dt>
       <dd className="text-right">{children}</dd>
     </div>
+  )
+}
+
+/** O grupo de IBS/CBS como vai na DPS: valores, de onde vieram ou por que não vai. */
+function IbsCbsNaDps({ ibs, servico }) {
+  if (!ibs || (!ibs.na_dps && !servico.cst_ibs_cbs)) return null
+  if (!ibs.na_dps) return <Linha rotulo="IBS/CBS na DPS">Não vai na nota. {ibs.motivo}</Linha>
+  return (
+    <Linha rotulo="IBS/CBS na DPS">
+      Indicador da operação {ibs.codigo_indicador_operacao} · destinatário{' '}
+      {ibs.indicador_destinatario === 0 ? 'é o próprio tomador' : 'é outra pessoa'} · NBS {ibs.nbs} · CST {ibs.cst}{' '}
+      · cClassTrib {ibs.c_class_trib}{' '}
+      <span className="text-xs text-gray-600 dark:text-gray-400">
+        ({ibs.origem === 'empresa' ? 'padrão da empresa' : 'ajuste desta nota'})
+      </span>
+    </Linha>
   )
 }
 
@@ -109,6 +139,7 @@ function Previa({ previa, ambiente, leiauteDescricao }) {
         <Linha rotulo="Valor líquido a receber">
           <strong>{dinheiro(t.valor_liquido)}</strong>
         </Linha>
+        <IbsCbsNaDps ibs={previa.ibs_cbs} servico={previa.servico} />
         <Linha rotulo="Ambiente">{AMBIENTES[ambiente] ?? ambiente}</Linha>
         <Linha rotulo="Leiaute">{leiauteDescricao}</Linha>
       </dl>
@@ -391,26 +422,47 @@ export default function NotaForm() {
             dica="Só para ME/EPP optante pelo Simples. Em branco, a nota segue sem essa informação."
           />
           {servicoEscolhido?.cst_ibs_cbs && (
-            <div className="grid gap-3 sm:grid-cols-2">
-              <Campo
-                rotulo="Indicador da operação (IBS/CBS)"
-                value={f.indicador_operacao}
-                onChange={mudar('indicador_operacao')}
-                erro={erros.ibs_cbs}
-                dica="6 dígitos. Em branco: a nota segue sem o grupo de IBS/CBS."
-              />
-              <div className="text-sm">
-                <label htmlFor="nota-destinatario">O destinatário é o próprio tomador?</label>
-                <select
-                  id="nota-destinatario"
-                  className="campo mt-1"
-                  value={f.indicador_destinatario}
-                  onChange={mudar('indicador_destinatario')}
-                >
-                  <option value="0">Sim</option>
-                  <option value="1">Não</option>
-                </select>
+            <div className="space-y-2">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Campo
+                  rotulo="Indicador da operação (IBS/CBS)"
+                  inputMode="numeric"
+                  maxLength={6}
+                  value={f.indicador_operacao}
+                  onChange={mudar('indicador_operacao')}
+                  disabled={f.ibs_nao_informar}
+                  erro={erros.ibs_cbs}
+                  dica={
+                    prontidao?.ibs_cbs?.informar
+                      ? `6 dígitos. Em branco: vale o padrão da empresa (${prontidao.ibs_cbs.codigo_indicador_operacao}).`
+                      : 'A empresa não informa IBS/CBS por padrão. Preencha (6 dígitos) para informar só nesta nota.'
+                  }
+                />
+                <div className="text-sm">
+                  <label htmlFor="nota-destinatario">O destinatário é o próprio tomador?</label>
+                  <select
+                    id="nota-destinatario"
+                    className="campo mt-1"
+                    value={f.indicador_destinatario}
+                    onChange={mudar('indicador_destinatario')}
+                    disabled={f.ibs_nao_informar}
+                  >
+                    <option value="0">Sim</option>
+                    <option value="1">Não</option>
+                  </select>
+                </div>
               </div>
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={f.ibs_nao_informar}
+                  onChange={(evento) => {
+                    setPrevia(null)
+                    setF((atual) => ({ ...atual, ibs_nao_informar: evento.target.checked }))
+                  }}
+                />
+                Não informar o IBS/CBS nesta nota
+              </label>
             </div>
           )}
         </fieldset>

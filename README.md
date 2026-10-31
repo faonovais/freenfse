@@ -109,6 +109,22 @@ próximas datas antes de salvar.
 O roteiro para validar tudo isto está em [`docs/verificacao-fase-5.md`](docs/verificacao-fase-5.md); as decisões, em
 [`docs/adr/0006-modelos-e-agendamentos.md`](docs/adr/0006-modelos-e-agendamentos.md).
 
+### Ajustes da issue #20 (IBS/CBS por empresa, Emissor, produção e municípios)
+
+- **IBS/CBS é da empresa.** Em *Parâmetros fiscais › IBS e CBS* a empresa liga a opção e informa o **indicador da operação
+  (`cIndOp`) padrão**; cada nota nova herda esse padrão e pode ajustá-lo só naquela nota (ou dispensar o grupo). A classificação
+  (NBS, CST e `cClassTrib`) continua no cadastro do serviço. A conferência da nota mostra o que vai na DPS e de onde veio.
+  O `cIndOp` é, pelo leiaute, atributo da operação: veja o alerta no [ADR 0007](docs/adr/0007-ajustes-da-issue-20.md).
+- **Emissor consulta a configuração.** Vê os parâmetros fiscais e os dados do certificado (nunca o `.pfx` nem a senha) e não
+  altera nada.
+- **Trocar para produção exige** certificado válido com o CNPJ conferido, município informado e convênio do município vigente
+  **em produção** (consultado na hora), além da permissão, da confirmação digitada e da auditoria. A tela lista o que falta.
+- **Municípios conferidos com o IBGE oficial** (DTB 2025): 31 nomes corrigidos; origem, data e SHA-256 em
+  [`backend/core/dados/LEIAME.md`](backend/core/dados/LEIAME.md). `python manage.py comparar_municipios_ibge <arquivo>` repete a conferência.
+
+O roteiro de validação está em [`docs/verificacao-issue-20.md`](docs/verificacao-issue-20.md); as decisões, em
+[`docs/adr/0007-ajustes-da-issue-20.md`](docs/adr/0007-ajustes-da-issue-20.md).
+
 ### Chaves de criptografia
 
 `FREENFSE_CHAVES` guarda as chaves que cifram dados sensíveis (certificados, senhas, tokens). Gere uma com `docker compose run --rm backend python manage.py gerar_chave` e use o formato `1:<chave>`. **Guarde-a fora do servidor e do repositório**: sem ela, o que foi cifrado não pode ser recuperado. A rotação de chaves está descrita no `.env.example`.

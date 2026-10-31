@@ -43,7 +43,7 @@ A Fase 2 entrega o que a DPS precisa por empresa: municípios, pessoas, serviço
 ### 5. Parâmetros fiscais e ambiente
 
 - Uma linha por schema (`pk=1` com restrição no banco). O regime tributário escolhido define a opção pelo Simples da DPS (`opSimpNac`); ME/EPP exige o regime de apuração. O padrão é "Outro (não optante)": o estado inicial é consistente e o usuário precisa declarar o regime.
-- Ambiente padrão: **produção restrita**. Trocar para produção exige permissão `config.editar`, `confirmar_producao: true` na API (a tela pede digitar `PRODUÇÃO`) e é auditado, nos dois sentidos.
+- Ambiente padrão: **produção restrita**. Trocar para produção exige permissão `config.editar`, `confirmar_producao: true` na API (a tela pede digitar `PRODUÇÃO`) e é auditado, nos dois sentidos. **Desde a issue #20** a troca exige também certificado válido com o CNPJ conferido, município informado e convênio vigente em produção ([ADR 0007](0007-ajustes-da-issue-20.md) §3).
 - **Não** há bloqueio da troca por falta de certificado ou de convênio verificado: não foi pedido e a Fase 3 recusa emitir sem eles. Fica como possível endurecimento.
 - O resultado do convênio é gravado com data, município e ambiente; vale como "atual" só enquanto município e ambiente não mudam.
 
@@ -76,7 +76,7 @@ A Fase 2 entrega o que a DPS precisa por empresa: municípios, pessoas, serviço
 ### 10. Permissões
 
 - Nenhuma permissão nova. Cadastros usam `cadastro.consultar`/`editar`; parâmetros, certificado e logo usam `config.consultar`/`editar`.
-- Consequência herdada da Fase 1: o perfil **Emissor não tem `config.consultar`**, então não vê parâmetros nem certificado. Para a interface funcionar para todos, a rota `identidade` (ambiente, versões do logo e situação resumida do certificado), o download do logo e a busca de municípios são abertas a **qualquer vinculado** (`QualquerVinculado`). Se o Emissor precisar ver os parâmetros, a mudança é conceder `config.consultar` a esse perfil.
+- ~~Consequência herdada da Fase 1: o perfil **Emissor não tem `config.consultar`**, então não vê parâmetros nem certificado.~~ **Superado pela issue #20** ([ADR 0007](0007-ajustes-da-issue-20.md) §2): o Emissor agora tem `config.consultar` (somente leitura). O texto original segue abaixo, para registro: Para a interface funcionar para todos, a rota `identidade` (ambiente, versões do logo e situação resumida do certificado), o download do logo e a busca de municípios são abertas a **qualquer vinculado** (`QualquerVinculado`). Se o Emissor precisar ver os parâmetros, a mudança é conceder `config.consultar` a esse perfil.
 
 ## Consequências e limites
 

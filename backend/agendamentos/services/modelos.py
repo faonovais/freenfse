@@ -88,7 +88,8 @@ def dados_do_rascunho(modelo, *, data_execucao):
         "valores": dict(modelo.valores or {}),
         "informacoes_complementares": texto,
         "percentual_total_tributos_simples": complementos.get("percentual_total_tributos_simples"),
-        # IBS/CBS não é do modelo: a opção e o indicador são da empresa (ADR 0006).
+        # IBS/CBS não é do modelo: a opção e o indicador são da empresa e o rascunho os
+        # herda ao nascer (ADR 0007).
     }
 
 

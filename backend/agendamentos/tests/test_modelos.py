@@ -185,6 +185,30 @@ def test_ibs_cbs_nao_e_do_modelo_o_rascunho_nunca_leva_o_grupo(empresa_pronta, r
     assert nota.complementos["ibs_cbs"] is None
 
 
+def test_rascunho_do_modelo_herda_o_padrao_de_ibs_cbs_da_empresa(empresa_pronta, responsavel):
+    """O modelo não tem IBS/CBS; o rascunho herda o padrão da empresa (issue #20, ADR 0007)."""
+    from fiscal.models import ParametrosFiscais
+
+    modelo = criar_modelo()
+    Servico.objects.filter(pk=modelo.servico_id).update(
+        nbs="113011000", cst_ibs_cbs="000", c_class_trib="000001"
+    )
+    ParametrosFiscais.objects.update(ibs_cbs_informar=True, ibs_cbs_indicador_operacao="010101")
+
+    nota = modelos.gerar_rascunho(modelo, usuario=responsavel, data_execucao=EXECUCAO)
+
+    assert nota.complementos["ibs_cbs"] == {
+        "codigo_indicador_operacao": "010101",
+        "indicador_destinatario": 0,
+        "origem": "empresa",
+    }
+    assert nota.servico["cst_ibs_cbs"] == "000" and nota.servico["c_class_trib"] == "000001"
+    # Mudar o padrão depois não mexe no rascunho já criado (é uma cópia, como o resto).
+    ParametrosFiscais.objects.update(ibs_cbs_indicador_operacao="020202")
+    nota.refresh_from_db()
+    assert nota.complementos["ibs_cbs"]["codigo_indicador_operacao"] == "010101"
+
+
 # -- validação do modelo -------------------------------------------------------------------
 
 

@@ -67,7 +67,7 @@ Três permissões novas, registradas no catálogo central (`documentos/permissoe
 | `documentos.exportar` | Emissor, Financeiro (e Administrador) | pedir e baixar lotes |
 | `documentos.enviar` | Emissor, Financeiro (e Administrador) | enviar/reenviar por e-mail e ao Drive |
 
-A **configuração** (e-mail, Drive, e-mail de teste) reaproveita `config.consultar` (ler e pré-visualizar) e `config.editar` (alterar, testar): credenciais não são decisão do Emissor. Consequência já conhecida (issue #14): o Emissor não tem `config.consultar`, então não vê as telas de configuração. Todas as rotas usam `PermissaoPorOperacao` (falha fechada) e o isolamento é o do schema.
+A **configuração** (e-mail, Drive, e-mail de teste) reaproveita `config.consultar` (ler e pré-visualizar) e `config.editar` (alterar, testar): credenciais não são decisão do Emissor. Consequência que existia (issue #14), **superada pela issue #20** ([ADR 0007](0007-ajustes-da-issue-20.md) §2): o Emissor não tinha `config.consultar`; agora tem e passa a *ler* a configuração de e-mail e de Drive (sem credenciais), sem alterá-la. Todas as rotas usam `PermissaoPorOperacao` (falha fechada) e o isolamento é o do schema.
 
 ### 6. Dependências novas
 

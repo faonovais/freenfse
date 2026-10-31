@@ -174,6 +174,8 @@ class EntradaDeNota(serializers.Serializer):
     percentual_total_tributos_simples = serializers.CharField(
         required=False, allow_blank=True, allow_null=True
     )
+    # Ajuste pontual do IBS/CBS (opcional): `informar` (false = sem o grupo nesta nota),
+    # `codigo_indicador_operacao` e `indicador_destinatario`. Sem ele, vale o padrão da empresa.
     ibs_cbs = serializers.DictField(required=False, allow_null=True)
 
 
@@ -276,6 +278,11 @@ class NotaViewSet(viewsets.GenericViewSet):
                 "pronta": not pendencias,
                 "bloqueios": [b.para_dict() for b in pendencias],
                 "ambiente": parametros.ambiente,
+                # Padrão da empresa para o IBS/CBS: a nota herda e pode ajustar pontualmente.
+                "ibs_cbs": {
+                    "informar": parametros.ibs_cbs_informar,
+                    "codigo_indicador_operacao": parametros.ibs_cbs_indicador_operacao,
+                },
                 "leiaute": gateway.leiaute_em_vigor(ambiente_producao),
                 "leiaute_descricao": gateway.descricao_do_leiaute(
                     gateway.leiaute_em_vigor(ambiente_producao)
@@ -312,6 +319,8 @@ class NotaViewSet(viewsets.GenericViewSet):
                 "valores": preparo.valores,
                 "totais": preparo.totais,
                 "complementos": preparo.complementos,
+                # O grupo IBS/CBS como vai na DPS: valores, de onde vieram ou por que não vai.
+                "ibs_cbs": preparo.ibs_cbs_dps,
                 "avisos": preparo.avisos,
                 "bloqueios": [b.para_dict() for b in servico_bloqueios.verificar_prontidao()],
             }

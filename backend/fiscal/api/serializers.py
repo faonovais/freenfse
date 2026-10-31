@@ -21,6 +21,8 @@ class ParametrosFiscaisSerializer(serializers.Serializer):
     serie_dps = serializers.IntegerField()
     ambiente = serializers.CharField()
     codigo_municipio_emissor = serializers.CharField()
+    ibs_cbs_informar = serializers.BooleanField()
+    ibs_cbs_indicador_operacao = serializers.CharField(allow_blank=True)
     opcao_simples = serializers.IntegerField()
     municipio_emissor = serializers.SerializerMethodField()
     convenio = serializers.SerializerMethodField()
@@ -59,6 +61,10 @@ class EntradaDeParametros(serializers.Serializer):
     serie_dps = serializers.IntegerField(min_value=1, max_value=99999, required=False)
     ambiente = serializers.ChoiceField(choices=ParametrosFiscais.Ambiente.choices, required=False)
     codigo_municipio_emissor = serializers.CharField(max_length=9, allow_blank=True, required=False)
+    ibs_cbs_informar = serializers.BooleanField(required=False)
+    ibs_cbs_indicador_operacao = serializers.CharField(
+        max_length=12, allow_blank=True, required=False
+    )
     confirmar_producao = serializers.BooleanField(required=False, default=False)
 
 

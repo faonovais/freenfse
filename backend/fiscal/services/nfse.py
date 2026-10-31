@@ -94,6 +94,7 @@ class Preparo:
     valores: dict
     totais: dict
     complementos: dict
+    ibs_cbs_dps: dict | None = None
     avisos: list = field(default_factory=list)
 
 
@@ -124,22 +125,79 @@ def _data(valor, campo, erros):
         return None
 
 
-def _ibs_cbs(bruto, servico, erros):
-    if not bruto:
-        return None
-    indicador = str(bruto.get("codigo_indicador_operacao") or "").strip()
+def _tem_classificacao(servico):
+    """NBS, CST e cClassTrib completos: o que o cadastro do serviço precisa para o IBS/CBS."""
+    return bool(servico.cst_ibs_cbs and servico.c_class_trib and servico.nbs)
+
+
+def _ibs_cbs(bruto, servico, parametros, erros, avisos):
+    """Decide se o grupo IBS/CBS vai na DPS e com quais valores (ADR 0007).
+
+    Quem manda, nesta ordem: o **ajuste pontual da nota** (`ibs_cbs` da entrada) e o **padrão da
+    empresa** (parâmetros fiscais: opção e indicador da operação). A classificação (NBS, CST,
+    cClassTrib) é sempre a do serviço. Devolve `(grupo, na_dps)`: `grupo` é o que se grava na nota
+    (ou `None`); `na_dps` explica à prévia o que vai, de onde veio e, se não vai, por quê.
+    """
+    bruto = bruto or {}
+    classificacao = {
+        "nbs": servico.nbs,
+        "cst": servico.cst_ibs_cbs,
+        "c_class_trib": servico.c_class_trib,
+    }
+
+    def sem_grupo(motivo):
+        return None, {"na_dps": False, "origem": None, "motivo": motivo, **classificacao}
+
+    if bruto.get("informar") is False:
+        return sem_grupo("Você escolheu não informar o IBS/CBS nesta nota.")
+
+    pediu = bruto.get("informar") is True
+    indicador_da_nota = str(bruto.get("codigo_indicador_operacao") or "").strip()
+    indicador_da_empresa = parametros.ibs_cbs_indicador_operacao
+    if indicador_da_nota:
+        origem, indicador = "nota", indicador_da_nota
+    elif parametros.ibs_cbs_informar and indicador_da_empresa:
+        origem, indicador = "empresa", indicador_da_empresa
+    elif pediu:
+        erros["ibs_cbs"] = (
+            "Informe o indicador da operação desta nota ou cadastre o padrão da empresa nos "
+            "parâmetros fiscais."
+        )
+        return None, None
+    else:
+        if _tem_classificacao(servico):
+            avisos.append(
+                "O serviço tem classificação de IBS/CBS, mas a empresa não informa IBS/CBS "
+                "(parâmetros fiscais): a nota sairá sem o grupo."
+            )
+            return sem_grupo("A empresa não informa o IBS/CBS (parâmetros fiscais).")
+        return sem_grupo("O serviço não tem classificação de IBS/CBS.")
+
     destinatario = bruto.get("indicador_destinatario")
+    if destinatario in (None, ""):
+        destinatario = 0  # o destinatário é o próprio tomador: o padrão da tela desde a Fase 3
     if not re.fullmatch(r"\d{6}", indicador):
         erros["ibs_cbs"] = "O código do indicador da operação tem 6 dígitos."
     elif destinatario not in (0, 1, "0", "1"):
         erros["ibs_cbs"] = "Informe se o destinatário é o próprio tomador (0 ou 1)."
-    elif not (servico.cst_ibs_cbs and servico.c_class_trib and servico.nbs):
+    elif not _tem_classificacao(servico):
+        if origem == "empresa" and not pediu:
+            avisos.append(
+                "A empresa informa IBS/CBS, mas o serviço não tem NBS, CST e classificação "
+                "tributária: a nota sairá sem o grupo. Complete o cadastro do serviço."
+            )
+            return sem_grupo("O serviço não tem classificação de IBS/CBS (NBS, CST e cClassTrib).")
         erros["ibs_cbs"] = (
             "O serviço precisa ter NBS, CST e classificação do IBS/CBS para informar esse grupo."
         )
     else:
-        return {"codigo_indicador_operacao": indicador, "indicador_destinatario": int(destinatario)}
-    return None
+        grupo = {
+            "codigo_indicador_operacao": indicador,
+            "indicador_destinatario": int(destinatario),
+            "origem": origem,
+        }
+        return grupo, {"na_dps": True, "motivo": None, **grupo, **classificacao}
+    return None, None
 
 
 def preparar(dados, *, hoje=None):
@@ -192,16 +250,13 @@ def preparar(dados, *, hoje=None):
         "percentual_total_tributos_simples",
         complementos_erros,
     )
-    ibs = _ibs_cbs(dados.get("ibs_cbs"), servico, complementos_erros)
+    avisos = []
+    ibs, ibs_na_dps = _ibs_cbs(
+        dados.get("ibs_cbs"), servico, ParametrosFiscais.obter(), complementos_erros, avisos
+    )
     if complementos_erros:
         raise ErroDeNota(complementos_erros)
 
-    avisos = []
-    if servico.cst_ibs_cbs and servico.c_class_trib and ibs is None:
-        avisos.append(
-            "O serviço tem classificação de IBS/CBS, mas o indicador da operação não foi "
-            "informado: a nota será emitida sem o grupo de IBS/CBS."
-        )
     if competencia.replace(day=1) != hoje.replace(day=1):
         avisos.append("A competência é de outro mês. Confira se é isso mesmo.")
 
@@ -220,6 +275,7 @@ def preparar(dados, *, hoje=None):
             "percentual_total_tributos_simples": None if simples is None else str(simples),
             "ibs_cbs": ibs,
         },
+        ibs_cbs_dps=ibs_na_dps,
         avisos=avisos,
     )
 
