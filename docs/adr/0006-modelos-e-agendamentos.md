@@ -34,7 +34,7 @@ O usuário vive no schema público: o responsável é guardado por `responsavel_
 - **Texto com variáveis.** As informações complementares aceitam `{competencia}`, `{mes}`, `{ano}` e `{data_execucao}` (mesmo analisador do e-mail e do Drive: variável desconhecida e chave solta são recusadas ao salvar).
 - **Competência padrão:** mês da execução (D12) ou mês anterior (serviço cobrado no mês seguinte). Editável no rascunho.
 - **Modelo inativo pode ficar incompleto**; ativo precisa gerar um rascunho válido hoje. Alterar só o e-mail de um modelo com o serviço vencido não é bloqueado (a prova de geração só roda quando o campo alterado afeta a geração).
-- **IBS/CBS não é do modelo.** A opção pelo IBS/CBS e o indicador da operação são **da empresa** (parâmetros fiscais; decisão do usuário nas issues #14, #16 e #18), não do serviço nem do modelo. Por isso o modelo **não tem** campo de IBS/CBS: o rascunho herda o padrão da empresa ao nascer, o que foi implementado na issue #20 ([ADR 0007](0007-ajustes-da-issue-20.md) §1).
+- ~~**IBS/CBS não é do modelo.**~~ **Revogado para o modelo pela decisão do usuário na issue #20** ([ADR 0007](0007-ajustes-da-issue-20.md) §1): o modelo **herda** da empresa a opção pelo IBS/CBS, o `cIndOp` e o `indDest` e **pode sobrescrevê-los** (campo vazio = herda o valor da empresa de quando o rascunho é gerado; prioridade nota > modelo > empresa). O texto original, para registro: a opção e o indicador da operação eram **da empresa** (parâmetros fiscais; decisão do usuário nas issues #14, #16 e #18), não do serviço nem do modelo.
 
 ### 3. Sobreposição de e-mail por modelo (D21)
 
@@ -94,7 +94,7 @@ Mudanças fora do app novo, todas pequenas e cobertas por testes: `fiscal` ganha
 
 ## Itens abertos e decisões que não são desta fase
 
-1. ~~**IBS/CBS por empresa** (issue #20)~~ — feito: o modelo herda o padrão da empresa, sem campo próprio ([ADR 0007](0007-ajustes-da-issue-20.md)).
+1. ~~**IBS/CBS por empresa** (issue #20)~~ — feito, e **ampliado** por decisão do usuário: o modelo herda a opção, o `cIndOp` e o `indDest` da empresa **e pode sobrescrevê-los** ([ADR 0007](0007-ajustes-da-issue-20.md)).
 2. **Calendário de feriados** (D17 manda executar mesmo assim; um dia pode pedir "dia útil").
 3. **Central de notificações** dentro do sistema (hoje: e-mail + histórico + avisos nas telas).
 4. **Aprovação por dupla** (quem gerou não aprova): não pedido.

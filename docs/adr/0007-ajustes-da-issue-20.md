@@ -15,29 +15,29 @@ Quatro ajustes decididos pelo usuário depois das fases 3 a 5, reunidos na issue
 
 ## Decisões
 
-### 1. IBS/CBS por empresa
+### 1. IBS/CBS: padrão da empresa, que o modelo e a nota herdam e podem sobrescrever
 
-**O que mudou.** `ParametrosFiscais` ganhou `ibs_cbs_informar` (a opção; padrão desligada) e `ibs_cbs_indicador_operacao` (o `cIndOp` padrão, 6 dígitos; obrigatório quando a opção está ligada). A nota **herda** esse padrão no momento em que nasce e pode **ajustá-lo pontualmente**. O serviço continua com a classificação (NBS, CST, `cClassTrib`).
+**O que mudou.** `ParametrosFiscais` ganhou três campos: `ibs_cbs_informar` (a opção; padrão desligada), `ibs_cbs_indicador_operacao` (o `cIndOp`, 6 dígitos; obrigatório quando a opção está ligada) e `ibs_cbs_indicador_destinatario` (o `indDest`; padrão `0`, "o próprio tomador"). O **modelo de NFS-e** e a **nota** herdam esses três valores e podem sobrescrevê-los. O serviço continua só com a classificação (NBS, CST, `cClassTrib`).
 
-**Quem manda, nesta ordem** (`fiscal.services.nfse._ibs_cbs`):
+**Quem manda: nota/rascunho > modelo > empresa, campo a campo** (`fiscal.services.nfse.resolver_ibs_cbs`). Cada um dos três campos (`informar`, `cIndOp`, `indDest`) vale pelo primeiro nível que o define; um nível só muda os campos que preenche e herda o resto. Exemplo: um modelo que fixa só o `cIndOp` herda da empresa a opção e o `indDest`.
 
-| Entrada da nota (`ibs_cbs`) | Padrão da empresa | Resultado |
+| Nível | Como "define" um campo | Como "herda" (volta a herdar) |
 |---|---|---|
-| `{informar: false}` | qualquer | sem o grupo (escolha explícita, vale para esta nota) |
-| `codigo_indicador_operacao` preenchido | qualquer | grupo com o indicador **da nota** (`origem: nota`) |
-| ausente / só `indicador_destinatario` | ligado e com indicador | grupo com o indicador **da empresa** (`origem: empresa`) |
-| `{informar: true}` | desligado | erro didático: informe o indicador na nota ou cadastre o padrão |
-| ausente | desligado | sem o grupo |
+| **Nota** (`ibs_cbs` da entrada) | `informar` (`true`/`false`), `codigo_indicador_operacao`, `indicador_destinatario` | omitir ou deixar vazio |
+| **Modelo** (`ibs_cbs_informar`, `ibs_cbs_indicador_operacao`, `ibs_cbs_indicador_destinatario`) | valor preenchido | `null` ou vazio |
+| **Empresa** (parâmetros fiscais) | sempre define os três | — |
 
-Em qualquer linha que gere o grupo, o serviço precisa ter NBS, CST e `cClassTrib`. Sem classificação: ajuste explícito da nota é **erro** (como na Fase 3); padrão da empresa vira **aviso** ("complete o cadastro do serviço") e a nota sai sem o grupo. Aviso e não bloqueio porque um serviço realmente sem classificação não deve travar a emissão; quem não quer o aviso completa o cadastro ou desliga a opção.
+Regras que completam a tabela: (1) indicar o `cIndOp` num nível, sem dizer se informa, vale como "informar"; (2) o `informar` falso de um nível mais forte vence o verdadeiro de um mais fraco e vice-versa; (3) o `cIndOp` guardado pela empresa vale para o modelo/nota mesmo com a opção da empresa desligada (a opção diz se informa por padrão, não apaga o valor); (4) sem classificação no serviço, um pedido de informar vindo da **nota ou do modelo** é **erro** (é um pedido explícito) e o vindo da **empresa** vira **aviso** ("complete o cadastro do serviço"), sem travar a emissão.
 
-**A prévia mostra o que vai na DPS.** `POST /notas/previa/` devolve `ibs_cbs`: `na_dps`, `origem`, indicador, destinatário, NBS, CST, `cClassTrib` e, quando não vai, o `motivo`. A tela exibe isso na linha "IBS/CBS na DPS". `GET /notas/prontidao/` devolve o padrão da empresa para a tela pré-preencher a dica.
+**Herdar não é copiar.** O modelo não guarda o valor da empresa: campo vazio vale o da empresa **de quando o rascunho é gerado**. Mudar o padrão da empresa muda os rascunhos **futuros** dos modelos que herdam; não muda os modelos com valor próprio, os rascunhos já criados nem as notas emitidas (testes). A API do modelo devolve o valor próprio, o herdado (a empresa de agora) e o efetivo com a origem de cada campo; as opções e a conferência do modelo trazem o padrão e a origem.
 
-**Cópia (snapshot).** O grupo resolvido é gravado em `complementos.ibs_cbs` (com `origem`) quando o rascunho nasce, como o resto da nota. Mudar o padrão da empresa depois **não altera** rascunhos já criados (nem os gerados por agendamento); salvar o rascunho de novo refaz a cópia. A emissão usa a cópia, nunca o parâmetro atual, para que o que foi conferido na prévia seja exatamente o que sai. O modelo de NFS-e continua sem campo de IBS/CBS e o rascunho dele herda o padrão da empresa (teste).
+**A prévia mostra o que vai na DPS e de onde veio cada campo.** `POST /notas/previa/` devolve `ibs_cbs`: `na_dps`, `origens` (por campo: `nota`, `modelo` ou `empresa`), indicador, destinatário, NBS, CST, `cClassTrib` e, quando não vai, o `motivo` (que diz de quem foi a decisão). A tela exibe a linha "IBS/CBS na DPS" com a origem entre parênteses. Ao conferir um rascunho existente, a tela informa o id dele (`rascunho`) para a conferência valer também o que o modelo dele definia.
 
-**Migração sem perda.** `0004_ibs_cbs_por_empresa` só acrescenta duas colunas com padrão (opção desligada, indicador vazio): não apaga, renomeia nem converte nada, e **não infere** o padrão a partir das notas antigas. Notas existentes mantêm o grupo que elas mesmas levavam, e o serviço mantém a classificação. Testes: a migração é apenas `AddField`; os dados de antes (parâmetros, nota com `ibs_cbs`, serviço classificado) sobrevivem à ida e à volta.
+**Cópia (snapshot) e rascunho ajustável.** O rascunho grava em `complementos`, como o resto da nota: `ibs_cbs` (o grupo efetivo, com `origens`), `ibs_cbs_nota` (o que a **nota** sobrescreveu, para a tela reabrir fiel — inclusive "não informar") e `ibs_cbs_modelo` (o que o **modelo** definia quando o rascunho nasceu). Assim o rascunho gerado pelo agendamento leva o valor efetivo e **continua ajustável** antes da aprovação: a edição resolve de novo com o ajuste novo da nota, o que o modelo definia (guardado no rascunho, sem consultar o app de agendamentos) e a empresa **de agora**. Quem edita vê na conferência o valor e a origem antes de emitir; a emissão usa a cópia gravada, nunca o parâmetro vivo, para que o que foi conferido seja exatamente o que sai. Apagar o ajuste da nota ("voltar a herdar") devolve o campo ao modelo e, na falta dele, à empresa.
 
-**Hipóteses e dívida de teste.** (a) O padrão do destinatário (`indDest`) fica **por nota**, com valor `0` ("o próprio tomador") quando não informado — é o padrão da tela desde a Fase 3. (b) O comportamento de IBS/CBS da Fase 3 **não tinha nenhum teste** (validação, aviso, mapeamento à DPS); esta issue o cobre, inclusive com o XML assinado da DPS.
+**Migração sem perda.** `fiscal.0004_ibs_cbs_por_empresa` só acrescenta três colunas com padrão (opção desligada, indicador vazio, `indDest` 0) e `agendamentos.0002_ibs_cbs_no_modelo` só acrescenta três colunas anuláveis: **os modelos existentes continuam "herda da empresa"**. Nada é apagado, renomeado nem convertido, e **nada é inferido** das notas antigas: elas mantêm o grupo que elas mesmas levavam, e o serviço mantém a classificação. Testes: as migrações são só `AddField`; dados de antes sobrevivem à ida e à volta.
+
+**Hipóteses e dívida de teste.** (a) O `indDest` padrão da empresa é `0` ("o próprio tomador"), o valor que a tela já usava desde a Fase 3: quem não mexer não muda de comportamento. (b) O comportamento de IBS/CBS da Fase 3 **não tinha nenhum teste** (validação, aviso, mapeamento à DPS); esta issue o cobre, inclusive com o XML assinado da DPS. (c) Esta seção **revoga, para o modelo**, a regra da Fase 5 "IBS/CBS fora do modelo" (ADR 0006), por decisão do usuário registrada na issue #20.
 
 #### O que é por empresa, por serviço ou por operação (NT 009)
 
@@ -46,14 +46,14 @@ Conferido contra o montador de DPS da biblioteca (`freedfe` 0.3.0) e o XML gerad
 | Campo do grupo `IBSCBS` | Natureza | Onde fica / estado |
 |---|---|---|
 | `finNFSe` | constante (0, NFS-e regular) | fixo na biblioteca |
-| `cIndOp` | **da operação** (ver alerta) | padrão da **empresa** + ajuste **pontual** na nota |
-| `indDest`, `dest` | da operação/nota | `indDest` por nota (padrão 0); `dest` não enviado |
+| `cIndOp` | **da operação** (ver alerta) | padrão da **empresa**, sobrescrito pelo **modelo** (operação recorrente) e, pontualmente, pela **nota** |
+| `indDest`, `dest` | da operação/nota | `indDest` com o mesmo caminho (empresa → modelo → nota; padrão 0); `dest` não enviado |
 | `indFinal`, `tpOper`, `gRefNFSe`, `tpEnteGov` | da operação / do tomador | **não enviados** hoje |
 | `valores/trib/CST` e `cClassTrib` | **do serviço** | cadastro do serviço (NT 009: direto em `valores/trib`; o `gIBSCBS` é da NT 004) |
 | `cCredPres`, `gTribRegular`, `gDif` | do serviço/operação | **não enviados** hoje; sem suporte na API do sistema |
 | `cNBS` (em `serv/cServ`) | **do serviço** | cadastro do serviço; obrigatória quando há o grupo (E0322) |
 
-> **Alerta (registrado, sem regra inventada).** O `cIndOp` é, pelo leiaute, atributo da **operação**: o DANFSe da biblioteca o exibe como "Indicador de Operação / Município de Incidência", e a Sefin devolve a localidade de incidência (`cLocalidadeIncid`) calculada a partir dele. Um único padrão por empresa só é correto para quem pratica **um tipo de operação**; uma empresa com serviços de naturezas diferentes precisará do **ajuste pontual** em cada nota (ou, no futuro, de um indicador por serviço como sobreposição — **não decidido aqui**). A decisão do usuário (padrão da empresa + ajuste pontual) é mantida e é exatamente o que mitiga o risco; a prévia deixa a origem visível. A biblioteca **não traz a tabela de `cIndOp`**: o sistema valida só o formato (6 dígitos). Confirmar a tabela e o comportamento por tipo de serviço na produção restrita é pendência de homologação.
+> **Alerta (registrado, sem regra inventada).** O `cIndOp` é, pelo leiaute, atributo da **operação**: o DANFSe da biblioteca o exibe como "Indicador de Operação / Município de Incidência", e a Sefin devolve a localidade de incidência (`cLocalidadeIncid`) calculada a partir dele. Um único padrão por empresa só é correto para quem pratica **um tipo de operação**. A decisão do usuário (empresa → modelo → nota) é exatamente o que mitiga o risco: **o modelo de NFS-e é o lugar natural para fixar o `cIndOp` de uma operação recorrente** (cada tipo de operação, o seu modelo) e a nota ajusta o caso isolado; a prévia deixa a origem visível. Um indicador **por serviço** como sobreposição continua **não decidido** (e, com o modelo, talvez desnecessário). A biblioteca **não traz a tabela de `cIndOp`**: o sistema valida só o formato (6 dígitos). Confirmar a tabela e o comportamento por tipo de serviço na produção restrita é pendência de homologação.
 
 ### 2. Perfil Emissor com `config.consultar`
 
@@ -85,8 +85,9 @@ O `core/dados/municipios_ibge.csv` foi conferido com a tabela **oficial** do IBG
 
 ## Consequências e riscos
 
-- **`cIndOp` por empresa pode estar errado para quem tem operações de naturezas diferentes** (alerta acima). Mitigação: ajuste pontual e prévia com a origem. Risco residual até a homologação.
-- **Rascunho antigo mantém o padrão de quando nasceu**: quem muda o padrão e emite um rascunho de ontem emite com o valor de ontem. É deliberado (o que se confere é o que sai); a tela de correção do rascunho refaz a cópia ao salvar.
+- **`cIndOp` por empresa pode estar errado para quem tem operações de naturezas diferentes** (alerta acima). Mitigação: um modelo por tipo de operação com o `cIndOp` próprio, ajuste pontual na nota e prévia com a origem. Risco residual até a homologação.
+- **Rascunho antigo mantém o padrão de quando nasceu**: quem muda o padrão e emite um rascunho de ontem emite com o valor de ontem. É deliberado (o que se confere é o que sai); ao **corrigir** o rascunho, os campos que a nota não sobrescreveu são resolvidos de novo (modelo guardado no rascunho + empresa de agora) e a conferência mostra o resultado e a origem antes de emitir.
+- **Mudar o modelo não altera rascunhos já gerados**, só os próximos: o rascunho guarda o que o modelo definia ao nascer.
 - **A troca para produção faz uma chamada à Sefin**: se o ambiente nacional estiver fora do ar, a troca espera (mensagem clara; tentar de novo em minutos). Em compensação, ninguém passa para produção com convênio que não existe.
 - **O Emissor passa a ver a configuração de e-mail e de Drive** (sem credenciais). Quem não quiser pode remover `config.consultar` daquele vínculo (`permissoes_removidas`).
 

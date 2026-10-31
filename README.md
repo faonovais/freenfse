@@ -111,10 +111,13 @@ O roteiro para validar tudo isto está em [`docs/verificacao-fase-5.md`](docs/ve
 
 ### Ajustes da issue #20 (IBS/CBS por empresa, Emissor, produção e municípios)
 
-- **IBS/CBS é da empresa.** Em *Parâmetros fiscais › IBS e CBS* a empresa liga a opção e informa o **indicador da operação
-  (`cIndOp`) padrão**; cada nota nova herda esse padrão e pode ajustá-lo só naquela nota (ou dispensar o grupo). A classificação
-  (NBS, CST e `cClassTrib`) continua no cadastro do serviço. A conferência da nota mostra o que vai na DPS e de onde veio.
-  O `cIndOp` é, pelo leiaute, atributo da operação: veja o alerta no [ADR 0007](docs/adr/0007-ajustes-da-issue-20.md).
+- **IBS/CBS: a empresa define o padrão; o modelo e a nota herdam e podem sobrescrever.** Em *Parâmetros fiscais › IBS e CBS*
+  a empresa liga a opção e informa o **indicador da operação (`cIndOp`)** e o **destinatário (`indDest`)** padrão. O *modelo
+  de NFS-e* herda os três valores (campo vazio = herda o da empresa **de quando o rascunho é gerado**; nada é copiado) e pode
+  sobrescrevê-los ou voltar a herdar; a nota ainda ajusta pontualmente. Vale o primeiro que definir o campo:
+  **nota > modelo > empresa**. A conferência mostra o valor e a origem de cada campo. A classificação (NBS, CST e `cClassTrib`)
+  continua no cadastro do serviço. O `cIndOp` é, pelo leiaute, atributo da operação: veja o alerta no
+  [ADR 0007](docs/adr/0007-ajustes-da-issue-20.md).
 - **Emissor consulta a configuração.** Vê os parâmetros fiscais e os dados do certificado (nunca o `.pfx` nem a senha) e não
   altera nada.
 - **Trocar para produção exige** certificado válido com o CNPJ conferido, município informado e convênio do município vigente
