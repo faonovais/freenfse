@@ -112,6 +112,8 @@ class EnvioEmail(models.Model):
         REENVIO = "reenvio", "Reenvio"
         TESTE = "teste", "E-mail de teste"
         ALERTA_CERTIFICADO = "alerta_certificado", "Alerta de certificado"
+        AVISO_AGENDAMENTO = "aviso_agendamento", "Aviso de agendamento"
+        RASCUNHOS_PENDENTES = "rascunhos_pendentes", "Rascunhos pendentes"
 
     class Situacao(models.TextChoices):
         """Andamento do envio."""

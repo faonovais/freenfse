@@ -48,7 +48,15 @@ def _rotas_do_modulo(nome_arquivo):
 
 @pytest.mark.parametrize(
     "modulo",
-    ["auth.js", "admin.js", "versao.js", "cadastros.js", "fiscal.js", "documentos.js"],
+    [
+        "auth.js",
+        "admin.js",
+        "versao.js",
+        "cadastros.js",
+        "fiscal.js",
+        "documentos.js",
+        "agendamentos.js",
+    ],  # fmt: skip
 )
 def test_toda_rota_chamada_pela_spa_existe_no_backend(modulo):
     rotas = _rotas_do_modulo(modulo)
