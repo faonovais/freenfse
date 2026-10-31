@@ -7,6 +7,9 @@ import Vinculos from './pages/admin/Vinculos.jsx'
 import Pessoas from './pages/cadastros/Pessoas.jsx'
 import Servicos from './pages/cadastros/Servicos.jsx'
 import Config2FA from './pages/Config2FA.jsx'
+import ConfigDrive from './pages/documentos/ConfigDrive.jsx'
+import ConfigEmail from './pages/documentos/ConfigEmail.jsx'
+import Exportacoes from './pages/documentos/Exportacoes.jsx'
 import Certificado from './pages/fiscal/Certificado.jsx'
 import DetalheNota from './pages/fiscal/DetalheNota.jsx'
 import Logo from './pages/fiscal/Logo.jsx'
@@ -36,6 +39,9 @@ export const rotas = [
           { path: 'fiscal/parametros', element: <Parametros /> },
           { path: 'fiscal/certificado', element: <Certificado /> },
           { path: 'fiscal/logo', element: <Logo /> },
+          { path: 'documentos/exportacoes', element: <Exportacoes /> },
+          { path: 'documentos/email', element: <ConfigEmail /> },
+          { path: 'documentos/drive', element: <ConfigDrive /> },
           {
             element: <RotaMaster />,
             children: [

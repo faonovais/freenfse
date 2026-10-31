@@ -4,6 +4,7 @@ Toda configuração variável vem de variáveis de ambiente (ver `.env.example`)
 Nenhum valor sensível é definido neste arquivo.
 """
 
+import tempfile
 from pathlib import Path
 
 import environ
@@ -240,6 +241,16 @@ REST_FRAMEWORK = {
 }
 
 # --- Celery -------------------------------------------------------------------
+# --- Download em lote (Fase 4) ------------------------------------------------
+# O ZIP é gravado nesta pasta (compartilhada entre o backend e o worker) e apagado depois da
+# retenção. Em contêineres, monte um volume aqui.
+FREENFSE_EXPORTACOES_DIR = env(
+    "FREENFSE_EXPORTACOES_DIR", default=str(Path(tempfile.gettempdir()) / "freenfse-exportacoes")
+)
+FREENFSE_LOTE_MAX_NOTAS = env.int("FREENFSE_LOTE_MAX_NOTAS", default=500)
+FREENFSE_LOTE_MAX_MB = env.int("FREENFSE_LOTE_MAX_MB", default=200)
+FREENFSE_LOTE_RETENCAO_HORAS = env.int("FREENFSE_LOTE_RETENCAO_HORAS", default=24)
+
 CELERY_BROKER_URL = REDIS_URL
 CELERY_RESULT_BACKEND = REDIS_URL
 CELERY_TIMEZONE = "America/Sao_Paulo"
@@ -255,6 +266,16 @@ CELERY_BEAT_SCHEDULE = {
     "reconciliar-notas-incertas": {
         "task": "fiscal.tasks.reconciliar_notas_incertas",
         "schedule": crontab(minute="*/5"),
+    },
+    # Fila de e-mails e de cópias ao Drive (retentativas persistidas): a cada minuto.
+    "despachar-documentos-pendentes": {
+        "task": "documentos.tasks.despachar_pendentes",
+        "schedule": crontab(minute="*"),
+    },
+    # Expurgo dos ZIPs do download em lote vencidos: de hora em hora.
+    "expurgar-exportacoes": {
+        "task": "documentos.tasks.expurgar_exportacoes",
+        "schedule": crontab(minute=17),
     },
 }
 

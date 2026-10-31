@@ -22,7 +22,7 @@ from lxml import etree
 
 from core.models import Empresa, LogAuditoria
 from core.services import auditoria
-from fiscal import gateway
+from fiscal import gateway, signals
 from fiscal.models import (
     Certificado,
     EventoNfse,
@@ -272,6 +272,7 @@ def _autorizar(empresa, nfse, resultado, contexto):
         alvo=f"nfse:{nfse.pk}",
         detalhes={"chave": resultado.chave, "leiaute": resultado.leiaute},
     )
+    signals.avisar(signals.nfse_autorizada, nfse=nfse)
     if nfse.substitui_id:
         _confirmar_substituicao(empresa, nfse.substitui, contexto)
     return S.AUTORIZADA
@@ -456,9 +457,10 @@ def sincronizar_eventos(contexto, nfse):
         (e.tipo_evento, e.identificador): e
         for e in EventoFiscal.objects.filter(modelo="nfse", chave=nfse.chave)
     }
+    novos = []
     for evento in eventos:
         origem = guardados.get((evento["tipo_evento"], evento["identificador"]))
-        EventoNfse.objects.get_or_create(
+        registro, novo = EventoNfse.objects.get_or_create(
             nfse=nfse,
             tipo_evento=evento["tipo_evento"],
             identificador=evento["identificador"],
@@ -469,12 +471,16 @@ def sincronizar_eventos(contexto, nfse):
                 "hash_xml": origem.sha256 if origem else "",
             },
         )
+        if novo:
+            novos.append(registro)
     tipos = {e["tipo_evento"] for e in eventos}
     if nfse.situacao == S.AUTORIZADA:
         if tipos & EVENTOS_DE_CANCELAMENTO:
             transicionar(nfse, S.CANCELADA, motivo="Cancelamento confirmado pela Sefin")
         elif EVENTO_DE_SUBSTITUICAO in tipos:
             transicionar(nfse, S.SUBSTITUIDA, motivo="Substituição confirmada pela Sefin")
+    for registro in novos:  # só depois de a situação da nota refletir o evento
+        signals.avisar(signals.nfse_evento_confirmado, nfse=nfse, evento=registro)
     return nfse
 
 
