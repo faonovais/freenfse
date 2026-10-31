@@ -34,6 +34,10 @@ const VAZIO = {
   email_corpo: '',
   copias_proprias: false,
   email_copias: '',
+  // IBS/CBS do modelo: vazio = herda da empresa (nada é copiado para o modelo).
+  ibs_informar: '',
+  ibs_indicador: '',
+  ibs_destinatario: '',
 }
 
 const listaDe = (dados) => (Array.isArray(dados) ? dados : (dados?.results ?? []))
@@ -44,6 +48,7 @@ const comoLista = (texto) =>
     .split(/[,;\n]/)
     .map((item) => item.trim())
     .filter(Boolean)
+const ORIGEM = { nota: 'ajuste da nota', modelo: 'do modelo', empresa: 'da empresa' }
 const OPCOES_TRI = [
   { valor: 'sim', rotulo: 'Sim' },
   { valor: 'nao', rotulo: 'Não' },
@@ -72,6 +77,12 @@ function formularioDe(m) {
     email_corpo: m.email_corpo_modelo ?? '',
     copias_proprias: m.email_copias_fixas !== null && m.email_copias_fixas !== undefined,
     email_copias: (m.email_copias_fixas ?? []).join(', '),
+    ibs_informar: tristate(m.ibs_cbs_informar),
+    ibs_indicador: m.ibs_cbs_indicador_operacao ?? '',
+    ibs_destinatario:
+      m.ibs_cbs_indicador_destinatario === null || m.ibs_cbs_indicador_destinatario === undefined
+        ? ''
+        : String(m.ibs_cbs_indicador_destinatario),
   }
 }
 
@@ -99,6 +110,9 @@ function corpoDe(f) {
     email_assunto_modelo: f.email_assunto,
     email_corpo_modelo: f.email_corpo,
     email_copias_fixas: f.copias_proprias ? comoLista(f.email_copias) : null,
+    ibs_cbs_informar: deTristate(f.ibs_informar),
+    ibs_cbs_indicador_operacao: f.ibs_indicador,
+    ibs_cbs_indicador_destinatario: f.ibs_destinatario === '' ? null : Number(f.ibs_destinatario),
   }
 }
 
@@ -119,6 +133,16 @@ function Previa({ previa }) {
         <p className="flex justify-between gap-4"><dt>Valor do serviço</dt><dd>{dinheiro(previa.totais.valor_servico)}</dd></p>
         <p className="flex justify-between gap-4"><dt>ISS</dt><dd>{dinheiro(previa.totais.valor_iss)}</dd></p>
         <p className="flex justify-between gap-4"><dt>Valor líquido</dt><dd><strong>{dinheiro(previa.totais.valor_liquido)}</strong></dd></p>
+        {previa.ibs_cbs && (
+          <p className="flex justify-between gap-4">
+            <dt>IBS/CBS na DPS</dt>
+            <dd className="text-right">
+              {previa.ibs_cbs.na_dps
+                ? `Indicador ${previa.ibs_cbs.codigo_indicador_operacao} (${ORIGEM[previa.ibs_cbs.origens.codigo_indicador_operacao]}) · destinatário ${previa.ibs_cbs.indicador_destinatario === 0 ? 'é o próprio tomador' : 'é outra pessoa'} (${ORIGEM[previa.ibs_cbs.origens.indicador_destinatario]})`
+                : `Não vai na nota. ${previa.ibs_cbs.motivo}`}
+            </dd>
+          </p>
+        )}
         {previa.informacoes_complementares && (
           <p className="mt-1"><dt className="inline font-medium">Texto na nota: </dt><dd className="inline">{previa.informacoes_complementares}</dd></p>
         )}
@@ -140,6 +164,7 @@ export default function ModeloForm() {
   const [pessoas, setPessoas] = useState([])
   const [servicos, setServicos] = useState([])
   const [variaveis, setVariaveis] = useState({})
+  const [empresaIbs, setEmpresaIbs] = useState(null) // o padrão de IBS/CBS da empresa de agora
   const [carregando, setCarregando] = useState(Boolean(id))
   const [falha, setFalha] = useState('')
   const [erros, setErros] = useState({})
@@ -153,7 +178,11 @@ export default function ModeloForm() {
     let ativo = true
     apiPessoas.listar({ ativo: 'true', tamanho: 200 }).then((r) => ativo && r.ok && setPessoas(listaDe(r.dados)))
     apiServicos.listar({ ativo: 'true', tamanho: 200 }).then((r) => ativo && r.ok && setServicos(listaDe(r.dados)))
-    apiOpcoes().then((r) => ativo && r.ok && setVariaveis(r.dados.variaveis_do_texto))
+    apiOpcoes().then((r) => {
+      if (!ativo || !r.ok) return
+      setVariaveis(r.dados.variaveis_do_texto)
+      setEmpresaIbs(r.dados.ibs_cbs_empresa ?? null)
+    })
     if (id) {
       api.obter(id).then((r) => {
         if (!ativo) return
@@ -335,6 +364,60 @@ export default function ModeloForm() {
             </ul>
           </div>
           <Campo rotulo="Percentual total de tributos do Simples (%) — opcional" inputMode="decimal" value={f.percentual_simples} onChange={mudar('percentual_simples')} erro={erros.percentual_total_tributos_simples} />
+
+          <section aria-label="IBS e CBS do modelo" className="space-y-2 text-sm">
+            <h3 className="text-base text-gray-900 dark:text-gray-100">IBS e CBS</h3>
+            <p className="text-xs text-gray-600 dark:text-gray-400">
+              O modelo herda da empresa (parâmetros fiscais) a opção, o indicador da operação e o destinatário. Preencha só o
+              que for diferente para as notas deste modelo; cada rascunho ainda pode ajustar. A classificação (NBS, CST e
+              cClassTrib) fica no cadastro do serviço.
+            </p>
+            <div className="grid gap-3 sm:grid-cols-3">
+              <CampoSelecao
+                rotulo="Informar o IBS/CBS"
+                vazio={`Herdar da empresa (hoje: ${empresaIbs?.informar ? 'informa' : 'não informa'})`}
+                opcoes={[
+                  { valor: 'sim', rotulo: 'Informar' },
+                  { valor: 'nao', rotulo: 'Não informar' },
+                ]}
+                value={f.ibs_informar}
+                onChange={mudar('ibs_informar')}
+              />
+              <Campo
+                rotulo="Indicador da operação (cIndOp)"
+                inputMode="numeric"
+                maxLength={6}
+                value={f.ibs_indicador}
+                onChange={mudar('ibs_indicador')}
+                erro={erros.ibs_cbs_indicador_operacao}
+                dica={
+                  empresaIbs?.codigo_indicador_operacao
+                    ? `Vazio: herda o da empresa (${empresaIbs.codigo_indicador_operacao}).`
+                    : 'Vazio: herda o da empresa (nenhum definido ainda).'
+                }
+              />
+              <CampoSelecao
+                rotulo="O destinatário é o próprio tomador?"
+                vazio={`Herdar da empresa (hoje: ${(empresaIbs?.indicador_destinatario ?? 0) === 0 ? 'sim' : 'não'})`}
+                opcoes={[
+                  { valor: '0', rotulo: 'Sim' },
+                  { valor: '1', rotulo: 'Não' },
+                ]}
+                value={f.ibs_destinatario}
+                onChange={mudar('ibs_destinatario')}
+                erro={erros.ibs_cbs_indicador_destinatario}
+              />
+            </div>
+            {podeEditar && (f.ibs_informar || f.ibs_indicador || f.ibs_destinatario) && (
+              <button
+                type="button"
+                className="botao-leve"
+                onClick={() => setF((atual) => ({ ...atual, ibs_informar: '', ibs_indicador: '', ibs_destinatario: '' }))}
+              >
+                Voltar a herdar tudo da empresa
+              </button>
+            )}
+          </section>
 
           <details className="text-sm">
             <summary className="cursor-pointer">E-mail das notas deste modelo (opcional)</summary>

@@ -5,6 +5,7 @@ alterar o modelo depois nunca muda uma nota já criada, nem a configuração de 
 """
 
 import datetime as dt
+import re
 
 from django.core.exceptions import ValidationError
 from django.core.validators import validate_email
@@ -88,8 +89,9 @@ def dados_do_rascunho(modelo, *, data_execucao):
         "valores": dict(modelo.valores or {}),
         "informacoes_complementares": texto,
         "percentual_total_tributos_simples": complementos.get("percentual_total_tributos_simples"),
-        # IBS/CBS não é do modelo: a opção e o indicador são da empresa e o rascunho os
-        # herda ao nascer (ADR 0007).
+        # IBS/CBS: o que ESTE modelo define (vazio = herda da empresa na hora de gerar; ADR 0007).
+        # Não vai em `ibs_cbs` (que é o ajuste da nota): o rascunho guarda de onde cada valor veio.
+        "ibs_cbs_modelo": modelo.padroes_de_ibs_cbs(),
     }
 
 
@@ -114,6 +116,13 @@ def validar_modelo(modelo, *, hoje, com_geracao=True):
         modelo.email_assunto_modelo, modelo.email_corpo_modelo
     ).items():
         erros[f"email_{campo}"] = mensagem
+    indicador = modelo.ibs_cbs_indicador_operacao
+    if indicador and not re.fullmatch(r"\d{6}", indicador):
+        erros["ibs_cbs_indicador_operacao"] = "O indicador da operação tem 6 dígitos."
+    if modelo.ibs_cbs_indicador_destinatario not in (None, 0, 1):
+        erros["ibs_cbs_indicador_destinatario"] = (
+            "Informe se o destinatário é o próprio tomador (0) ou outra pessoa (1)."
+        )
     for email in modelo.email_copias_fixas or []:
         try:
             validate_email(str(email))

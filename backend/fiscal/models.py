@@ -89,6 +89,12 @@ class ParametrosFiscais(_UnicoPorEmpresa):
         blank=True,
         help_text="6 dígitos, da tabela de indicadores da operação do IBS/CBS.",
     )
+    ibs_cbs_indicador_destinatario = models.PositiveSmallIntegerField(
+        "destinatário padrão (indDest)",
+        choices=[(0, "O destinatário é o próprio tomador"), (1, "O destinatário é outra pessoa")],
+        default=0,
+        help_text="0 = o próprio tomador (o padrão); 1 = outra pessoa.",
+    )
 
     # Último resultado da verificação do convênio do município (ver fiscal/services).
     convenio_verificado_em = models.DateTimeField(null=True, blank=True)
@@ -161,6 +167,10 @@ class ParametrosFiscais(_UnicoPorEmpresa):
             erros["ibs_cbs_indicador_operacao"] = (
                 "Para informar o IBS/CBS nas notas, informe o indicador da operação padrão da "
                 "empresa (6 dígitos)."
+            )
+        if self.ibs_cbs_indicador_destinatario not in (0, 1):
+            erros["ibs_cbs_indicador_destinatario"] = (
+                "Informe se o destinatário é o próprio tomador (0) ou outra pessoa (1)."
             )
         if erros:
             raise ValidationError(erros)

@@ -7,6 +7,7 @@ O comportamento de IBS/CBS da Fase 3 não tinha testes: este arquivo cobre tamb�
 
 import datetime as dt
 from decimal import Decimal
+from types import SimpleNamespace
 
 import pytest
 from django_tenants.utils import schema_context
@@ -27,6 +28,12 @@ NOTAS = "/api/fiscal/notas/"
 PARAMETROS = "/api/fiscal/parametros/"
 PADRAO = "010101"
 OUTRO = "020202"
+# Origem de cada campo quando tudo vem da empresa (a nota e o modelo não definiram nada).
+ORIGENS_EMPRESA = {
+    "informar": "empresa",
+    "codigo_indicador_operacao": "empresa",
+    "indicador_destinatario": "empresa",
+}
 
 
 # -- apoio ----------------------------------------------------------------------------------
@@ -116,12 +123,12 @@ def test_nota_herda_o_padrao_da_empresa_e_a_classificacao_do_servico(cadastros):
     assert preparo.complementos["ibs_cbs"] == {
         "codigo_indicador_operacao": PADRAO,
         "indicador_destinatario": 0,
-        "origem": "empresa",
+        "origens": ORIGENS_EMPRESA,
     }
     assert preparo.ibs_cbs_dps == {
         "na_dps": True,
         "motivo": None,
-        "origem": "empresa",
+        "origens": ORIGENS_EMPRESA,
         "codigo_indicador_operacao": PADRAO,
         "indicador_destinatario": 0,
         "nbs": "113011000",
@@ -165,9 +172,13 @@ def test_ajuste_pontual_vale_mais_que_o_padrao_da_empresa(cadastros):
     assert preparo.complementos["ibs_cbs"] == {
         "codigo_indicador_operacao": OUTRO,
         "indicador_destinatario": 1,
-        "origem": "nota",
+        "origens": {
+            "informar": "nota",  # indicar o cIndOp na nota vale como "informar"
+            "codigo_indicador_operacao": "nota",
+            "indicador_destinatario": "nota",
+        },
     }
-    assert preparo.ibs_cbs_dps["origem"] == "nota"
+    assert preparo.ibs_cbs_dps["origens"]["codigo_indicador_operacao"] == "nota"
 
 
 def test_ajuste_pontual_so_do_destinatario_mantem_o_indicador_da_empresa(cadastros):
@@ -177,7 +188,7 @@ def test_ajuste_pontual_so_do_destinatario_mantem_o_indicador_da_empresa(cadastr
     grupo = _preparar(tomador, com, ibs_cbs={"indicador_destinatario": 1}).complementos["ibs_cbs"]
 
     assert (grupo["codigo_indicador_operacao"], grupo["indicador_destinatario"]) == (PADRAO, 1)
-    assert grupo["origem"] == "empresa"
+    assert grupo["origens"] == {**ORIGENS_EMPRESA, "indicador_destinatario": "nota"}  # por campo
 
 
 def test_nao_informar_nesta_nota_tira_o_grupo_mesmo_com_o_padrao_ligado(cadastros):
@@ -198,7 +209,9 @@ def test_ajuste_pontual_funciona_mesmo_com_a_opcao_da_empresa_desligada(cadastro
         tomador, com, ibs_cbs={"codigo_indicador_operacao": OUTRO, "indicador_destinatario": 0}
     ).complementos["ibs_cbs"]
 
-    assert (grupo["codigo_indicador_operacao"], grupo["origem"]) == (OUTRO, "nota")
+    assert grupo["codigo_indicador_operacao"] == OUTRO
+    assert grupo["origens"]["codigo_indicador_operacao"] == "nota"
+    assert grupo["origens"]["informar"] == "nota"  # sem a opção da empresa, a nota decidiu
 
 
 def test_pedir_para_informar_sem_nenhum_indicador_e_erro_didatico(cadastros):
@@ -206,7 +219,7 @@ def test_pedir_para_informar_sem_nenhum_indicador_e_erro_didatico(cadastros):
 
     erros = _erros(tomador, com, ibs_cbs={"informar": True})
 
-    assert "padrão da empresa nos parâmetros fiscais" in erros["ibs_cbs"]
+    assert "desta nota, do modelo ou dos parâmetros fiscais da empresa" in erros["ibs_cbs"]
 
 
 def test_pedir_para_informar_usa_o_padrao_da_empresa_quando_ele_existe(cadastros):
@@ -215,7 +228,8 @@ def test_pedir_para_informar_usa_o_padrao_da_empresa_quando_ele_existe(cadastros
 
     grupo = _preparar(tomador, com, ibs_cbs={"informar": True}).complementos["ibs_cbs"]
 
-    assert (grupo["codigo_indicador_operacao"], grupo["origem"]) == (PADRAO, "empresa")
+    assert grupo["codigo_indicador_operacao"] == PADRAO
+    assert grupo["origens"] == {**ORIGENS_EMPRESA, "informar": "nota"}
 
 
 def test_classificacao_sem_nbs_nao_conta_como_servico_classificado(cadastros):
@@ -284,6 +298,140 @@ def test_ajuste_pontual_exige_classificacao_no_servico(cadastros):
     erros = _erros(tomador, sem, ibs_cbs={"codigo_indicador_operacao": PADRAO})
 
     assert "NBS, CST e classificação do IBS/CBS" in erros["ibs_cbs"]
+
+
+# -- as três origens e a prioridade: nota > modelo > empresa --------------------------------
+
+
+def _empresa(informar=True, indicador=PADRAO, destinatario=0):
+    return SimpleNamespace(
+        ibs_cbs_informar=informar,
+        ibs_cbs_indicador_operacao=indicador,
+        ibs_cbs_indicador_destinatario=destinatario,
+    )
+
+
+def _resolver(nota=None, modelo=None, empresa=None):
+    valores, origens, erro = servico_nfse.resolver_ibs_cbs(nota, modelo, empresa or _empresa())
+    assert erro is None, erro
+    return valores, origens
+
+
+def test_sem_nota_nem_modelo_tudo_vem_da_empresa():
+    valores, origens = _resolver()
+
+    assert valores == {
+        "informar": True,
+        "codigo_indicador_operacao": PADRAO,
+        "indicador_destinatario": 0,
+    }
+    assert origens == ORIGENS_EMPRESA
+
+
+def test_o_modelo_vale_mais_que_a_empresa_campo_a_campo():
+    valores, origens = _resolver(modelo={"codigo_indicador_operacao": OUTRO})
+
+    assert valores["codigo_indicador_operacao"] == OUTRO
+    # Só o campo que o modelo definiu muda de origem; o resto continua herdado da empresa.
+    assert origens == {
+        "informar": "modelo",  # indicar o cIndOp no modelo vale como "informar"
+        "codigo_indicador_operacao": "modelo",
+        "indicador_destinatario": "empresa",
+    }
+
+
+def test_a_nota_vale_mais_que_o_modelo_que_vale_mais_que_a_empresa():
+    valores, origens = _resolver(
+        nota={"indicador_destinatario": 1},
+        modelo={"codigo_indicador_operacao": OUTRO, "indicador_destinatario": 0},
+        empresa=_empresa(indicador="030303", destinatario=0),
+    )
+
+    assert valores == {
+        "informar": True,
+        "codigo_indicador_operacao": OUTRO,
+        "indicador_destinatario": 1,
+    }
+    assert origens == {
+        "informar": "modelo",
+        "codigo_indicador_operacao": "modelo",
+        "indicador_destinatario": "nota",
+    }
+
+
+def test_cada_nivel_pode_dizer_para_nao_informar_e_o_mais_forte_decide():
+    assert _resolver(nota={"informar": False})[0]["informar"] is False
+    assert _resolver(nota={"informar": False})[1]["informar"] == "nota"
+    assert _resolver(modelo={"informar": False})[1]["informar"] == "modelo"
+    # A nota pode voltar a informar o que o modelo dispensou, e o modelo o que a empresa dispensou.
+    assert _resolver(nota={"informar": True}, modelo={"informar": False})[0]["informar"] is True
+    desligada = _empresa(informar=False)
+    assert _resolver(modelo={"informar": True}, empresa=desligada)[0]["informar"] is True
+    assert _resolver(nota={"informar": False}, modelo={"informar": True})[0]["informar"] is False
+
+
+def test_o_indicador_guardado_pela_empresa_vale_para_o_modelo_mesmo_com_a_opcao_desligada():
+    valores, origens = _resolver(modelo={"informar": True}, empresa=_empresa(informar=False))
+
+    assert valores["codigo_indicador_operacao"] == PADRAO
+    assert origens["codigo_indicador_operacao"] == "empresa"
+    assert origens["informar"] == "modelo"
+
+
+def test_vazio_nao_define_nada_e_a_empresa_de_agora_e_que_vale():
+    """Campo vazio herda; mudar a empresa muda o resultado na hora (nada foi copiado)."""
+    modelo_que_herda = {
+        "informar": None,
+        "codigo_indicador_operacao": "",
+        "indicador_destinatario": None,
+    }
+
+    antes = _resolver(modelo=modelo_que_herda, empresa=_empresa(indicador=PADRAO, destinatario=0))
+    depois = _resolver(modelo=modelo_que_herda, empresa=_empresa(indicador=OUTRO, destinatario=1))
+
+    assert antes[0]["codigo_indicador_operacao"] == PADRAO and antes[1] == ORIGENS_EMPRESA
+    assert (
+        depois[0]["codigo_indicador_operacao"] == OUTRO and depois[0]["indicador_destinatario"] == 1
+    )
+    assert depois[1] == ORIGENS_EMPRESA
+
+
+@pytest.mark.parametrize(
+    ("nota", "trecho"),
+    [
+        ({"informar": "sim"}, "verdadeiro ou falso"),
+        ({"indicador_destinatario": 2}, "próprio tomador (0 ou 1)"),
+        ({"indicador_destinatario": "x"}, "próprio tomador (0 ou 1)"),
+    ],
+)
+def test_valor_invalido_em_qualquer_nivel_e_recusado(nota, trecho):
+    for nivel in ("nota", "modelo"):
+        _, _, erro = servico_nfse.resolver_ibs_cbs(
+            nota if nivel == "nota" else None,
+            nota if nivel == "modelo" else None,
+            _empresa(),
+        )
+        assert trecho in erro
+
+
+def test_o_ajuste_da_nota_guardado_so_tem_o_que_a_nota_definiu():
+    assert servico_nfse.ajuste_da_nota(None) is None
+    assert servico_nfse.ajuste_da_nota({}) is None
+    assert (
+        servico_nfse.ajuste_da_nota(
+            {"codigo_indicador_operacao": "", "indicador_destinatario": None}
+        )
+        is None
+    )
+    assert servico_nfse.ajuste_da_nota({"informar": False}) == {"informar": False}
+    assert servico_nfse.ajuste_da_nota(
+        {"codigo_indicador_operacao": OUTRO, "indicador_destinatario": "1"}
+    ) == {
+        "codigo_indicador_operacao": OUTRO,
+        "indicador_destinatario": 1,
+    }
+    # Indicar o cIndOp não faz o "informar" virar ajuste guardado: ele só vale como efeito.
+    assert "informar" not in servico_nfse.ajuste_da_nota({"codigo_indicador_operacao": OUTRO})
 
 
 # -- snapshot: a nota guarda o que valia quando nasceu ---------------------------------------
@@ -486,6 +634,7 @@ def test_prontidao_expoe_o_padrao_da_empresa_para_a_tela_preencher(api_de, empre
     assert emissor.get(f"{NOTAS}prontidao/").json()["ibs_cbs"] == {
         "informar": False,
         "codigo_indicador_operacao": "",
+        "indicador_destinatario": 0,
     }
     with schema_context(empresa_a.schema_name):
         _padrao_da_empresa()
@@ -493,6 +642,7 @@ def test_prontidao_expoe_o_padrao_da_empresa_para_a_tela_preencher(api_de, empre
     assert emissor.get(f"{NOTAS}prontidao/").json()["ibs_cbs"] == {
         "informar": True,
         "codigo_indicador_operacao": PADRAO,
+        "indicador_destinatario": 0,
     }
 
 
@@ -537,7 +687,7 @@ def test_previa_mostra_o_que_vai_na_dps_com_a_origem(emissor_com_servico, empres
     assert previa == {
         "na_dps": True,
         "motivo": None,
-        "origem": "empresa",
+        "origens": ORIGENS_EMPRESA,
         "codigo_indicador_operacao": PADRAO,
         "indicador_destinatario": 0,
         "nbs": "113011000",
@@ -566,15 +716,12 @@ def test_previa_com_ajuste_pontual_mostra_a_nota_como_origem(emissor_com_servico
         {**corpo, "ibs_cbs": {"codigo_indicador_operacao": OUTRO, "indicador_destinatario": 1}},
     ).json()["ibs_cbs"]
 
-    assert (
-        previa["origem"],
-        previa["codigo_indicador_operacao"],
-        previa["indicador_destinatario"],
-    ) == (
-        "nota",
-        OUTRO,
-        1,
-    )
+    assert (previa["codigo_indicador_operacao"], previa["indicador_destinatario"]) == (OUTRO, 1)
+    assert previa["origens"] == {
+        "informar": "nota",
+        "codigo_indicador_operacao": "nota",
+        "indicador_destinatario": "nota",
+    }
 
 
 def test_previa_recusa_ajuste_invalido_com_a_mensagem_no_campo(emissor_com_servico):
@@ -601,5 +748,5 @@ def test_nota_criada_pela_api_herda_o_padrao_e_guarda_a_origem(emissor_com_servi
     assert grupo == {
         "codigo_indicador_operacao": PADRAO,
         "indicador_destinatario": 0,
-        "origem": "empresa",
+        "origens": ORIGENS_EMPRESA,
     }

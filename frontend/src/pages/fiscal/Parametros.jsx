@@ -24,6 +24,7 @@ function formularioDe(dados) {
     codigo_municipio_emissor: dados.codigo_municipio_emissor,
     ibs_cbs_informar: Boolean(dados.ibs_cbs_informar),
     ibs_cbs_indicador_operacao: dados.ibs_cbs_indicador_operacao ?? '',
+    ibs_cbs_indicador_destinatario: String(dados.ibs_cbs_indicador_destinatario ?? 0),
   }
 }
 
@@ -123,6 +124,7 @@ export default function Parametros() {
       codigo_municipio_emissor: f.codigo_municipio_emissor,
       ibs_cbs_informar: f.ibs_cbs_informar,
       ibs_cbs_indicador_operacao: f.ibs_cbs_indicador_operacao,
+      ibs_cbs_indicador_destinatario: Number(f.ibs_cbs_indicador_destinatario),
     }
     const indoParaProducao = f.ambiente === 'producao' && dados.ambiente !== 'producao'
 
@@ -239,9 +241,9 @@ export default function Parametros() {
             <h2 className="text-base text-gray-900 dark:text-gray-100">
               IBS e CBS{' '}
               <BotaoAjuda rotulo="IBS e CBS">
-                A opção e o indicador da operação valem para a empresa toda: cada nota nova usa este padrão e, se
-                preciso, dá para ajustar numa nota específica. A classificação (NBS, CST e cClassTrib) continua no
-                cadastro de cada serviço.
+                A opção, o indicador da operação e o destinatário valem para a empresa toda. Cada modelo de NFS-e e cada
+                nota herdam este padrão e podem mudá-lo (vale o da nota, depois o do modelo, depois o da empresa). A
+                classificação (NBS, CST e cClassTrib) continua no cadastro de cada serviço.
               </BotaoAjuda>
             </h2>
             <label className="flex items-center gap-2 text-sm">
@@ -260,6 +262,17 @@ export default function Parametros() {
               onChange={mudar('ibs_cbs_indicador_operacao')}
               erro={erros.ibs_cbs_indicador_operacao}
               dica="6 dígitos. Só vai na nota de serviço que tem NBS, CST e cClassTrib no cadastro."
+            />
+            <CampoSelecao
+              rotulo="Destinatário padrão (indDest)"
+              opcoes={[
+                { valor: '0', rotulo: 'O destinatário é o próprio tomador' },
+                { valor: '1', rotulo: 'O destinatário é outra pessoa' },
+              ]}
+              value={f.ibs_cbs_indicador_destinatario}
+              onChange={mudar('ibs_cbs_indicador_destinatario')}
+              erro={erros.ibs_cbs_indicador_destinatario}
+              dica="Os modelos de NFS-e e as notas herdam este valor e podem mudá-lo."
             />
           </div>
 

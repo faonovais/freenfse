@@ -130,15 +130,98 @@ def _tem_classificacao(servico):
     return bool(servico.cst_ibs_cbs and servico.c_class_trib and servico.nbs)
 
 
-def _ibs_cbs(bruto, servico, parametros, erros, avisos):
-    """Decide se o grupo IBS/CBS vai na DPS e com quais valores (ADR 0007).
+ORIGEM_NOTA, ORIGEM_MODELO, ORIGEM_EMPRESA = "nota", "modelo", "empresa"
+CAMPOS_DO_IBS_CBS = ("informar", "codigo_indicador_operacao", "indicador_destinatario")
 
-    Quem manda, nesta ordem: o **ajuste pontual da nota** (`ibs_cbs` da entrada) e o **padrão da
-    empresa** (parâmetros fiscais: opção e indicador da operação). A classificação (NBS, CST,
-    cClassTrib) é sempre a do serviço. Devolve `(grupo, na_dps)`: `grupo` é o que se grava na nota
-    (ou `None`); `na_dps` explica à prévia o que vai, de onde veio e, se não vai, por quê.
+
+def _nivel_de_ibs_cbs(bruto):
+    """O que um nível (nota ou modelo) define; vazio ou ausente = não definiu (herda).
+
+    Devolve `(valores, erro)`. Indicar o `cIndOp` sem dizer se informa vale como "informar".
     """
     bruto = bruto or {}
+    informar = bruto.get("informar")
+    if informar is not None and not isinstance(informar, bool):
+        return None, 'Use verdadeiro ou falso em "informar".'
+    indicador = str(bruto.get("codigo_indicador_operacao") or "").strip() or None
+    destinatario = bruto.get("indicador_destinatario")
+    if destinatario == "":
+        destinatario = None
+    if destinatario is not None and destinatario not in (0, 1, "0", "1"):
+        return None, "Informe se o destinatário é o próprio tomador (0 ou 1)."
+    if informar is None and indicador:
+        informar = True
+    return {
+        "informar": informar,
+        "codigo_indicador_operacao": indicador,
+        "indicador_destinatario": None if destinatario is None else int(destinatario),
+    }, None
+
+
+def resolver_ibs_cbs(nota, modelo, parametros):
+    """Valor efetivo de cada campo do IBS/CBS e de onde veio: nota > modelo > empresa.
+
+    Cada campo é resolvido sozinho: vale o do primeiro nível que o define. O modelo e a nota que
+    deixam o campo vazio **herdam** o valor da empresa **de agora** (nada é copiado para o
+    modelo). Devolve `(valores, origens, erro)`; `origens[campo]` é `nota`, `modelo` ou
+    `empresa`.
+    """
+    niveis = []
+    for origem, bruto in ((ORIGEM_NOTA, nota), (ORIGEM_MODELO, modelo)):
+        valores, erro = _nivel_de_ibs_cbs(bruto)
+        if erro:
+            return None, None, erro
+        niveis.append((origem, valores))
+    niveis.append(
+        (
+            ORIGEM_EMPRESA,
+            {
+                "informar": bool(parametros.ibs_cbs_informar),
+                "codigo_indicador_operacao": parametros.ibs_cbs_indicador_operacao or None,
+                "indicador_destinatario": parametros.ibs_cbs_indicador_destinatario,
+            },
+        )
+    )
+    valores, origens = {}, {}
+    for campo in CAMPOS_DO_IBS_CBS:
+        valores[campo], origens[campo] = next(
+            ((n[campo], origem) for origem, n in niveis if n[campo] is not None), (None, None)
+        )
+    return valores, origens, None
+
+
+def ajuste_da_nota(bruto):
+    """O que a nota sobrescreveu, normalizado, para guardar e reabrir a tela fiel; ou `None`."""
+    valores, erro = _nivel_de_ibs_cbs(bruto)
+    if erro or not valores:
+        return None
+    bruto = bruto or {}
+    ajuste = {
+        campo: valores[campo] for campo in CAMPOS_DO_IBS_CBS if (bruto.get(campo) not in (None, ""))
+    }
+    return ajuste or None
+
+
+MOTIVO_DE_NAO_INFORMAR = {
+    ORIGEM_NOTA: "Você escolheu não informar o IBS/CBS nesta nota.",
+    ORIGEM_MODELO: "O modelo de NFS-e não informa o IBS/CBS.",
+    ORIGEM_EMPRESA: "A empresa não informa o IBS/CBS (parâmetros fiscais).",
+}
+
+
+def _ibs_cbs(bruto, modelo, servico, parametros, erros, avisos):
+    """Decide se o grupo IBS/CBS vai na DPS e com quais valores (ADR 0007).
+
+    Cada campo (`informar`, `cIndOp`, `indDest`) vale pelo primeiro nível que o define: a
+    **nota** (ajuste pontual), o **modelo** de NFS-e ou a **empresa** (parâmetros fiscais). A
+    classificação (NBS, CST, cClassTrib) é sempre a do serviço. Devolve `(grupo, na_dps)`:
+    `grupo` é o que se grava na nota (ou `None`); `na_dps` explica à prévia o que vai, de onde
+    veio cada campo e, se não vai, por quê.
+    """
+    valores, origens, erro = resolver_ibs_cbs(bruto, modelo, parametros)
+    if erro:
+        erros["ibs_cbs"] = erro
+        return None, None
     classificacao = {
         "nbs": servico.nbs,
         "cst": servico.cst_ibs_cbs,
@@ -146,42 +229,33 @@ def _ibs_cbs(bruto, servico, parametros, erros, avisos):
     }
 
     def sem_grupo(motivo):
-        return None, {"na_dps": False, "origem": None, "motivo": motivo, **classificacao}
+        return None, {"na_dps": False, "motivo": motivo, "origens": origens, **classificacao}
 
-    if bruto.get("informar") is False:
-        return sem_grupo("Você escolheu não informar o IBS/CBS nesta nota.")
-
-    pediu = bruto.get("informar") is True
-    indicador_da_nota = str(bruto.get("codigo_indicador_operacao") or "").strip()
-    indicador_da_empresa = parametros.ibs_cbs_indicador_operacao
-    if indicador_da_nota:
-        origem, indicador = "nota", indicador_da_nota
-    elif parametros.ibs_cbs_informar and indicador_da_empresa:
-        origem, indicador = "empresa", indicador_da_empresa
-    elif pediu:
-        erros["ibs_cbs"] = (
-            "Informe o indicador da operação desta nota ou cadastre o padrão da empresa nos "
-            "parâmetros fiscais."
-        )
-        return None, None
-    else:
+    origem_de_informar = origens["informar"]
+    if not valores["informar"]:
+        if origem_de_informar != ORIGEM_EMPRESA:
+            return sem_grupo(MOTIVO_DE_NAO_INFORMAR[origem_de_informar])
         if _tem_classificacao(servico):
             avisos.append(
                 "O serviço tem classificação de IBS/CBS, mas a empresa não informa IBS/CBS "
                 "(parâmetros fiscais): a nota sairá sem o grupo."
             )
-            return sem_grupo("A empresa não informa o IBS/CBS (parâmetros fiscais).")
+            return sem_grupo(MOTIVO_DE_NAO_INFORMAR[ORIGEM_EMPRESA])
         return sem_grupo("O serviço não tem classificação de IBS/CBS.")
 
-    destinatario = bruto.get("indicador_destinatario")
-    if destinatario in (None, ""):
-        destinatario = 0  # o destinatário é o próprio tomador: o padrão da tela desde a Fase 3
+    indicador = valores["codigo_indicador_operacao"]
+    if not indicador:
+        erros["ibs_cbs"] = (
+            "Informe o indicador da operação desta nota, do modelo ou dos parâmetros fiscais da "
+            "empresa."
+        )
+        return None, None
     if not re.fullmatch(r"\d{6}", indicador):
         erros["ibs_cbs"] = "O código do indicador da operação tem 6 dígitos."
-    elif destinatario not in (0, 1, "0", "1"):
+    elif valores["indicador_destinatario"] not in (0, 1):
         erros["ibs_cbs"] = "Informe se o destinatário é o próprio tomador (0 ou 1)."
     elif not _tem_classificacao(servico):
-        if origem == "empresa" and not pediu:
+        if origem_de_informar == ORIGEM_EMPRESA:
             avisos.append(
                 "A empresa informa IBS/CBS, mas o serviço não tem NBS, CST e classificação "
                 "tributária: a nota sairá sem o grupo. Complete o cadastro do serviço."
@@ -193,8 +267,8 @@ def _ibs_cbs(bruto, servico, parametros, erros, avisos):
     else:
         grupo = {
             "codigo_indicador_operacao": indicador,
-            "indicador_destinatario": int(destinatario),
-            "origem": origem,
+            "indicador_destinatario": valores["indicador_destinatario"],
+            "origens": origens,
         }
         return grupo, {"na_dps": True, "motivo": None, **grupo, **classificacao}
     return None, None
@@ -252,7 +326,12 @@ def preparar(dados, *, hoje=None):
     )
     avisos = []
     ibs, ibs_na_dps = _ibs_cbs(
-        dados.get("ibs_cbs"), servico, ParametrosFiscais.obter(), complementos_erros, avisos
+        dados.get("ibs_cbs"),
+        dados.get("ibs_cbs_modelo"),
+        servico,
+        ParametrosFiscais.obter(),
+        complementos_erros,
+        avisos,
     )
     if complementos_erros:
         raise ErroDeNota(complementos_erros)
@@ -274,6 +353,10 @@ def preparar(dados, *, hoje=None):
             "informacoes_complementares": (dados.get("informacoes_complementares") or "").strip(),
             "percentual_total_tributos_simples": None if simples is None else str(simples),
             "ibs_cbs": ibs,
+            # O que a nota sobrescreveu e o que o modelo definia ao gerar: a tela reabre fiel e a
+            # edição do rascunho resolve de novo sem consultar o app de agendamentos.
+            "ibs_cbs_nota": ajuste_da_nota(dados.get("ibs_cbs")),
+            "ibs_cbs_modelo": dados.get("ibs_cbs_modelo"),
         },
         ibs_cbs_dps=ibs_na_dps,
         avisos=avisos,
@@ -315,6 +398,8 @@ def atualizar_rascunho(nfse, dados):
         raise ErroDeNota(
             f"Uma nota {nfse.get_situacao_display().lower()} não pode mais ser alterada."
         )
+    # O que o modelo definia quando o rascunho nasceu continua valendo (a entrada não o controla).
+    dados = {**dados, "ibs_cbs_modelo": (nfse.complementos or {}).get("ibs_cbs_modelo")}
     preparo = preparar(dados)
     for campo, valor in _campos_da_nota(preparo).items():
         setattr(nfse, campo, valor)

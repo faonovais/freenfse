@@ -31,11 +31,12 @@ def _migrar(alvo):
 def test_a_migracao_so_acrescenta_campos_com_padrao_nos_parametros():
     migracao = importlib.import_module("fiscal.migrations.0004_ibs_cbs_por_empresa").Migration
 
-    assert [type(op) for op in migracao.operations] == [migrations.AddField, migrations.AddField]
+    assert [type(op) for op in migracao.operations] == [migrations.AddField] * 3
     assert {op.model_name for op in migracao.operations} == {"parametrosfiscais"}
     assert {op.name for op in migracao.operations} == {
         "ibs_cbs_informar",
         "ibs_cbs_indicador_operacao",
+        "ibs_cbs_indicador_destinatario",
     }
     # Nenhuma operação apaga, renomeia ou converte coluna existente: nada se perde.
     assert not any(
@@ -90,6 +91,9 @@ def test_dados_de_antes_da_migracao_continuam_iguais_e_o_padrao_nasce_desligado(
         # O padrão da empresa nasce desligado e vazio: nada é inferido das notas antigas.
         assert parametros.ibs_cbs_informar is False
         assert parametros.ibs_cbs_indicador_operacao == ""
+        assert (
+            parametros.ibs_cbs_indicador_destinatario == 0
+        )  # o padrão de sempre: o próprio tomador
         # A nota antiga continua com o grupo que ela mesma levava (é o snapshot dela).
         nota_depois = atual.get_model("fiscal", "Nfse").objects.get(pk=nota.pk)
         assert nota_depois.complementos == {

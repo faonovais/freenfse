@@ -268,6 +268,32 @@ describe('Parâmetros fiscais', () => {
     expect(chamadas.find((c) => c.metodo === 'PATCH').corpo).not.toHaveProperty('confirmar_producao')
   })
 
+  it('o destinatário padrão da empresa começa como o próprio tomador e pode mudar', async () => {
+    const { chamadas } = abrirParametros({
+      [`GET ${PARAMETROS}`]: { status: 200, dados: { ...PARAMS, ibs_cbs_indicador_destinatario: 0 } },
+      [`PATCH ${PARAMETROS}`]: (chamada) => ({
+        status: 200,
+        dados: { ...PARAMS, ibs_cbs_indicador_destinatario: chamada.corpo.ibs_cbs_indicador_destinatario },
+      }),
+    })
+    const campo = await screen.findByLabelText('Destinatário padrão (indDest)')
+    expect(campo).toHaveValue('0')
+    expect(screen.getByText(/Os modelos de NFS-e e as notas herdam este valor/)).toBeInTheDocument()
+
+    fireEvent.change(campo, { target: { value: '1' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Salvar parâmetros' }))
+
+    await waitFor(() => expect(chamadas.find((c) => c.metodo === 'PATCH')?.corpo).toMatchObject({
+      ibs_cbs_indicador_destinatario: 1,
+    }))  // fmt: skip
+  })
+
+  it('sem o campo na resposta (API antiga), o destinatário padrão é o próprio tomador', async () => {
+    abrirParametros()
+
+    expect(await screen.findByLabelText('Destinatário padrão (indDest)')).toHaveValue('0')
+  })
+
   it('mostra o erro do indicador padrão junto do campo', async () => {
     abrirParametros({
       [`PATCH ${PARAMETROS}`]: {
