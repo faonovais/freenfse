@@ -16,6 +16,9 @@ from freenfse_instalador.executor import ErroDeComando, ExecutorSimulado, Result
 from freenfse_instalador.nativo import InstalacaoNativa
 
 CHAVE_AGE = "age1" + "q" * 58
+# Valor falso montado em pedaços: o texto contínuo imitaria um segredo e o gitleaks (que varre o
+# histórico) o apontaria.
+SEGREDO_FALSO = "-".join(["segredo", "muito", "secreto", "123"])
 SAUDE_OK = (200, {"status": "ok"})
 
 
@@ -114,6 +117,17 @@ def test_nova_execucao_sem_dados_reaproveita_a_pasta_ja_configurada(parametros, 
 
     assert Path(inst.p.dados) == tmp_path / "meus-dados"
     assert not (tmp_path / "padrao").exists()
+
+
+def test_dados_informado_de_novo_vale_mais_que_o_que_ja_estava_no_env(parametros, saida, tmp_path):
+    primeiro = _instalar(parametros, ExecutorSimulado(), saida, dados=tmp_path / "antigos")
+    assert segredos.ler_env(primeiro.p.env)["FREENFSE_DADOS"] == str(tmp_path / "antigos")
+
+    segundo = _instalar(parametros, ExecutorSimulado(), saida, dados=tmp_path / "novos")
+
+    assert Path(segundo.p.dados) == tmp_path / "novos"
+    assert segredos.ler_env(segundo.p.env)["FREENFSE_DADOS"] == str(tmp_path / "novos")
+    assert (tmp_path / "antigos" / "backups").exists()  # a pasta antiga não é tocada
 
 
 def test_compose_sem_docker_para_com_orientacao(parametros, saida):
@@ -622,3 +636,59 @@ def test_consultar_fala_com_um_servidor_http_de_verdade():
         servidor.shutdown()
 
     assert codigo == 200 and corpo["status"] == "ok"
+
+
+# -- andamento dos comandos longos ----------------------------------------------------------------
+
+
+def test_comando_longo_mostra_a_saida_aos_poucos_e_sem_segredo(parametros, saida):
+    import sys
+
+    from freenfse_instalador.executor import Executor
+
+    p = parametros("compose")
+    inst = InstalacaoCompose(p, Executor(), saida=saida.append, dormir=lambda _s: None)
+    inst.segredos = {"SECRET_KEY": SEGREDO_FALSO}
+
+    resultado = inst.executar(
+        [sys.executable, "-c", f"print('baixando'); print('chave {SEGREDO_FALSO}')"],
+        longo=True,
+    )
+
+    texto = "\n".join(saida)
+    assert resultado.codigo == 0
+    assert "baixando" in texto and SEGREDO_FALSO not in texto and "***" in texto
+
+
+def test_comando_longo_que_falha_levanta_o_erro_com_o_final_da_saida(parametros, saida):
+    import sys
+
+    from freenfse_instalador.executor import Executor
+
+    inst = InstalacaoCompose(
+        parametros("compose"), Executor(), saida=saida.append, dormir=lambda _s: None
+    )
+    codigo = "import sys; print('passo 1'); print('deu errado', file=sys.stderr); sys.exit(3)"
+
+    with pytest.raises(ErroDeComando, match="deu errado"):
+        inst.executar([sys.executable, "-c", codigo], longo=True)
+
+    assert any("passo 1" in linha for linha in saida)
+
+
+def test_as_etapas_demoradas_do_compose_e_do_nativo_sao_transmitidas(parametros, saida, tmp_path):
+    class Espiao(ExecutorSimulado):
+        def executar(self, comando, **opcoes):
+            self.transmitidos = getattr(self, "transmitidos", [])
+            if opcoes.get("transmitir") is not None:
+                self.transmitidos.append(" ".join(comando))
+            return super().executar(comando, **opcoes)
+
+    compose = Espiao()
+    _instalar(parametros, compose, saida)
+    assert any("up -d --build --wait" in c for c in compose.transmitidos)
+
+    nativo = Espiao()
+    _instalar(parametros, nativo, saida, modo="nativo")
+    assert any("pip install" in c for c in nativo.transmitidos)
+    assert any("npm ci" in c for c in nativo.transmitidos)

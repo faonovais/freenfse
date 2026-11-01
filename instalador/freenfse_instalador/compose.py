@@ -142,7 +142,9 @@ class InstalacaoCompose(Instalacao):
     def subir(self):
         """Sobe (ou atualiza) a pilha e espera os serviços ficarem saudáveis."""
         self.passo("Subindo os serviços (isto pode levar alguns minutos na primeira vez)")
-        self.executar(self.compose("up", "-d", "--build", "--wait", "--wait-timeout", "600"))
+        self.executar(
+            self.compose("up", "-d", "--build", "--wait", "--wait-timeout", "600"), longo=True
+        )
 
     def configurar_letsencrypt(self):
         """Obtém o certificado (se ainda não há) e troca o Nginx para a configuração HTTPS."""
@@ -159,7 +161,8 @@ class InstalacaoCompose(Instalacao):
                     email=p.email,
                     pasta_letsencrypt=str(dados / "letsencrypt"),
                     pasta_acme=str(dados / "certbot-www"),
-                )
+                ),
+                longo=True,
             )
         self.gravar_nginx_tls()
         self.gravar_override(com_tls=True)

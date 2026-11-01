@@ -18,6 +18,6 @@ def saude_da_instalacao(request):
     aplicação atende, mas algo precisa de atenção) e 503 quando `falha` (banco ou Redis fora).
     Não devolve versão, endereço nem mensagem de erro.
     """
-    estado_geral, componentes = saude.estado()
+    estado_geral, componentes = saude.estado(com_memo=True)
     codigo = status.HTTP_503_SERVICE_UNAVAILABLE if estado_geral == "falha" else status.HTTP_200_OK
     return Response({"status": estado_geral, **componentes}, status=codigo)

@@ -28,6 +28,7 @@ transacionais.
   `CSRF_TRUSTED_ORIGINS` e o HSTS, para o login não entrar em loop.
 * **PostgreSQL no Compose** continua em volume nomeado do Docker: trocar para uma pasta do host numa reinstalação deixaria
   os dados antigos órfãos. A pasta de dados (`--dados`) guarda backups, certificados e o estado do instalador.
+* **Andamento:** comandos longos (build do Compose, `pip`, `npm`, `certbot`) mostram a saída aos poucos, já sem segredos.
 * **Limites assumidos:** o instalador foi testado com executor simulado e o Nginx real em teste; **não** foi exercitado
   numa VPS limpa nem com Docker/systemd reais neste ambiente de desenvolvimento. O roteiro de VPS
   ([`docs/verificacao-fase-6.md`](../verificacao-fase-6.md)) é a prova que falta e fica com o usuário.
@@ -48,6 +49,8 @@ diretiva diferente entre versões do Nginx (1.24 das distribuições × 1.30 da 
   O log de acesso do Gunicorn não leva a query string (filtros podem carregar CPF).
 * **`GET /api/saude/`** (público): `banco`, `redis`, `worker`, `agendador`, `backup`, cada um em uma palavra. 503 só quando
   banco ou Redis caem; worker, agendador ou backup com problema só *degradam* (200). Não expõe versão nem endereço nem erro.
+  Como é público e cada verificação trabalha de verdade (banco, Redis, `ping` no Celery), a resposta é reaproveitada por 5 s em
+  cada processo (`FREENFSE_SAUDE_CACHE_SEGUNDOS`): quem martela o endpoint não multiplica o custo.
 * **Agendador (beat):** uma tarefa a cada minuto grava um batimento no Redis; a sonda `verificar_batimento` serve de
   `healthcheck` do contêiner (pendência da issue #10). O batimento prova a cadeia beat → fila → worker; se o worker cai, o
   beat também aparece como não saudável — é uma sonda da cadeia, não só do beat.

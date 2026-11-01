@@ -249,3 +249,69 @@ def test_backup_recente_ok_e_de_ontem_atrasado(backup_configurado):
     assert saude.verificar_backup(AGORA) == "ok"
 
     assert saude.verificar_backup(AGORA + dt.timedelta(hours=12)) == "atrasado"
+
+
+# -- memo curto do endpoint público --------------------------------------------------------------
+
+
+@pytest.fixture
+def memo_ligado(settings):
+    settings.FREENFSE_SAUDE_CACHE_SEGUNDOS = 30
+    saude.esquecer_memo()
+    yield
+    saude.esquecer_memo()
+
+
+def _contador_de_verificacoes(monkeypatch):
+    chamadas = []
+
+    def banco():
+        chamadas.append("banco")
+        return "ok"
+
+    monkeypatch.setattr(saude, "verificar_banco", banco)
+    for nome in ("verificar_redis", "verificar_worker", "verificar_agendador"):
+        monkeypatch.setattr(saude, nome, lambda: "ok")
+    monkeypatch.setattr(saude, "verificar_backup", lambda: "ok")
+    return chamadas
+
+
+@pytest.mark.django_db
+def test_o_endpoint_publico_reaproveita_a_resposta_por_alguns_segundos(monkeypatch, memo_ligado):
+    chamadas = _contador_de_verificacoes(monkeypatch)
+    cliente = Client()
+
+    for _ in range(5):
+        assert cliente.get("/api/saude/").status_code == 200
+
+    assert chamadas == ["banco"]  # cinco requisições, uma única verificação de verdade
+
+
+def test_o_memo_expira(monkeypatch, memo_ligado):
+    chamadas = _contador_de_verificacoes(monkeypatch)
+    relogio = iter([0.0, 10.0, 31.0, 31.0])
+
+    saude.estado(com_memo=True, relogio=lambda: next(relogio))
+    saude.estado(com_memo=True, relogio=lambda: next(relogio))  # t=10: ainda vale
+    saude.estado(com_memo=True, relogio=lambda: next(relogio))  # t=31: expirou
+
+    assert chamadas == ["banco", "banco"]
+
+
+def test_sem_memo_cada_chamada_verifica_de_novo(monkeypatch, settings):
+    settings.FREENFSE_SAUDE_CACHE_SEGUNDOS = 0
+    chamadas = _contador_de_verificacoes(monkeypatch)
+
+    saude.estado(com_memo=True)
+    saude.estado(com_memo=True)
+
+    assert chamadas == ["banco", "banco"]
+
+
+def test_o_memo_nao_vale_para_quem_nao_pediu(monkeypatch, memo_ligado):
+    chamadas = _contador_de_verificacoes(monkeypatch)
+
+    saude.estado()
+    saude.estado()
+
+    assert chamadas == ["banco", "banco"]

@@ -11,6 +11,7 @@ uma palavra de estado: nunca versão, endereço, usuário nem mensagem de erro d
 
 import datetime as dt
 import logging
+import time
 
 import redis
 from django.conf import settings
@@ -106,8 +107,33 @@ def verificar_backup(agora=None):
     return "ok" if agora - criado <= IDADE_MAXIMA_DO_BACKUP else "atrasado"
 
 
-def estado():
-    """`(status, componentes)`: `ok`, `degradado` (algo secundário) ou `falha` (banco/Redis)."""
+_MEMO = {"quando": None, "resposta": None}
+
+
+def esquecer_memo():
+    """Descarta a última resposta guardada (usado nos testes)."""
+    _MEMO.update(quando=None, resposta=None)
+
+
+def estado(*, com_memo=False, relogio=time.monotonic):
+    """`(status, componentes)`: `ok`, `degradado` (algo secundário) ou `falha` (banco/Redis).
+
+    O endpoint é público e cada verificação faz trabalho de verdade (consulta ao banco, ao Redis e
+    um `ping` no Celery de até 1 s). Com `com_memo`, a última resposta vale por
+    `FREENFSE_SAUDE_CACHE_SEGUNDOS` (por processo): quem martela o endpoint não multiplica o custo.
+    """
+    validade = getattr(settings, "FREENFSE_SAUDE_CACHE_SEGUNDOS", 0)
+    agora = relogio()
+    if com_memo and validade and _MEMO["quando"] is not None:
+        if agora - _MEMO["quando"] < validade:
+            return _MEMO["resposta"]
+    resposta = _calcular_estado()
+    if com_memo and validade:
+        _MEMO.update(quando=agora, resposta=resposta)
+    return resposta
+
+
+def _calcular_estado():
     componentes = {
         "banco": verificar_banco(),
         "redis": verificar_redis(),

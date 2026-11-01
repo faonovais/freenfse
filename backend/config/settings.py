@@ -334,6 +334,9 @@ ALERTAS_SMTP_USUARIO = env("ALERTAS_SMTP_USUARIO", default="")
 ALERTAS_SMTP_SENHA = env("ALERTAS_SMTP_SENHA", default="")
 ALERTAS_EMAIL_DE = env("ALERTAS_EMAIL_DE", default=ALERTAS_SMTP_USUARIO or "freenfse@localhost")
 
+# Segundos em que a resposta de /api/saude/ é reaproveitada (por processo): o endpoint é público.
+FREENFSE_SAUDE_CACHE_SEGUNDOS = env.int("FREENFSE_SAUDE_CACHE_SEGUNDOS", default=5)
+
 # --- BI (Fase 6) -------------------------------------------------------------------
 # Usuário de banco SOMENTE LEITURA que enxerga apenas o schema "bi" (views consolidadas, sem XML
 # nem credenciais). Criado por `python manage.py criar_usuario_bi`.

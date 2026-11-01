@@ -308,18 +308,20 @@ class InstalacaoNativa(Instalacao):
             [
                 str(self.venv / "bin" / "pip"),
                 "install",
-                "--quiet",
                 "-r",
                 str(p.repositorio / "backend" / "requirements.txt"),
-            ]
+            ],
+            longo=True,
         )
         if p.frontend_pronto:
             self.executar(["cp", "-r", f"{p.frontend_pronto}/.", str(self.www)])
         else:
             self.executar(
-                ["npm", "ci", "--no-audit", "--no-fund"], cwd=str(p.repositorio / "frontend")
+                ["npm", "ci", "--no-audit", "--no-fund"],
+                cwd=str(p.repositorio / "frontend"),
+                longo=True,
             )
-            self.executar(["npm", "run", "build"], cwd=str(p.repositorio / "frontend"))
+            self.executar(["npm", "run", "build"], cwd=str(p.repositorio / "frontend"), longo=True)
             self.executar(["cp", "-r", f"{p.repositorio}/frontend/dist/.", str(self.www)])
         self.executar(["cp", "-r", f"{p.repositorio}/docker/erros/.", str(self.pasta_erros)])
         usuario = p.usuario_do_servico
@@ -367,7 +369,8 @@ class InstalacaoNativa(Instalacao):
                 self.executar(
                     tls.comando_certbot_nativo(
                         dominio=p.dominio, email=p.email, pasta_acme=Path(p.dados) / "certbot-www"
-                    )
+                    ),
+                    longo=True,
                 )
             self.gravar(
                 self.pasta_letsencrypt / "renewal-hooks" / "deploy" / "freenfse-nginx",

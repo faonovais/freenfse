@@ -71,12 +71,17 @@ class Instalacao:
                     f"root ou execute: chown {dono} {caminho}"
                 )
 
-    def executar(self, comando, **opcoes):
-        """Roda (ou, na simulação, só descreve) um comando."""
+    def executar(self, comando, *, longo=False, **opcoes):
+        """Roda (ou, na simulação, só descreve) um comando.
+
+        Com `longo`, a saída do comando é mostrada aos poucos (já sem nenhum segredo conhecido).
+        """
         if self.p.simular:
             self.dizer(f"  [simulação] {' '.join(comando)}")
             return self.executor.executar(comando, **opcoes)
         self.dizer(f"  $ {' '.join(comando)}")
+        if longo:
+            opcoes["transmitir"] = self.dizer
         return self.executor.executar(comando, **opcoes)
 
     # -- .env ------------------------------------------------------------------------------

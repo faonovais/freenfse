@@ -121,6 +121,54 @@ def test_pg_dump_com_defeito_nao_deixa_arquivo_nem_apaga_os_antigos(config, empr
     assert nomes == [antigo["arquivo"], f"{antigo['arquivo']}.json"]  # nada parcial, nada apagado
 
 
+def _ferramenta_que_falha(tmp_path, nome, mensagem):
+    """Executável de teste que escreve `mensagem` no erro e sai com código 1."""
+    caminho = tmp_path / nome
+    caminho.write_text(f"#!/bin/sh\ncat >/dev/null\necho '{mensagem}' >&2\nexit 1\n")
+    caminho.chmod(0o755)
+    return str(caminho)
+
+
+def test_backup_que_falha_nao_aplica_a_retencao_nem_apaga_backups_antigos(
+    config, empresas_com_dados
+):
+    """A limpeza só vale depois de um backup novo e bom: sem ele, o que existe é tudo o que há."""
+    config.pasta.mkdir()
+    muito_velho = _criar_falso(config.pasta, dt.datetime(2026, 9, 1, 5, 0, tzinfo=dt.UTC))
+    velho = _criar_falso(config.pasta, dt.datetime(2026, 10, 1, 5, 0, tzinfo=dt.UTC))
+    quebrado = dataclasses.replace(config, pg_dump="false")
+
+    with pytest.raises(backup.ErroDeBackup):
+        backup.fazer_backup(quebrado, agora=dt.datetime(2026, 11, 20, 5, 0, tzinfo=dt.UTC))
+
+    assert (config.pasta / muito_velho).exists() and (config.pasta / velho).exists()
+
+
+def test_o_erro_de_uma_ferramenta_externa_nao_vaza_a_senha_do_banco(
+    config, empresas_com_dados, tmp_path
+):
+    senha = config.banco["password"]
+    quebrado = dataclasses.replace(
+        config, pg_dump=_ferramenta_que_falha(tmp_path, "pg_dump_falso", f"falha com senha {senha}")
+    )
+
+    with pytest.raises(backup.ErroDeBackup) as erro:
+        backup.fazer_backup(quebrado)
+
+    assert "falha com senha" in str(erro.value) and senha not in str(erro.value)
+
+
+def test_falha_da_cifragem_com_age_nao_vira_backup_bom(config, empresas_com_dados, tmp_path):
+    sem_age = dataclasses.replace(
+        config, age=_ferramenta_que_falha(tmp_path, "age_falso", "age quebrou")
+    )
+
+    with pytest.raises(backup.ErroDeBackup, match="cifragem com age falhou"):
+        backup.fazer_backup(sem_age)
+
+    assert not list(config.pasta.glob("freenfse-*"))  # nenhum arquivo, nenhum manifesto
+
+
 def test_o_erro_do_banco_nao_vaza_a_senha(config, empresas_com_dados):
     errado = dataclasses.replace(config, banco={**config.banco, "dbname": "banco_que_nao_existe"})
 
