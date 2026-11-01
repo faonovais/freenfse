@@ -92,7 +92,7 @@ isolamento por *schema*; as *views* de BI não trazem XML nem credenciais e masc
 | Registros de envio de e-mail (`EnvioEmail`) | **5 anos**, depois expurgo automático (decisão #18) | tarefa diária; só apaga registro de envio, nunca a nota |
 | ZIPs do download em lote | 24 h | expurgo horário (Fase 4) |
 | Trilha de auditoria (`LogAuditoria`) | 5 anos; sem expurgo automático nesta Fase | trilha imutável por desenho; remoção manual e documentada após o prazo |
-| Logs da aplicação (saída padrão) | 14 dias de rotação | Compose: `json-file` com `max-size`/`max-file`; nativo: `journald` com `MaxRetentionSec` |
+| Logs da aplicação (saída padrão) | rotação (sem expurgo manual) | Compose: `json-file`, 5 arquivos de 10 MB por serviço; nativo: `journald` (recomendado `MaxRetentionSec=14day`) |
 | Backups | `FREENFSE_BACKUP_RETENCAO_DIAS` (padrão 14) | limpeza após backup bem-sucedido |
 
 Base legal: cumprimento de obrigação legal e regulatória pelo controlador (guarda de documento fiscal) e execução do serviço
@@ -105,7 +105,9 @@ emissora; o freenfse é o operador).
 - Um segredo a mais para guardar fora do servidor (a identidade do backup) e um deles (`FREENFSE_CHAVES`) passa a proteger também os
   XMLs — a perda é mais grave que antes. O manual de instalação e o checklist de produção tratam disso como item bloqueante.
 - A migração roda em cada *schema*; em bases grandes pode levar minutos (cifra linha a linha em lotes).
-- A chave de backup pública no servidor não protege contra um invasor que **troque** o destinatário para uma chave dele: o
-  manifesto registra o destinatário usado e a verificação do instalador compara com o configurado.
+- A chave de backup pública no servidor não protege contra um invasor que **troque** o destinatário para uma chave dele (quem
+  escreve no `.env` já controla o servidor). O manifesto registra o destinatário usado em cada backup, para auditoria; o
+  sistema não impede a troca.
 - Tamanho: AES-GCM acrescenta 28 bytes por valor; irrelevante frente ao XML.
+- Os ZIPs do download em lote ficam em claro no volume por até 24 h (expurgo horário); a cifragem de disco recomendada cobre esse intervalo.
 - Dados em claro (classe "operacionais") continuam expostos a quem lê o banco; mitigações acima e decisão em aberto.
