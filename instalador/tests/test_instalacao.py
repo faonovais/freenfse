@@ -2,6 +2,7 @@
 
 import http.server
 import os
+import re
 import shutil
 import stat
 import subprocess
@@ -534,10 +535,16 @@ def test_a_configuracao_do_nginx_gerada_passa_no_nginx_t(parametros, executor, s
         chave_privada=chave,
     )
     base = inst.p.pasta_nginx
+    # `nginx -t` abre (bind) as portas do `listen`: sem ser root, 80 e 443 dão "Permission denied"
+    # (o runner do CI roda como usuário comum). O teste valida a sintaxe e a estrutura, não a porta,
+    # então as portas privilegiadas viram portas altas só dentro da cópia usada aqui.
+    portas_altas = {"80": "18080", "443": "18443"}
     for arquivo in (base / "freenfse" / "locais.conf", base / "conf.d" / "freenfse.conf"):
-        arquivo.write_text(
-            arquivo.read_text().replace("/etc/nginx/freenfse", str(base / "freenfse"))
+        conteudo = arquivo.read_text().replace("/etc/nginx/freenfse", str(base / "freenfse"))
+        conteudo = re.sub(
+            r"(listen\s+)(80|443)\b", lambda m: m.group(1) + portas_altas[m.group(2)], conteudo
         )
+        arquivo.write_text(conteudo)
     principal = tmp_path / "nginx.conf"
     principal.write_text(
         f"pid {tmp_path}/n.pid; error_log {tmp_path}/erro.log; events {{}}\n"
