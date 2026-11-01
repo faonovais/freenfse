@@ -88,6 +88,9 @@ sudo apt install postgresql-18 postgresql-client-18 redis-server nginx git age c
 # Node 22 (https://nodejs.org) — ou compile o frontend em outro computador e use --frontend-pronto
 ```
 
+Clone o repositório em **`/opt/freenfse`** (fora de `/home` e `/root`: as unidades usam `ProtectHome=true` e o serviço
+não leria o código de lá; o instalador recusa e avisa).
+
 ```bash
 sudo python3 instalador/instalar.py nativo --dominio nfse.suaempresa.com.br --tls letsencrypt \
   --email ti@suaempresa.com.br --python python3.14 --gerar-chave-backup /root/freenfse-backup.key

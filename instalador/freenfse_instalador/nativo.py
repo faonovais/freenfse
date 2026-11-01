@@ -222,6 +222,15 @@ class InstalacaoNativa(Instalacao):
             raise RuntimeError("Faltam no servidor:\n  - " + "\n  - ".join(faltando))
         for linha in faltando:
             self.aviso(f"(simulação) faltaria: {linha}")
+        if str(p.repositorio).startswith(("/home/", "/root/")):
+            mensagem = (
+                f"O repositório está em {p.repositorio}, mas as unidades do systemd usam "
+                "ProtectHome=true e o serviço não conseguiria ler o código. Clone em /opt/freenfse "
+                "(ex.: git clone … /opt/freenfse) e rode o instalador de lá."
+            )
+            if not p.simular:
+                raise RuntimeError(mensagem)
+            self.aviso(mensagem)
 
     def preparar_usuario_e_pastas(self):
         """Usuário de sistema do serviço e pastas de dados."""

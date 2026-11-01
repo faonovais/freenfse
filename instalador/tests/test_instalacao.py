@@ -416,6 +416,16 @@ def test_nativo_comandos_na_ordem_certa_e_senha_do_banco_so_como_verificador(par
     assert senha not in " ".join(comandos) and not any(senha in e for e in entradas)
 
 
+def test_nativo_recusa_repositorio_em_home_por_causa_do_protecthome(
+    parametros, executor, saida, tmp_path
+):
+    p = parametros("nativo", frontend_pronto=Path("/tmp/dist"))
+    p.repositorio = Path("/home/alguem/freenfse")
+
+    with pytest.raises(RuntimeError, match="/opt/freenfse"):
+        InstalacaoNativa(p, executor, saida=saida.append).verificar_prerequisitos()
+
+
 def test_nativo_nao_recria_o_usuario_nem_o_banco_que_ja_existem(parametros, saida):
     existentes = ExecutorSimulado(
         respostas={
