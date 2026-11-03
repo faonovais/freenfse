@@ -52,6 +52,15 @@ class LogAuditoria(models.Model):
         CERTIFICADO_A_VENCER = "certificado_a_vencer", "Alerta de vencimento do certificado"
         LOGO_ALTERADO = "logo_alterado", "Logo da empresa alterado"
         PESSOAS_COPIADAS = "pessoas_copiadas", "Cadastros copiados de outra empresa"
+        NFSE_RASCUNHO_CRIADO = "nfse_rascunho_criado", "Rascunho de NFS-e criado"
+        NFSE_EMISSAO_SOLICITADA = "nfse_emissao_solicitada", "Emissão de NFS-e solicitada"
+        NFSE_AUTORIZADA = "nfse_autorizada", "NFS-e autorizada"
+        NFSE_REJEITADA = "nfse_rejeitada", "NFS-e rejeitada pela Sefin"
+        NFSE_INCERTA = "nfse_incerta", "Emissão de NFS-e com resultado incerto"
+        NFSE_CANCELADA = "nfse_cancelada", "NFS-e cancelada"
+        NFSE_CANCELAMENTO_RECUSADO = "nfse_cancelamento_recusado", "Cancelamento de NFS-e recusado"
+        NFSE_SUBSTITUICAO_CRIADA = "nfse_substituicao_criada", "Substituição de NFS-e iniciada"
+        NFSE_SUBSTITUIDA = "nfse_substituida", "NFS-e substituída"
 
     usuario = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="+"

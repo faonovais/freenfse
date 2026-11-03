@@ -144,6 +144,14 @@ export default function Layout() {
               </NavLink>
             </>
           )}
+          {temPermissao('nfse.consultar') && (
+            <>
+              <p className="titulo-grupo-menu mt-4 px-3">Notas fiscais</p>
+              <NavLink to="/fiscal/notas" className={classeLink}>
+                NFS-e emitidas
+              </NavLink>
+            </>
+          )}
           {temPermissao('cadastro.consultar') && (
             <>
               <p className="titulo-grupo-menu mt-4 px-3">Cadastros</p>

@@ -25,7 +25,8 @@ export default defineConfig([
     rules: { 'react-refresh/only-export-components': 'off' },
   },
   {
-    files: ['*.config.js', 'src/**/*.test.{js,jsx}'],
+    // Config, testes e apoio dos testes rodam em Node (globais como `process`), não no navegador.
+    files: ['*.config.js', 'src/**/*.test.{js,jsx}', 'src/testes/**/*.{js,jsx}'],
     languageOptions: { globals: globals.node },
   },
 ])

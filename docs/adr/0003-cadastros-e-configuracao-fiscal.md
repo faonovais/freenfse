@@ -50,7 +50,7 @@ A Fase 2 entrega o que a DPS precisa por empresa: municípios, pessoas, serviço
 ### 6. Gateway da freedfe
 
 - `fiscal/gateway.py` é o único ponto de contato com a biblioteca (além da leitura do certificado). Os testes trocam só o transporte HTTP, então a `freedfe` roda de verdade, sem rede.
-- `criar_servico_nfse` exige peças de persistência da emissão (numeração, travas, evidências, repositório) que só existem na Fase 3. Elas são preenchidas com objetos que **recusam o uso** (`NaoDisponivelNaFase2`), para ninguém emitir por engano (há teste).
+- `criar_servico_nfse` exige peças de persistência da emissão (numeração, travas, evidências, repositório) que só existem na Fase 3. Na Fase 2 elas eram preenchidas com objetos que **recusavam o uso** (`NaoDisponivelNaFase2`), para ninguém emitir por engano. A Fase 3 as substituiu por implementações reais em PostgreSQL ([ADR 0004](0004-nucleo-fiscal.md)) e o placeholder foi removido.
 - Consultas: o cache de parâmetros é desligado (a verificação sempre consulta) e as repetições são curtas (1 s e 2 s), porque o usuário aguarda a requisição.
 - **Limite:** a rota de convênio foi confirmada com A1 real na produção restrita pela própria biblioteca; as rotas de contribuinte e de serviço, segundo a documentação dela, não. Por isso, a falha ao obter o contribuinte só gera um aviso e não impede o resultado do convênio.
 
