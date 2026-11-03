@@ -49,23 +49,44 @@ def test_configuracao_de_email_e_so_do_administrador_para_alterar(api_de, empres
     assert admin.get(EMAIL).status_code == 200
 
 
-def test_consulta_le_a_configuracao_mas_nao_altera_e_o_emissor_nem_le(
-    api_de, cliente_de, vincular, empresa_a
-):
-    from core.models import Usuario
+@pytest.mark.parametrize("perfil", [Perfil.CONSULTA, Perfil.EMISSOR])
+def test_consulta_e_emissor_leem_a_configuracao_mas_nao_alteram(api_de, empresa_a, perfil):
+    """O Emissor ganhou `config.consultar` (issue #14/#20): lê, mas não altera nem testa envio."""
+    api = api_de(empresa_a, perfil)
 
-    consulta = api_de(empresa_a, Perfil.CONSULTA)
-    emissor_usuario = Usuario.objects.create_user(
-        email="emissor@exemplo.test", password="x" * 14, nome="E"
-    )
-    vincular(emissor_usuario, empresa_a, Perfil.EMISSOR)
-    emissor = Api(cliente_de(emissor_usuario), empresa_a)
+    assert api.get(EMAIL).status_code == 200 and api.get(DRIVE).status_code == 200
+    assert api.put(EMAIL, _corpo_email()).status_code == 403
+    assert api.put(DRIVE, {"ativo": False}).status_code == 403
+    assert api.post(f"{EMAIL}teste/", {"destino": "a@x.test"}).status_code == 403
 
-    assert consulta.get(EMAIL).status_code == 200 and consulta.get(DRIVE).status_code == 200
-    assert consulta.put(EMAIL, _corpo_email()).status_code == 403
-    assert consulta.put(DRIVE, {"ativo": False}).status_code == 403
-    assert consulta.post(f"{EMAIL}teste/", {"destino": "a@x.test"}).status_code == 403
-    assert emissor.get(EMAIL).status_code == 403  # o Emissor não tem config.consultar (issue #14)
+
+def test_emissor_le_a_configuracao_de_email_sem_nenhuma_credencial(api_de, empresa_a):
+    with schema_context(empresa_a.schema_name):
+        configurar_email()
+    api = api_de(empresa_a, Perfil.EMISSOR)
+
+    leitura = api.get(EMAIL)
+
+    assert leitura.status_code == 200
+    texto = leitura.content.decode()
+    for segredo in (SEGREDO_DE_TESTE, "private_key", "BEGIN PRIVATE KEY"):
+        assert segredo not in texto
+    # Só o "tem credencial"; o valor nunca sai.
+    assert leitura.json()["credenciais_configuradas"]["smtp_senha"] is True
+
+
+def test_emissor_le_a_configuracao_do_drive_sem_a_credencial(api_de, empresa_a):
+    with schema_context(empresa_a.schema_name):
+        ativar_drive()
+    api = api_de(empresa_a, Perfil.EMISSOR)
+
+    leitura = api.get(DRIVE)
+
+    assert leitura.status_code == 200
+    texto = leitura.content.decode()
+    for segredo in ("private_key", "BEGIN PRIVATE KEY", SEGREDO_DE_TESTE):
+        assert segredo not in texto
+    assert leitura.json()["pasta_raiz_id"] == "RAIZ"  # a configuração (não secreta) aparece
 
 
 def test_sem_vinculo_com_a_empresa_nao_ha_acesso(

@@ -12,7 +12,7 @@ from core.municipios import ARQUIVO_PADRAO, UF_POR_CODIGO, ErroNoArquivoDeMunici
 from core.services import municipios
 
 # SHA-256 registrado em core/dados/LEIAME.md: mudar o arquivo exige atualizar os dois.
-SHA256_DO_ARQUIVO = "de3ce3f6e34ff52bfa83c05ed068d5e8cc95aa35321fcdd8b9320edc16b9a5d6"
+SHA256_DO_ARQUIVO = "71540779b62e9d2235fd62872b8defd6ef84f5190f9e393b9b08cf9aa6177bc1"
 # Códigos que o próprio IBGE atribuiu fora da regra do dígito verificador.
 DV_IRREGULAR_NO_IBGE = {
     "2201919", "2201988", "2202251", "2611533", "3117836",

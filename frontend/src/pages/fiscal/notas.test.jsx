@@ -247,6 +247,214 @@ describe('Emissão guiada', () => {
     expect(ordem).toEqual([`${NOTAS}previa/`, NOTAS, `${NOTAS}9/emitir/`])
   })
 
+  describe('IBS/CBS: nota > modelo > empresa', () => {
+    const COM_CLASSIFICACAO = {
+      status: 200,
+      dados: [{ ...SERVICOS.dados[0], cst_ibs_cbs: '000', c_class_trib: '000001', nbs: '113011000' }],
+    }
+    const EMPRESA_INFORMA = { informar: true, codigo_indicador_operacao: '010101', indicador_destinatario: 0 }
+    const PRONTA_COM_PADRAO = { status: 200, dados: { ...PRONTA.dados, ibs_cbs: EMPRESA_INFORMA } }
+    const PRONTA_SEM_PADRAO = {
+      status: 200,
+      dados: { ...PRONTA.dados, ibs_cbs: { informar: false, codigo_indicador_operacao: '', indicador_destinatario: 0 } },
+    }
+    const previaCom = (ibs) => ({
+      status: 200,
+      dados: { ...PREVIA.dados, servico: { ...PREVIA.dados.servico, cst_ibs_cbs: '000' }, ibs_cbs: ibs },
+    })
+    const TUDO_DA_EMPRESA = { informar: 'empresa', codigo_indicador_operacao: 'empresa', indicador_destinatario: 'empresa' }
+    const DA_EMPRESA = {
+      na_dps: true, motivo: null, codigo_indicador_operacao: '010101', indicador_destinatario: 0,
+      origens: TUDO_DA_EMPRESA, nbs: '113011000', cst: '000', c_class_trib: '000001',
+    }  // fmt: skip
+    const abrirComServico = (extras = {}, rota = '/fiscal/notas/nova') =>
+      abrir(
+        rota,
+        rotas({
+          'GET /api/cadastros/servicos/': COM_CLASSIFICACAO,
+          [`GET ${NOTAS}prontidao/`]: PRONTA_COM_PADRAO,
+          [`POST ${NOTAS}previa/`]: previaCom(DA_EMPRESA),
+          ...extras,
+        }),
+      )
+    const conferir = async () => {
+      await preencher()
+      fireEvent.click(screen.getByRole('button', { name: 'Conferir a nota' }))
+      return screen.findByRole('region', { name: 'Conferência da nota' })
+    }
+
+    it('sem ajuste, a nota herda: nada é enviado em ibs_cbs e a conferência mostra a origem de cada campo', async () => {
+      const { chamadas } = abrirComServico()
+
+      const conferencia = await conferir()
+
+      expect(chamadas.find((c) => c.caminho === `${NOTAS}previa/`).corpo.ibs_cbs).toBeNull()
+      expect(screen.getByText(/Em branco: vale o padrão da empresa \(010101\)/)).toBeInTheDocument()
+      const linha = within(conferencia).getByText('IBS/CBS na DPS').closest('div')
+      expect(linha).toHaveTextContent('Indicador da operação 010101 (padrão da empresa)')
+      expect(linha).toHaveTextContent('destinatário é o próprio tomador (padrão da empresa)')
+      expect(linha).toHaveTextContent('NBS 113011000 · CST 000 · cClassTrib 000001')
+    })
+
+    it('a conferência mostra o modelo como origem do que o modelo definiu', async () => {
+      const doModelo = { ...DA_EMPRESA, codigo_indicador_operacao: '020202', origens: { ...TUDO_DA_EMPRESA, informar: 'modelo', codigo_indicador_operacao: 'modelo' } }
+      abrirComServico({ [`POST ${NOTAS}previa/`]: previaCom(doModelo) })
+
+      const conferencia = await conferir()
+
+      const linha = within(conferencia).getByText('IBS/CBS na DPS').closest('div')
+      expect(linha).toHaveTextContent('Indicador da operação 020202 (do modelo)')
+      expect(linha).toHaveTextContent('destinatário é o próprio tomador (padrão da empresa)')
+    })
+
+    it('empresa sem padrão: a tela avisa e só informa se o usuário preencher', async () => {
+      abrirComServico({ [`GET ${NOTAS}prontidao/`]: PRONTA_SEM_PADRAO })
+      await preencher()
+
+      expect(await screen.findByText(/A empresa não informa IBS\/CBS por padrão/)).toBeInTheDocument()
+    })
+
+    it('ajuste pontual: o indicador e o destinatário digitados vão na nota e a origem é a nota', async () => {
+      const daNota = { ...DA_EMPRESA, codigo_indicador_operacao: '020202', indicador_destinatario: 1, origens: { informar: 'nota', codigo_indicador_operacao: 'nota', indicador_destinatario: 'nota' } }
+      const { chamadas } = abrirComServico({ [`POST ${NOTAS}previa/`]: previaCom(daNota) })
+      await preencher()
+      fireEvent.change(screen.getByLabelText('Indicador da operação (IBS/CBS)'), { target: { value: '020202' } })
+      fireEvent.change(screen.getByLabelText('O destinatário é o próprio tomador?'), { target: { value: '1' } })
+
+      fireEvent.click(screen.getByRole('button', { name: 'Conferir a nota' }))
+
+      const conferencia = await screen.findByRole('region', { name: 'Conferência da nota' })
+      expect(chamadas.find((c) => c.caminho === `${NOTAS}previa/`).corpo.ibs_cbs).toEqual({
+        codigo_indicador_operacao: '020202',
+        indicador_destinatario: 1,
+      })
+      const linha = within(conferencia).getByText('IBS/CBS na DPS').closest('div')
+      expect(linha).toHaveTextContent('Indicador da operação 020202 (ajuste desta nota)')
+      expect(linha).toHaveTextContent('destinatário é outra pessoa (ajuste desta nota)')
+    })
+
+    it('o destinatário em branco herda; escolher "Sim" explicitamente é um ajuste da nota', async () => {
+      const { chamadas } = abrirComServico()
+      await preencher()
+      const select = screen.getByLabelText('O destinatário é o próprio tomador?')
+      expect(select).toHaveValue('') // herdar
+      expect(within(select).getByRole('option', { name: 'Herdar (da empresa: sim)' })).toBeInTheDocument()
+
+      fireEvent.change(select, { target: { value: '0' } })
+      fireEvent.click(screen.getByRole('button', { name: 'Conferir a nota' }))
+      await screen.findByRole('region', { name: 'Conferência da nota' })
+
+      expect(chamadas.find((c) => c.caminho === `${NOTAS}previa/`).corpo.ibs_cbs).toEqual({ indicador_destinatario: 0 })
+    })
+
+    it('"Não informar nesta nota" envia informar:false, trava os campos e a prévia explica', async () => {
+      const semGrupo = { na_dps: false, motivo: 'Você escolheu não informar o IBS/CBS nesta nota.', origens: { ...TUDO_DA_EMPRESA, informar: 'nota' }, nbs: '113011000', cst: '000', c_class_trib: '000001' }
+      const { chamadas } = abrirComServico({ [`POST ${NOTAS}previa/`]: previaCom(semGrupo) })
+      await preencher()
+
+      fireEvent.click(screen.getByLabelText('Não informar o IBS/CBS nesta nota'))
+      expect(screen.getByLabelText('Indicador da operação (IBS/CBS)')).toBeDisabled()
+      expect(screen.getByLabelText('O destinatário é o próprio tomador?')).toBeDisabled()
+      fireEvent.click(screen.getByRole('button', { name: 'Conferir a nota' }))
+
+      const conferencia = await screen.findByRole('region', { name: 'Conferência da nota' })
+      expect(chamadas.find((c) => c.caminho === `${NOTAS}previa/`).corpo.ibs_cbs).toEqual({ informar: false })
+      expect(within(conferencia).getByText(/Não vai na nota\. Você escolheu não informar/)).toBeInTheDocument()
+    })
+
+    it('mudar o ajuste depois de conferir invalida a conferência', async () => {
+      abrirComServico()
+      await conferir()
+
+      fireEvent.click(screen.getByLabelText('Não informar o IBS/CBS nesta nota'))
+
+      expect(screen.queryByRole('region', { name: 'Conferência da nota' })).not.toBeInTheDocument()
+    })
+
+    it('serviço sem classificação não mostra a seção de IBS/CBS', async () => {
+      abrir('/fiscal/notas/nova', rotas({ [`GET ${NOTAS}prontidao/`]: PRONTA_COM_PADRAO }))
+      await preencher()
+
+      expect(screen.queryByLabelText('Indicador da operação (IBS/CBS)')).not.toBeInTheDocument()
+      expect(screen.queryByLabelText('Não informar o IBS/CBS nesta nota')).not.toBeInTheDocument()
+    })
+
+    it('mostra o erro do indicador junto do campo', async () => {
+      abrirComServico({
+        [`POST ${NOTAS}previa/`]: { status: 400, dados: { ibs_cbs: 'O código do indicador da operação tem 6 dígitos.' } },
+      })
+      await preencher()
+      fireEvent.change(screen.getByLabelText('Indicador da operação (IBS/CBS)'), { target: { value: '12' } })
+
+      fireEvent.click(screen.getByRole('button', { name: 'Conferir a nota' }))
+
+      expect(await screen.findByText('O código do indicador da operação tem 6 dígitos.')).toBeInTheDocument()
+    })
+
+    describe('ao corrigir um rascunho', () => {
+      const rascunho = (complementos) =>
+        detalhe({ situacao: 'rascunho', complementos: { informacoes_complementares: '', ...complementos } })
+      const abrirRascunho = (complementos, extras = {}) =>
+        abrirComServico({ [`GET ${NOTAS}9/`]: rascunho(complementos), ...extras }, '/fiscal/notas/9/editar')
+
+      it('só o que a PRÓPRIA nota ajustou volta preenchido; o que veio do modelo ou da empresa volta em branco', async () => {
+        abrirRascunho({
+          ibs_cbs: { codigo_indicador_operacao: '020202', indicador_destinatario: 1, origens: { informar: 'modelo', codigo_indicador_operacao: 'modelo', indicador_destinatario: 'modelo' } },
+          ibs_cbs_modelo: { informar: null, codigo_indicador_operacao: '020202', indicador_destinatario: 1 },
+          ibs_cbs_nota: null,
+        })
+
+        const campo = await screen.findByLabelText('Indicador da operação (IBS/CBS)')
+
+        await waitFor(() => expect(screen.getByLabelText('O destinatário é o próprio tomador?')).toHaveValue(''))
+        expect(campo).toHaveValue('')
+        // As dicas dizem de onde vem o valor herdado: do modelo do rascunho.
+        expect(screen.getByText(/Em branco: vale o do modelo \(020202\)/)).toBeInTheDocument()
+        expect(screen.getByRole('option', { name: 'Herdar (do modelo: não)' })).toBeInTheDocument()
+      })
+
+      it('o ajuste guardado na nota (inclusive "não informar") volta como estava', async () => {
+        abrirRascunho({ ibs_cbs: null, ibs_cbs_nota: { informar: false }, ibs_cbs_modelo: null })
+
+        await screen.findByLabelText('Indicador da operação (IBS/CBS)')
+
+        await waitFor(() => expect(screen.getByLabelText('Não informar o IBS/CBS nesta nota')).toBeChecked())
+        expect(screen.getByLabelText('Indicador da operação (IBS/CBS)')).toBeDisabled()
+      })
+
+      it('o ajuste de indicador e de destinatário da nota volta preenchido', async () => {
+        abrirRascunho({
+          ibs_cbs: { codigo_indicador_operacao: '030303', indicador_destinatario: 0, origens: { informar: 'nota', codigo_indicador_operacao: 'nota', indicador_destinatario: 'nota' } },
+          ibs_cbs_nota: { codigo_indicador_operacao: '030303', indicador_destinatario: 0 },
+          ibs_cbs_modelo: null,
+        })
+
+        const campo = await screen.findByLabelText('Indicador da operação (IBS/CBS)')
+
+        await waitFor(() => expect(campo).toHaveValue('030303'))
+        expect(screen.getByLabelText('O destinatário é o próprio tomador?')).toHaveValue('0')
+      })
+
+      it('a conferência do rascunho informa qual é o rascunho (vale o que o modelo dele definia)', async () => {
+        const { chamadas } = abrirRascunho({ ibs_cbs: null, ibs_cbs_nota: null, ibs_cbs_modelo: null })
+        await screen.findByLabelText('Indicador da operação (IBS/CBS)')
+
+        fireEvent.click(await screen.findByRole('button', { name: 'Conferir a nota' }))
+        await screen.findByRole('region', { name: 'Conferência da nota' })
+
+        expect(chamadas.find((c) => c.caminho === `${NOTAS}previa/`).corpo.rascunho).toBe(9)
+      })
+    })
+
+    it('nota nova não informa rascunho na conferência', async () => {
+      const { chamadas } = abrirComServico()
+
+      await conferir()
+
+      expect(chamadas.find((c) => c.caminho === `${NOTAS}previa/`).corpo.rascunho).toBeNull()
+    })
+  })
+
   it('aponta o campo com problema devolvido pela conferência', async () => {
     abrir(
       '/fiscal/notas/nova',

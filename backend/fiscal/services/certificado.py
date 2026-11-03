@@ -56,6 +56,30 @@ def _ler(arquivo, senha):
     return a1, info
 
 
+def divergencia_de_cnpj(cnpj_certificado, cnpj_empresa, *, mesma_raiz=False):
+    """Por que o CNPJ do certificado não serve à empresa (texto didático), ou `None` se serve.
+
+    Serve o CNPJ idêntico; e, só com `mesma_raiz` (autorização explícita), o de outro
+    estabelecimento da mesma empresa (mesmos 8 primeiros caracteres). É a regra do envio do
+    certificado e também a conferida na troca para produção.
+    """
+    cnpj_certificado, cnpj_empresa = cnpj_certificado.upper(), cnpj_empresa.upper()
+    if cnpj_certificado == cnpj_empresa:
+        return None
+    if cnpj_certificado[:8] != cnpj_empresa[:8]:
+        return (
+            f"O CNPJ do certificado ({cnpj_certificado}) é diferente do CNPJ da empresa "
+            f"({cnpj_empresa})."
+        )
+    if not mesma_raiz:
+        return (
+            "O certificado é de outro estabelecimento da mesma empresa (CNPJ "
+            f"{cnpj_certificado}). Se for o certificado da matriz ou de uma filial, "
+            "marque a opção que autoriza usar um certificado da mesma raiz de CNPJ."
+        )
+    return None
+
+
 def validar_para_empresa(empresa, arquivo, senha, *, mesma_raiz=False, agora=None):
     """Valida senha, CNPJ do titular e validade; devolve os metadados do certificado.
 
@@ -69,20 +93,10 @@ def validar_para_empresa(empresa, arquivo, senha, *, mesma_raiz=False, agora=Non
             "O certificado não traz CNPJ (parece ser de pessoa física). Envie o certificado A1 "
             "da empresa."
         )
-    cnpj_certificado, cnpj_empresa = info.cnpj.upper(), empresa.cnpj.upper()
-    if cnpj_certificado != cnpj_empresa:
-        if cnpj_certificado[:8] == cnpj_empresa[:8]:
-            if not mesma_raiz:
-                raise ErroDeCertificado(
-                    "O certificado é de outro estabelecimento da mesma empresa (CNPJ "
-                    f"{cnpj_certificado}). Se for o certificado da matriz ou de uma filial, "
-                    "marque a opção que autoriza usar um certificado da mesma raiz de CNPJ."
-                )
-        else:
-            raise ErroDeCertificado(
-                f"O CNPJ do certificado ({cnpj_certificado}) é diferente do CNPJ da empresa "
-                f"({cnpj_empresa})."
-            )
+    cnpj_certificado = info.cnpj.upper()
+    divergencia = divergencia_de_cnpj(cnpj_certificado, empresa.cnpj, mesma_raiz=mesma_raiz)
+    if divergencia:
+        raise ErroDeCertificado(divergencia)
     if info.valido_de > agora:
         raise ErroDeCertificado(f"O certificado só passa a valer em {info.valido_de:%d/%m/%Y}.")
     if info.valido_ate < agora:

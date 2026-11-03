@@ -174,7 +174,12 @@ class EntradaDeNota(serializers.Serializer):
     percentual_total_tributos_simples = serializers.CharField(
         required=False, allow_blank=True, allow_null=True
     )
+    # Ajuste pontual do IBS/CBS (opcional): `informar` (false = sem o grupo nesta nota),
+    # `codigo_indicador_operacao` e `indicador_destinatario`. Campo ausente ou vazio herda do
+    # modelo de NFS-e (se a nota veio de um) e, depois, da empresa.
     ibs_cbs = serializers.DictField(required=False, allow_null=True)
+    # Só na prévia: o rascunho que está sendo corrigido (para valer o que o modelo dele definia).
+    rascunho = serializers.IntegerField(required=False, allow_null=True)
 
 
 class EntradaDeCancelamento(serializers.Serializer):
@@ -276,6 +281,12 @@ class NotaViewSet(viewsets.GenericViewSet):
                 "pronta": not pendencias,
                 "bloqueios": [b.para_dict() for b in pendencias],
                 "ambiente": parametros.ambiente,
+                # Padrão da empresa para o IBS/CBS: a nota herda e pode ajustar pontualmente.
+                "ibs_cbs": {
+                    "informar": parametros.ibs_cbs_informar,
+                    "codigo_indicador_operacao": parametros.ibs_cbs_indicador_operacao,
+                    "indicador_destinatario": parametros.ibs_cbs_indicador_destinatario,
+                },
                 "leiaute": gateway.leiaute_em_vigor(ambiente_producao),
                 "leiaute_descricao": gateway.descricao_do_leiaute(
                     gateway.leiaute_em_vigor(ambiente_producao)
@@ -292,16 +303,24 @@ class NotaViewSet(viewsets.GenericViewSet):
 
     # -- rascunho ----------------------------------------------------------------------
 
-    def _entrada(self, request):
+    def _entrada(self, request, *, com_rascunho=False):
         entrada = EntradaDeNota(data=request.data)
         entrada.is_valid(raise_exception=True)
-        return dict(entrada.validated_data)
+        dados = dict(entrada.validated_data)
+        if not com_rascunho:
+            dados.pop("rascunho", None)  # só a prévia usa
+        return dados
 
     @action(detail=False, methods=["post"])
     def previa(self, request):
         """Calcula e valida a nota **sem gravar nada**: é a conferência antes de enviar."""
+        dados = self._entrada(request, com_rascunho=True)
+        rascunho = self.get_queryset().filter(pk=dados.pop("rascunho", None)).first()
+        if rascunho is not None:
+            # Corrigindo um rascunho: vale também o que o modelo dele definia quando ele nasceu.
+            dados["ibs_cbs_modelo"] = (rascunho.complementos or {}).get("ibs_cbs_modelo")
         try:
-            preparo = servico_nfse.preparar(self._entrada(request))
+            preparo = servico_nfse.preparar(dados)
         except servico_nfse.ErroDeNota as erro:
             raise serializers.ValidationError(erro.erros) from None
         return Response(
@@ -312,6 +331,8 @@ class NotaViewSet(viewsets.GenericViewSet):
                 "valores": preparo.valores,
                 "totais": preparo.totais,
                 "complementos": preparo.complementos,
+                # O grupo IBS/CBS como vai na DPS: valores, de onde vieram ou por que não vai.
+                "ibs_cbs": preparo.ibs_cbs_dps,
                 "avisos": preparo.avisos,
                 "bloqueios": [b.para_dict() for b in servico_bloqueios.verificar_prontidao()],
             }

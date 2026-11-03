@@ -42,7 +42,12 @@ class ParametrosView(APIView):
         return _resposta_de_parametros(ParametrosFiscais.obter())
 
     def patch(self, request):
-        """Altera os parâmetros. Trocar para produção exige `confirmar_producao: true`."""
+        """Altera os parâmetros.
+
+        Trocar para produção exige certificado válido (CNPJ conferido), município e convênio
+        vigente em produção (senão `producao_nao_liberada`, com a lista do que falta) e, além
+        disso, `confirmar_producao: true`.
+        """
         entrada = EntradaDeParametros(data=request.data)
         entrada.is_valid(raise_exception=True)
         dados = dict(entrada.validated_data)
@@ -53,6 +58,16 @@ class ParametrosView(APIView):
             )
         except ErroDjango as erro:
             raise serializers.ValidationError(erro.message_dict) from None
+        except servico_parametros.ProducaoNaoLiberada as erro:
+            return Response(
+                {
+                    "codigo": "producao_nao_liberada",
+                    "detalhe": str(erro),
+                    "pendencias": [pendencia.para_dict() for pendencia in erro.pendencias],
+                    "ambiente": [str(erro)],
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         except servico_parametros.ProducaoSemConfirmacao:
             return Response(
                 {

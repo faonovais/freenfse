@@ -6,6 +6,15 @@ from cadastros.tests.conftest import Api
 from conftest import CNPJ_A, CNPJ_B
 from core.models import Empresa
 from core.permissoes import Perfil
+from fiscal import gateway
+from fiscal.tests.apoio import (
+    SENHA_DO_PFX,
+    TransporteFalso,
+    convenio_aderente,
+    gerar_pfx,
+)
+
+BALSAS = "2101400"
 
 
 @pytest.fixture
@@ -90,3 +99,43 @@ def empresas_confirmadas(transactional_db):
     yield alfa, beta
     for empresa in (alfa, beta):
         empresa.delete(force_drop=True)
+
+
+# -- convênio e troca para produção ----------------------------------------------------------
+
+
+@pytest.fixture
+def transporte(monkeypatch):
+    """`transporte(rotas)`: troca só o HTTP do gateway; o resto da freedfe roda de verdade."""
+    original = gateway.verificar_convenio  # a de verdade, mesmo se instalar mais de uma vez
+
+    def _instalar(rotas):
+        falso = TransporteFalso(rotas)
+        monkeypatch.setattr(
+            gateway,
+            "verificar_convenio",
+            lambda **kw: original(**{**kw, "transporte": falso, "pausa": lambda segundos: None}),
+        )
+        return falso
+
+    return _instalar
+
+
+@pytest.fixture
+def liberar_producao(municipios_basicos, transporte):
+    """`liberar_producao(api)`: deixa a empresa A apta a trocar para produção.
+
+    Informa o município, envia um certificado válido do CNPJ da empresa e instala um convênio
+    aderente (simulado, sem rede). Devolve o transporte falso, com as chamadas feitas.
+    """
+
+    def _liberar(api, *, cnpj=CNPJ_A, **convenio):
+        resposta = api.patch("/api/fiscal/parametros/", {"codigo_municipio_emissor": BALSAS})
+        assert resposta.status_code == 200, resposta.json()
+        enviado = api.post_arquivo(
+            "/api/fiscal/certificado/", gerar_pfx(cnpj), nome="c.pfx", senha=SENHA_DO_PFX
+        )
+        assert enviado.status_code == 201, enviado.json()
+        return transporte({"/convenio": convenio_aderente(**convenio), f"/{cnpj}": (200, {})})
+
+    return _liberar

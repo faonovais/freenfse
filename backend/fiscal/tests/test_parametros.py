@@ -94,8 +94,9 @@ def test_recusa_nao_altera_o_que_estava_gravado(api_de, empresa_a):
     assert api.get(URL).json()["serie_dps"] == 5
 
 
-def test_trocar_para_producao_exige_confirmacao(api_de, empresa_a):
+def test_trocar_para_producao_exige_confirmacao(api_de, empresa_a, liberar_producao):
     api = api_de(empresa_a)
+    liberar_producao(api)  # tudo o mais em ordem: só falta a confirmação
 
     sem_confirmar = api.patch(URL, {"ambiente": "producao"})
     confirmado_falso = api.patch(URL, {"ambiente": "producao", "confirmar_producao": False})
@@ -107,8 +108,9 @@ def test_trocar_para_producao_exige_confirmacao(api_de, empresa_a):
     assert not LogAuditoria.objects.filter(acao=LogAuditoria.Acao.AMBIENTE_ALTERADO).exists()
 
 
-def test_troca_confirmada_para_producao_e_auditada(api_de, empresa_a, usuario):
+def test_troca_confirmada_para_producao_e_auditada(api_de, empresa_a, usuario, liberar_producao):
     api = api_de(empresa_a)
+    liberar_producao(api)
 
     resposta = api.patch(URL, {"ambiente": "producao", "confirmar_producao": True})
 
@@ -118,8 +120,11 @@ def test_troca_confirmada_para_producao_e_auditada(api_de, empresa_a, usuario):
     assert registro.detalhes == {"de": "producao_restrita", "para": "producao"}
 
 
-def test_voltar_para_producao_restrita_nao_pede_confirmacao_e_e_auditado(api_de, empresa_a):
+def test_voltar_para_producao_restrita_nao_pede_confirmacao_e_e_auditado(
+    api_de, empresa_a, liberar_producao
+):
     api = api_de(empresa_a)
+    liberar_producao(api)
     api.patch(URL, {"ambiente": "producao", "confirmar_producao": True})
 
     resposta = api.patch(URL, {"ambiente": "producao_restrita"})
@@ -164,15 +169,23 @@ def test_quem_so_consulta_le_mas_nao_altera(api_de, empresa_a, perfil):
     assert api.patch(URL, {"ambiente": "producao", "confirmar_producao": True}).status_code == 403
 
 
-def test_emissor_nao_acessa_a_configuracao(api_de, empresa_a):
+def test_emissor_le_os_parametros_mas_nao_altera(api_de, api_do_master, empresa_a):
+    """Issue #14/#20: o Emissor vê a configuração fiscal (somente leitura)."""
+    api_do_master(empresa_a).patch(URL, {"serie_dps": 7})
     api = api_de(empresa_a, Perfil.EMISSOR)
 
-    assert api.get(URL).status_code == 403
+    leitura = api.get(URL)
+
+    assert leitura.status_code == 200 and leitura.json()["serie_dps"] == 7
     assert api.patch(URL, {"serie_dps": 2}).status_code == 403
+    assert api.patch(URL, {"ambiente": "producao", "confirmar_producao": True}).status_code == 403
+    assert api_do_master(empresa_a).get(URL).json()["serie_dps"] == 7  # nada mudou
+    assert api.post(f"{URL}verificar-convenio/", {}).status_code == 403
 
 
-def test_parametros_sao_por_empresa(api_do_master, empresa_a, empresa_b):
+def test_parametros_sao_por_empresa(api_do_master, empresa_a, empresa_b, liberar_producao):
     api_a, api_b = api_do_master(empresa_a), api_do_master(empresa_b)
+    liberar_producao(api_a)
     api_a.patch(URL, {"serie_dps": 9, "ambiente": "producao", "confirmar_producao": True})
 
     assert api_b.get(URL).json()["serie_dps"] == 1

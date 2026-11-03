@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { parametros as api } from '../../api/fiscal.js'
 import Aviso from '../../components/Aviso.jsx'
 import BotaoAjuda from '../../components/BotaoAjuda.jsx'
@@ -21,6 +22,9 @@ function formularioDe(dados) {
     serie_dps: String(dados.serie_dps),
     ambiente: dados.ambiente,
     codigo_municipio_emissor: dados.codigo_municipio_emissor,
+    ibs_cbs_informar: Boolean(dados.ibs_cbs_informar),
+    ibs_cbs_indicador_operacao: dados.ibs_cbs_indicador_operacao ?? '',
+    ibs_cbs_indicador_destinatario: String(dados.ibs_cbs_indicador_destinatario ?? 0),
   }
 }
 
@@ -47,6 +51,24 @@ function ResultadoDoConvenio({ convenio }) {
   )
 }
 
+/** O que falta para a produção (certificado, município, convênio), cada item com o caminho para resolver. */
+function PendenciasDaProducao({ pendencias }) {
+  if (pendencias.length === 0) return null
+  return (
+    <section aria-label="O que falta para a produção" className="space-y-2">
+      <Aviso tipo="erro">Ainda não é possível trocar para o ambiente de produção. Resolva antes:</Aviso>
+      {pendencias.map((pendencia) => (
+        <Aviso key={pendencia.codigo} tipo="atencao">
+          {pendencia.mensagem}{' '}
+          <Link className="underline" to={pendencia.tela}>
+            Resolver
+          </Link>
+        </Aviso>
+      ))}
+    </section>
+  )
+}
+
 export default function Parametros() {
   const confirmar = useConfirmacao()
   const { temPermissao, recarregarIdentidade } = useAuth()
@@ -56,6 +78,7 @@ export default function Parametros() {
   const [f, setF] = useState(null)
   const [erros, setErros] = useState({})
   const [erroGeral, setErroGeral] = useState('')
+  const [pendencias, setPendencias] = useState([])
   const [salvo, setSalvo] = useState(false)
   const [salvando, setSalvando] = useState(false)
   const [verificando, setVerificando] = useState(false)
@@ -91,6 +114,7 @@ export default function Parametros() {
     evento.preventDefault()
     setErros({})
     setErroGeral('')
+    setPendencias([])
     const corpo = {
       regime_tributario: f.regime_tributario,
       regime_apuracao_simples: simples && f.regime_apuracao_simples !== '' ? Number(f.regime_apuracao_simples) : null,
@@ -98,24 +122,38 @@ export default function Parametros() {
       serie_dps: Number(f.serie_dps),
       ambiente: f.ambiente,
       codigo_municipio_emissor: f.codigo_municipio_emissor,
+      ibs_cbs_informar: f.ibs_cbs_informar,
+      ibs_cbs_indicador_operacao: f.ibs_cbs_indicador_operacao,
+      ibs_cbs_indicador_destinatario: Number(f.ibs_cbs_indicador_destinatario),
     }
-    if (f.ambiente === 'producao' && dados.ambiente !== 'producao') {
+    const indoParaProducao = f.ambiente === 'producao' && dados.ambiente !== 'producao'
+
+    // Primeiro sem confirmação: se a produção não está liberada (certificado, município, convênio),
+    // a API diz o que falta ANTES de pedir ao usuário que digite a confirmação.
+    setSalvando(true)
+    let resposta = await api.alterar(corpo)
+    setSalvando(false)
+    if (indoParaProducao && !resposta.ok && resposta.dados?.codigo === 'confirmacao_necessaria') {
       const confirmado = await confirmar({
         titulo: 'Trocar para o ambiente de produção?',
         mensagem:
           'A partir de agora as notas emitidas têm valor fiscal de verdade. Use este ambiente só depois de testar ' +
-          'tudo em produção restrita.',
+          'tudo em produção restrita. O convênio do município será consultado na produção neste momento.',
         variante: 'perigo',
         textoConfirmar: 'Trocar para produção',
         textoDigitado: TEXTO_DE_PRODUCAO,
       })
       if (!confirmado) return
-      corpo.confirmar_producao = true
+      setSalvando(true)
+      resposta = await api.alterar({ ...corpo, confirmar_producao: true })
+      setSalvando(false)
     }
-    setSalvando(true)
-    const resposta = await api.alterar(corpo)
-    setSalvando(false)
     if (!resposta.ok) {
+      if (resposta.dados?.codigo === 'producao_nao_liberada') {
+        setPendencias(resposta.dados.pendencias ?? [])
+        setErroGeral(resposta.dados.detalhe ?? '')
+        return
+      }
       setErros(errosPorCampo(resposta))
       setErroGeral(mensagemErro(resposta))
       return
@@ -199,6 +237,45 @@ export default function Parametros() {
             />
           </div>
 
+          <div className="max-w-md space-y-2">
+            <h2 className="text-base text-gray-900 dark:text-gray-100">
+              IBS e CBS{' '}
+              <BotaoAjuda rotulo="IBS e CBS">
+                A opção, o indicador da operação e o destinatário valem para a empresa toda. Cada modelo de NFS-e e cada
+                nota herdam este padrão e podem mudá-lo (vale o da nota, depois o do modelo, depois o da empresa). A
+                classificação (NBS, CST e cClassTrib) continua no cadastro de cada serviço.
+              </BotaoAjuda>
+            </h2>
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={f.ibs_cbs_informar}
+                onChange={(evento) => setF((atual) => ({ ...atual, ibs_cbs_informar: evento.target.checked }))}
+              />
+              Informar o IBS/CBS nas notas desta empresa
+            </label>
+            <Campo
+              rotulo="Indicador da operação padrão (cIndOp)"
+              inputMode="numeric"
+              maxLength={6}
+              value={f.ibs_cbs_indicador_operacao}
+              onChange={mudar('ibs_cbs_indicador_operacao')}
+              erro={erros.ibs_cbs_indicador_operacao}
+              dica="6 dígitos. Só vai na nota de serviço que tem NBS, CST e cClassTrib no cadastro."
+            />
+            <CampoSelecao
+              rotulo="Destinatário padrão (indDest)"
+              opcoes={[
+                { valor: '0', rotulo: 'O destinatário é o próprio tomador' },
+                { valor: '1', rotulo: 'O destinatário é outra pessoa' },
+              ]}
+              value={f.ibs_cbs_indicador_destinatario}
+              onChange={mudar('ibs_cbs_indicador_destinatario')}
+              erro={erros.ibs_cbs_indicador_destinatario}
+              dica="Os modelos de NFS-e e as notas herdam este valor e podem mudá-lo."
+            />
+          </div>
+
           <div className="max-w-md">
             <CampoSelecao
               rotulo="Ambiente de emissão"
@@ -219,7 +296,10 @@ export default function Parametros() {
           </div>
         </fieldset>
 
-        <Aviso tipo="erro">{erroGeral && Object.keys(erros).length === 0 ? erroGeral : ''}</Aviso>
+        <PendenciasDaProducao pendencias={pendencias} />
+        <Aviso tipo="erro">
+          {erroGeral && pendencias.length === 0 && Object.keys(erros).length === 0 ? erroGeral : ''}
+        </Aviso>
         {podeEditar ? (
           <button type="submit" className="botao" disabled={salvando || !alterado}>
             Salvar parâmetros

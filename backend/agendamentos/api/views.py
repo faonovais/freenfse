@@ -126,6 +126,8 @@ class ModeloViewSet(viewsets.GenericViewSet):
                 "totais": preparo.totais,
                 "avisos": preparo.avisos,
                 "informacoes_complementares": preparo.complementos["informacoes_complementares"],
+                # O IBS/CBS como iria na DPS, com a origem de cada campo (nota, modelo ou empresa).
+                "ibs_cbs": preparo.ibs_cbs_dps,
             }
         )
 
@@ -362,6 +364,8 @@ class OpcoesView(APIView):
                     {"valor": v, "rotulo": r} for v, r in ModeloNfse.Competencia.choices
                 ],
                 "variaveis_do_texto": s.variaveis_do_texto(),
+                # Padrão de IBS/CBS da empresa de agora: é o que um modelo vazio herda.
+                "ibs_cbs_empresa": s.ibs_cbs_da_empresa(),
                 "modelos": [
                     {"id": m.pk, "nome": m.nome} for m in ModeloNfse.objects.filter(ativo=True)
                 ],

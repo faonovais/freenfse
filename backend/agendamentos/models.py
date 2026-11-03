@@ -57,6 +57,13 @@ class ModeloNfse(models.Model):
         max_length=20, choices=Competencia, default=Competencia.MES_DA_EXECUCAO
     )
 
+    # IBS/CBS (issue #20, ADR 0007): o modelo HERDA da empresa e pode sobrescrever. Vazio (nulo ou
+    # em branco) = herda o valor da empresa **de quando o rascunho é gerado**; nada é copiado para
+    # cá. A classificação (NBS, CST, cClassTrib) continua no serviço.
+    ibs_cbs_informar = models.BooleanField(null=True, blank=True)
+    ibs_cbs_indicador_operacao = models.CharField(max_length=6, blank=True)
+    ibs_cbs_indicador_destinatario = models.PositiveSmallIntegerField(null=True, blank=True)
+
     # Sobreposição da configuração de e-mail da empresa (D21). Vazio/nulo = herdar da empresa.
     email_envio_automatico = models.BooleanField(null=True, blank=True)
     email_avisar_cancelamento = models.BooleanField(null=True, blank=True)
@@ -79,6 +86,14 @@ class ModeloNfse(models.Model):
 
     def __str__(self):
         return self.nome
+
+    def padroes_de_ibs_cbs(self):
+        """O que ESTE modelo define de IBS/CBS (`None`/vazio = herda da empresa)."""
+        return {
+            "informar": self.ibs_cbs_informar,
+            "codigo_indicador_operacao": self.ibs_cbs_indicador_operacao,
+            "indicador_destinatario": self.ibs_cbs_indicador_destinatario,
+        }
 
     def sobreposicao_de_email(self):
         """Só o que este modelo muda na configuração de e-mail (o resto é herdado da empresa)."""

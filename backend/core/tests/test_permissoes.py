@@ -36,6 +36,17 @@ def test_emissor_emite_cancela_e_substitui_mas_nao_administra():
     assert not {"config.editar", "usuario.gerenciar"} & permissoes
 
 
+def test_emissor_consulta_a_configuracao_sem_poder_altera_la():
+    """Issue #14/#20: leitura dos parâmetros fiscais e do certificado, nunca a edição."""
+    permissoes = permissoes_do_perfil(Perfil.EMISSOR)
+
+    assert "config.consultar" in permissoes
+    assert "config.editar" not in permissoes
+    # Nenhuma permissão de escrita de configuração veio junto: só o que termina em `.consultar`
+    # é novo para o Emissor em relação ao que ele já tinha (cadastro.editar é de antes).
+    assert {nome for nome in permissoes if nome.startswith("config.")} == {"config.consultar"}
+
+
 def test_consulta_so_le():
     permissoes = permissoes_do_perfil(Perfil.CONSULTA)
 

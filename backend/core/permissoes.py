@@ -83,7 +83,10 @@ registrar_permissao("cadastro.editar", "Editar cadastros", perfis=[Perfil.EMISSO
 registrar_permissao(
     "config.consultar",
     "Consultar a configuração da empresa",
-    perfis=[Perfil.FINANCEIRO, Perfil.CONSULTA],
+    # Issue #14/#20: o Emissor precisa ver os parâmetros fiscais e o certificado (titular,
+    # CNPJ, validade) para saber por que uma nota não sai. É só leitura: o arquivo .pfx e a
+    # senha nunca saem da API, e quem altera continua sendo `config.editar`.
+    perfis=[Perfil.EMISSOR, Perfil.FINANCEIRO, Perfil.CONSULTA],
 )
 registrar_permissao("config.editar", "Editar a configuração da empresa")
 registrar_permissao("usuario.gerenciar", "Gerenciar usuários e vínculos da empresa")

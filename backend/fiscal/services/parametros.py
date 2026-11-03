@@ -7,7 +7,9 @@ from core.models import LogAuditoria, Municipio
 from core.services import auditoria
 from fiscal import gateway
 from fiscal.models import Certificado, ParametrosFiscais
+from fiscal.services import producao
 from fiscal.services.certificado import abrir_em_memoria
+from fiscal.services.producao import ProducaoNaoLiberada
 
 CAMPOS_EDITAVEIS = (
     "regime_tributario",
@@ -16,6 +18,16 @@ CAMPOS_EDITAVEIS = (
     "serie_dps",
     "ambiente",
     "codigo_municipio_emissor",
+    "ibs_cbs_informar",
+    "ibs_cbs_indicador_operacao",
+    "ibs_cbs_indicador_destinatario",
+)
+# O que a verificação do convênio grava (a gravação toca só estes campos, nunca a linha inteira).
+CAMPOS_DO_CONVENIO = (
+    "convenio_resultado",
+    "convenio_verificado_em",
+    "convenio_codigo_municipio",
+    "convenio_ambiente",
 )
 
 
@@ -31,12 +43,21 @@ class ErroDeConsultaExterna(Exception):
     """A consulta ao ambiente nacional falhou (rede, serviço fora do ar ou recusa)."""
 
 
-@transaction.atomic
 def atualizar_parametros(*, request, dados, confirmar_producao=False):
     """Altera os parâmetros fiscais e audita; a troca de ambiente é auditada à parte.
 
-    Trocar para **produção** (notas com valor fiscal) exige `confirmar_producao`. A permissão
-    `config.editar` é verificada pela view.
+    A permissão `config.editar` é verificada pela view. Trocar para **produção** (notas com valor
+    fiscal) segue esta ordem, parando na primeira etapa que falhar e sem gravar nada:
+
+    1. pendências locais (certificado enviado, em vigor e com o CNPJ conferido; município
+       informado) → `ProducaoNaoLiberada`;
+    2. confirmação explícita → `ProducaoSemConfirmacao`;
+    3. convênio do município **consultado na hora, no ambiente de produção**, vigente →
+       `ProducaoNaoLiberada`.
+
+    Passando tudo, o resultado dessa consulta é gravado junto com a troca: a empresa já nasce em
+    produção com o convênio válido para o ambiente e o município atuais. A consulta (rede) roda
+    **fora** da transação: não se segura conexão aberta esperando a Sefin.
     """
     parametros = ParametrosFiscais.obter()
     antes = {campo: getattr(parametros, campo) for campo in CAMPOS_EDITAVEIS}
@@ -49,32 +70,81 @@ def atualizar_parametros(*, request, dados, confirmar_producao=False):
         antes["ambiente"] != ParametrosFiscais.Ambiente.PRODUCAO
         and parametros.ambiente == ParametrosFiscais.Ambiente.PRODUCAO
     )
-    if indo_para_producao and not confirmar_producao:
-        raise ProducaoSemConfirmacao
-    parametros.save()
+    convenio = None
+    if indo_para_producao:
+        convenio = _liberar_producao(request, parametros, confirmar_producao)
 
-    alterados = {
-        campo: {"de": antes[campo], "para": getattr(parametros, campo)}
-        for campo in CAMPOS_EDITAVEIS
-        if antes[campo] != getattr(parametros, campo)
-    }
-    if alterados:
-        auditoria.registrar(
-            LogAuditoria.Acao.PARAMETROS_ALTERADOS, request=request, alvo="parametros-fiscais",
-            detalhes={"alterados": alterados},
-        )  # fmt: skip
-    if "ambiente" in alterados:
-        auditoria.registrar(
-            LogAuditoria.Acao.AMBIENTE_ALTERADO,
-            request=request,
-            alvo="parametros-fiscais",
-            detalhes=alterados["ambiente"],
-        )
+    campos = [campo for campo in CAMPOS_EDITAVEIS if campo in dados]
+    with transaction.atomic():
+        if convenio is not None:
+            _guardar_convenio(parametros, convenio, ambiente_producao=True)
+            campos += CAMPOS_DO_CONVENIO
+        parametros.save(update_fields=[*campos, "atualizado_em"])
+
+        alterados = {
+            campo: {"de": antes[campo], "para": getattr(parametros, campo)}
+            for campo in CAMPOS_EDITAVEIS
+            if antes[campo] != getattr(parametros, campo)
+        }
+        if alterados:
+            auditoria.registrar(
+                LogAuditoria.Acao.PARAMETROS_ALTERADOS, request=request, alvo="parametros-fiscais",
+                detalhes={"alterados": alterados},
+            )  # fmt: skip
+        if "ambiente" in alterados:
+            auditoria.registrar(
+                LogAuditoria.Acao.AMBIENTE_ALTERADO,
+                request=request,
+                alvo="parametros-fiscais",
+                detalhes=alterados["ambiente"],
+            )
+        if convenio is not None:
+            auditoria.registrar(
+                LogAuditoria.Acao.CONVENIO_VERIFICADO,
+                request=request,
+                alvo=f"municipio:{convenio.codigo_municipio}",
+                detalhes={
+                    "aderente": convenio.aderente,
+                    "ambiente": ParametrosFiscais.Ambiente.PRODUCAO,
+                    "na_troca_para_producao": True,
+                },
+            )
     return parametros
 
 
-def _mensagem_do_convenio(resultado, municipio):
-    lugar = f"{municipio.nome}/{municipio.uf}" if municipio else resultado.codigo_municipio
+def _liberar_producao(request, parametros, confirmar_producao):
+    """Confere tudo o que a produção exige e devolve o convênio consultado (ou levanta o motivo)."""
+    certificado = Certificado.objects.first()
+    pendencias = producao.pendencias_locais(
+        empresa=request.empresa, parametros=parametros, certificado=certificado
+    )
+    if pendencias:
+        raise ProducaoNaoLiberada(pendencias)
+    if not confirmar_producao:
+        raise ProducaoSemConfirmacao
+
+    try:
+        convenio = _consultar_convenio(
+            cnpj=request.empresa.cnpj,
+            codigo_municipio=parametros.codigo_municipio_emissor,
+            ambiente_producao=True,
+            certificado=certificado,
+        )
+    except ErroDeConsultaExterna as erro:
+        raise ProducaoNaoLiberada([producao.sem_consulta(str(erro))]) from None
+    pendencia = producao.avaliar_convenio(convenio, lugar=_lugar(convenio))
+    if pendencia:
+        raise ProducaoNaoLiberada([pendencia])
+    return convenio
+
+
+def _lugar(resultado):
+    """`Nome/UF` do município do resultado (ou o código, se a tabela não o conhecer)."""
+    municipio = Municipio.objects.filter(codigo=resultado.codigo_municipio).first()
+    return f"{municipio.nome}/{municipio.uf}" if municipio else resultado.codigo_municipio
+
+
+def _mensagem_do_convenio(resultado, lugar):
     if resultado.aderente is True:
         texto = f"O município {lugar} aderiu à NFS-e Nacional: já é possível emitir por aqui."
         if resultado.data_ativacao:
@@ -92,11 +162,48 @@ def _mensagem_do_convenio(resultado, municipio):
     )
 
 
+def _consultar_convenio(
+    *, cnpj, codigo_municipio, ambiente_producao, certificado, transporte=None, pausa=None
+):
+    """Consulta o convênio via `freedfe` com o certificado da empresa; não grava nada."""
+    if certificado is None:
+        # Segunda trava (a primeira é a pendência `sem_certificado`): sem certificado não há como
+        # se identificar na consulta, e isso vira uma recusa explícita, nunca um erro interno.
+        raise ErroDeConsultaExterna("a empresa não tem certificado A1 para se identificar.")
+    try:
+        a1 = abrir_em_memoria(certificado)
+        resultado = gateway.verificar_convenio(
+            cnpj=cnpj,
+            codigo_municipio=codigo_municipio,
+            ambiente_producao=ambiente_producao,
+            certificado=a1,
+            transporte=transporte,
+            pausa=pausa,
+        )
+    except gateway.ErroDeConsultaFiscal as erro:
+        raise ErroDeConsultaExterna(str(erro)) from None
+    resultado.mensagem = _mensagem_do_convenio(resultado, _lugar(resultado))
+    return resultado
+
+
+def _guardar_convenio(parametros, resultado, *, ambiente_producao):
+    """Põe o resultado nos campos do convênio (quem chama grava), com o ambiente consultado."""
+    ambiente = ParametrosFiscais.Ambiente
+    parametros.convenio_resultado = resultado.para_dict()
+    parametros.convenio_verificado_em = timezone.now()
+    parametros.convenio_codigo_municipio = resultado.codigo_municipio
+    parametros.convenio_ambiente = (
+        ambiente.PRODUCAO if ambiente_producao else ambiente.PRODUCAO_RESTRITA
+    )
+
+
 def verificar_convenio(*, request, transporte=None, pausa=None):
     """Consulta o convênio do município emissor via `freedfe` e guarda o resultado com a data.
 
-    Usa o certificado da empresa (mTLS). Em caso de falha, o último resultado guardado é
-    mantido e o usuário recebe uma mensagem clara (`ErroDeVerificacao`).
+    Usa o certificado da empresa (mTLS) e o ambiente **gravado** nos parâmetros. Em caso de
+    falha, o último resultado guardado é mantido e o usuário recebe uma mensagem clara
+    (`ErroDeVerificacao`). A gravação toca só os campos do convênio: uma troca de ambiente feita
+    por outra pessoa durante a consulta não é desfeita.
     """
     parametros = ParametrosFiscais.obter()
     if not parametros.codigo_municipio_emissor:
@@ -112,30 +219,22 @@ def verificar_convenio(*, request, transporte=None, pausa=None):
             "O certificado da empresa está vencido. Envie um certificado válido."
         )
 
-    try:
-        a1 = abrir_em_memoria(certificado)
-        resultado = gateway.verificar_convenio(
-            cnpj=request.empresa.cnpj,
-            codigo_municipio=parametros.codigo_municipio_emissor,
-            ambiente_producao=parametros.ambiente == ParametrosFiscais.Ambiente.PRODUCAO,
-            certificado=a1,
-            transporte=transporte,
-            pausa=pausa,
-        )
-    except gateway.ErroDeConsultaFiscal as erro:
-        raise ErroDeConsultaExterna(str(erro)) from None
+    em_producao = parametros.ambiente == ParametrosFiscais.Ambiente.PRODUCAO
+    resultado = _consultar_convenio(
+        cnpj=request.empresa.cnpj,
+        codigo_municipio=parametros.codigo_municipio_emissor,
+        ambiente_producao=em_producao,
+        certificado=certificado,
+        transporte=transporte,
+        pausa=pausa,
+    )
 
-    municipio = Municipio.objects.filter(codigo=resultado.codigo_municipio).first()
-    resultado.mensagem = _mensagem_do_convenio(resultado, municipio)
-    parametros.convenio_resultado = resultado.para_dict()
-    parametros.convenio_verificado_em = timezone.now()
-    parametros.convenio_codigo_municipio = parametros.codigo_municipio_emissor
-    parametros.convenio_ambiente = parametros.ambiente
-    parametros.save()
+    _guardar_convenio(parametros, resultado, ambiente_producao=em_producao)
+    parametros.save(update_fields=[*CAMPOS_DO_CONVENIO, "atualizado_em"])
     auditoria.registrar(
         LogAuditoria.Acao.CONVENIO_VERIFICADO,
         request=request,
         alvo=f"municipio:{resultado.codigo_municipio}",
-        detalhes={"aderente": resultado.aderente, "ambiente": parametros.ambiente},
+        detalhes={"aderente": resultado.aderente, "ambiente": parametros.convenio_ambiente},
     )
     return parametros
