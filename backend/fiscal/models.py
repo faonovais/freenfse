@@ -267,6 +267,7 @@ class Nfse(models.Model):
         INCERTA = "incerta", "Resultado incerto (a conferir na Sefin)"
         CANCELADA = "cancelada", "Cancelada"
         SUBSTITUIDA = "substituida", "Substituída"
+        DESCARTADA = "descartada", "Descartada"
 
     direcao = models.CharField(max_length=10, choices=Direcao, default=Direcao.EMITIDA)
     situacao = models.CharField(

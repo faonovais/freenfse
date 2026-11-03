@@ -89,6 +89,26 @@ mostradas de volta. Variáveis opcionais do lote: `FREENFSE_LOTE_MAX_NOTAS`, `FR
 de e-mail de teste) está em [`docs/verificacao-fase-4.md`](docs/verificacao-fase-4.md); as decisões, em
 [`docs/adr/0005-documentos.md`](docs/adr/0005-documentos.md).
 
+### Modelos de NFS-e e agendamentos
+
+Para o que se repete todo mês, o Emissor cadastra um **modelo de NFS-e** (tomador, serviço, valor e texto, com `{competencia}`,
+`{mes}`, `{ano}`) em *Agendamentos › Modelos de NFS-e* e um **agendamento** em *Agendamentos*: única, diária, semanal, mensal,
+anual ou "a cada N", com hora (Brasília), data de início e fim por data **ou** por número de execuções. A tela mostra as
+próximas datas antes de salvar.
+
+- O agendamento só **gera rascunhos** (nada é emitido sozinho). Quem tem permissão de emitir confere, corrige e **aprova um a
+  um ou em lote** em *Agendamentos › Rascunhos*, ou **descarta com motivo**. Cada aprovação passa pelo mesmo fluxo de emissão da
+  emissão manual, com o resultado por item.
+- Dia 29/30/31 em mês curto vale o último dia do mês; 29/02 em ano comum vale 28/02; feriado e fim de semana executam.
+- Cada data gera **no máximo um rascunho**, mesmo com mais de uma instância do beat. Falha ao gerar não conta como execução e
+  avisa por e-mail; se o responsável perder o acesso, o agendamento é **suspenso** e o administrador é avisado. Nada é
+  disparado retroativamente: ao reativar, vale só a próxima data futura. `FREENFSE_AGENDAMENTO_TOLERANCIA_HORAS` (padrão 12)
+  limita o atraso aceito se o sistema ficar fora do ar.
+- Um e-mail diário (08:20) lembra cada responsável dos rascunhos pendentes.
+
+O roteiro para validar tudo isto está em [`docs/verificacao-fase-5.md`](docs/verificacao-fase-5.md); as decisões, em
+[`docs/adr/0006-modelos-e-agendamentos.md`](docs/adr/0006-modelos-e-agendamentos.md).
+
 ### Chaves de criptografia
 
 `FREENFSE_CHAVES` guarda as chaves que cifram dados sensíveis (certificados, senhas, tokens). Gere uma com `docker compose run --rm backend python manage.py gerar_chave` e use o formato `1:<chave>`. **Guarde-a fora do servidor e do repositório**: sem ela, o que foi cifrado não pode ser recuperado. A rotação de chaves está descrita no `.env.example`.

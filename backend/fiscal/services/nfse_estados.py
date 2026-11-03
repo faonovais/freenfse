@@ -13,7 +13,8 @@ from fiscal.models import Nfse, TransicaoInvalida, TransicaoNfse
 S = Nfse.Situacao
 
 TRANSICOES = {
-    S.RASCUNHO: {S.ENVIANDO},
+    # `RASCUNHO → DESCARTADA`: o rascunho nunca foi enviado; alguém decidiu não emiti-lo (motivo).
+    S.RASCUNHO: {S.ENVIANDO, S.DESCARTADA},
     # `ENVIANDO → RASCUNHO`: a DPS foi recusada localmente (dado inválido) e nada foi enviado.
     S.ENVIANDO: {S.AUTORIZADA, S.REJEITADA, S.INCERTA, S.RASCUNHO},
     # `INCERTA → ENVIANDO` só acontece pela retomada, que consulta a Sefin antes de enviar.
@@ -23,6 +24,7 @@ TRANSICOES = {
     S.AUTORIZADA: {S.CANCELADA, S.SUBSTITUIDA},
     S.CANCELADA: set(),
     S.SUBSTITUIDA: set(),
+    S.DESCARTADA: set(),
 }
 
 

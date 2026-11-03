@@ -68,6 +68,14 @@ class LogAuditoria(models.Model):
         DRIVE_REENVIADO = "drive_reenviado", "Cópia ao Google Drive refeita"
         EXPORTACAO_SOLICITADA = "exportacao_solicitada", "Download em lote solicitado"
         EXPORTACAO_BAIXADA = "exportacao_baixada", "Download em lote baixado"
+        MODELO_NFSE_SALVO = "modelo_nfse_salvo", "Modelo de NFS-e salvo"
+        AGENDAMENTO_SALVO = "agendamento_salvo", "Agendamento salvo"
+        AGENDAMENTO_SUSPENSO = "agendamento_suspenso", "Agendamento suspenso"
+        AGENDAMENTO_REATIVADO = "agendamento_reativado", "Agendamento reativado"
+        AGENDAMENTO_EXECUTADO = "agendamento_executado", "Agendamento gerou um rascunho"
+        AGENDAMENTO_FALHOU = "agendamento_falhou", "Agendamento não conseguiu gerar o rascunho"
+        NFSE_DESCARTADA = "nfse_descartada", "Rascunho de NFS-e descartado"
+        NFSE_LOTE_APROVADO = "nfse_lote_aprovado", "Rascunhos aprovados em lote"
 
     usuario = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="+"

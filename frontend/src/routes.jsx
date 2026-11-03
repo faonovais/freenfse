@@ -4,6 +4,12 @@ import RotaProtegida from './components/RotaProtegida.jsx'
 import Empresas from './pages/admin/Empresas.jsx'
 import Usuarios from './pages/admin/Usuarios.jsx'
 import Vinculos from './pages/admin/Vinculos.jsx'
+import AgendamentoForm from './pages/agendamentos/AgendamentoForm.jsx'
+import Agendamentos from './pages/agendamentos/Agendamentos.jsx'
+import Historico from './pages/agendamentos/Historico.jsx'
+import ModeloForm from './pages/agendamentos/ModeloForm.jsx'
+import Modelos from './pages/agendamentos/Modelos.jsx'
+import Rascunhos from './pages/agendamentos/Rascunhos.jsx'
 import Pessoas from './pages/cadastros/Pessoas.jsx'
 import Servicos from './pages/cadastros/Servicos.jsx'
 import Config2FA from './pages/Config2FA.jsx'
@@ -39,6 +45,14 @@ export const rotas = [
           { path: 'fiscal/parametros', element: <Parametros /> },
           { path: 'fiscal/certificado', element: <Certificado /> },
           { path: 'fiscal/logo', element: <Logo /> },
+          { path: 'agendamentos', element: <Agendamentos /> },
+          { path: 'agendamentos/novo', element: <AgendamentoForm /> },
+          { path: 'agendamentos/:id', element: <AgendamentoForm /> },
+          { path: 'agendamentos/modelos', element: <Modelos /> },
+          { path: 'agendamentos/modelos/novo', element: <ModeloForm /> },
+          { path: 'agendamentos/modelos/:id', element: <ModeloForm /> },
+          { path: 'agendamentos/rascunhos', element: <Rascunhos /> },
+          { path: 'agendamentos/historico', element: <Historico /> },
           { path: 'documentos/exportacoes', element: <Exportacoes /> },
           { path: 'documentos/email', element: <ConfigEmail /> },
           { path: 'documentos/drive', element: <ConfigDrive /> },

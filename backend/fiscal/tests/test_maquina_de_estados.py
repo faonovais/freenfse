@@ -51,10 +51,18 @@ def test_toda_transicao_fora_da_tabela_e_recusada(nota, origem, destino):
     assert not nota.transicoes.exists()
 
 
-@pytest.mark.parametrize("terminal", [S.CANCELADA, S.SUBSTITUIDA])
-def test_cancelada_e_substituida_sao_finais(nota, terminal):
+@pytest.mark.parametrize("terminal", [S.CANCELADA, S.SUBSTITUIDA, S.DESCARTADA])
+def test_cancelada_substituida_e_descartada_sao_finais(nota, terminal):
     assert TRANSICOES[terminal] == set()
     assert not pode_transicionar(terminal, S.AUTORIZADA)
+
+
+def test_so_o_rascunho_pode_ser_descartado_e_o_motivo_fica_no_historico(nota):
+    transicionar(nota, S.DESCARTADA, motivo="Descartado: o cliente cancelou o contrato")
+
+    assert nota.situacao == S.DESCARTADA
+    assert nota.transicoes.get().motivo == "Descartado: o cliente cancelou o contrato"
+    assert [o for o in S if S.DESCARTADA in TRANSICOES[o]] == [S.RASCUNHO]
 
 
 def test_nao_se_muda_a_situacao_por_atribuicao_direta(nota):

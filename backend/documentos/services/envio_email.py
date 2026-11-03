@@ -370,6 +370,31 @@ def destinatarios_do_alerta(configuracao, empresa):
     return sorted({v.usuario.email for v in vinculos if v.usuario.email})
 
 
+def registrar_aviso_avulso(*, tipo, destinatarios, assunto, texto, chave_idempotencia, agora=None):
+    """Cria um e-mail do sistema sem nota, uma única vez por `chave_idempotencia`.
+
+    Devolve `None` se o e-mail da empresa está desligado ou não há para quem enviar: o aviso
+    continua visível na tela de quem o originou. O envio é feito pela fila periódica.
+    """
+    agora = agora or contexto.agora()
+    configuracao = ConfiguracaoEmail.obter()
+    para = sorted({e for e in destinatarios if e})
+    if configuracao.provedor == ConfiguracaoEmail.Provedor.NENHUM or not para:
+        return None
+    existente = EnvioEmail.objects.filter(chave_idempotencia=chave_idempotencia).first()
+    if existente:
+        return existente
+    return EnvioEmail.objects.create(
+        tipo=tipo,
+        provedor=configuracao.provedor,
+        destinatarios=para,
+        assunto=_linha_unica(assunto)[:300],
+        corpo_avulso=texto,
+        chave_idempotencia=chave_idempotencia,
+        proxima_tentativa=agora,
+    )
+
+
 def registrar_alerta_de_certificado(*, empresa, faixa, dias_restantes, impressao, agora=None):
     """Cria o e-mail de alerta de vencimento (uma vez por certificado e faixa)."""
     agora = agora or contexto.agora()
