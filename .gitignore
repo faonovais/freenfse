@@ -19,6 +19,9 @@
 *.keystore
 secrets/
 
+# Gerado pelo instalador em cada instalação (sem segredos, mas específico do servidor).
+docker-compose.instalacao.yml
+
 # --- Mídia, uploads, backups e dumps ------------------------------------------
 media/
 uploads/

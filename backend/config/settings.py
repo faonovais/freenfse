@@ -51,6 +51,7 @@ SHARED_APPS = [
     "allauth.headless",
     "rest_framework",
     "core",
+    "operacao",
 ]
 TENANT_APPS = [
     "cadastros",
@@ -285,6 +286,26 @@ CELERY_BEAT_SCHEDULE = {
         "task": "agendamentos.tasks.alertar_rascunhos_pendentes",
         "schedule": crontab(hour=8, minute=20),
     },
+    # Batimento do agendador: prova que beat -> fila -> worker funcionam (saúde e healthcheck).
+    "batimento-do-agendador": {
+        "task": "operacao.tasks.batimento",
+        "schedule": crontab(minute="*"),
+    },
+    # Alertas operacionais por e-mail (emissão incerta prolongada, falhas permanentes, backup).
+    "verificar-alertas-operacionais": {
+        "task": "operacao.tasks.verificar_alertas",
+        "schedule": crontab(minute=35),
+    },
+    # Backup cifrado do banco inteiro: todo dia às 02:30 (Brasília). Falha = log crítico + alerta.
+    "fazer-backup": {
+        "task": "operacao.tasks.fazer_backup",
+        "schedule": crontab(hour=2, minute=30),
+    },
+    # Expurgo dos registros de envio de e-mail com mais de 5 anos (nenhum documento fiscal).
+    "expurgar-envios-de-email": {
+        "task": "documentos.tasks.expurgar_envios_email",
+        "schedule": crontab(hour=3, minute=10),
+    },
     # Expurgo dos ZIPs do download em lote vencidos: de hora em hora.
     "expurgar-exportacoes": {
         "task": "documentos.tasks.expurgar_exportacoes",
@@ -292,16 +313,69 @@ CELERY_BEAT_SCHEDULE = {
     },
 }
 
+# --- Retenção (Fase 6, ADR 0008) ----------------------------------------------------
+# Registros de envio de e-mail: 5 anos (decisão #18), depois expurgo automático diário. XML e
+# documentos fiscais NÃO têm expurgo automático.
+FREENFSE_RETENCAO_ENVIOS_ANOS = env.int("FREENFSE_RETENCAO_ENVIOS_ANOS", default=5)
+
+# --- Alertas operacionais (Fase 6) -----------------------------------------------
+# Por empresa: pelo e-mail configurado da empresa (Fase 4), para os administradores. Horas sem
+# resposta definitiva da Sefin até alertar uma nota "enviando"/"incerta".
+FREENFSE_ALERTA_EMISSAO_HORAS = env.int("FREENFSE_ALERTA_EMISSAO_HORAS", default=2)
+# Da plataforma (backup que falhou): não pertencem a uma empresa, então saem por um SMTP do
+# sistema (ALERTAS_SMTP_*; recomendado: caixa dedicada com senha de app). Sem ALERTAS_SMTP_HOST
+# o alerta fica só no log (CRITICAL) e no endpoint de saúde. ALERTAS_EMAIL_PARA vazio = os
+# usuários Master ativos.
+ALERTAS_EMAIL_PARA = env.list("ALERTAS_EMAIL_PARA", default=[])
+ALERTAS_SMTP_HOST = env("ALERTAS_SMTP_HOST", default="")
+ALERTAS_SMTP_PORTA = env.int("ALERTAS_SMTP_PORTA", default=587)
+ALERTAS_SMTP_SEGURANCA = env("ALERTAS_SMTP_SEGURANCA", default="starttls")  # starttls|ssl|nenhuma
+ALERTAS_SMTP_USUARIO = env("ALERTAS_SMTP_USUARIO", default="")
+ALERTAS_SMTP_SENHA = env("ALERTAS_SMTP_SENHA", default="")
+ALERTAS_EMAIL_DE = env("ALERTAS_EMAIL_DE", default=ALERTAS_SMTP_USUARIO or "freenfse@localhost")
+
+# Segundos em que a resposta de /api/saude/ é reaproveitada (por processo): o endpoint é público.
+FREENFSE_SAUDE_CACHE_SEGUNDOS = env.int("FREENFSE_SAUDE_CACHE_SEGUNDOS", default=5)
+
+# --- BI (Fase 6) -------------------------------------------------------------------
+# Usuário de banco SOMENTE LEITURA que enxerga apenas o schema "bi" (views consolidadas, sem XML
+# nem credenciais). Criado por `python manage.py criar_usuario_bi`.
+FREENFSE_BI_USUARIO = env("FREENFSE_BI_USUARIO", default="freenfse_bi")
+
+# --- Backup (Fase 6, ADR 0008) --------------------------------------------------
+# Pasta dos backups cifrados (volume próprio; copie para fora do servidor). O destinatário é a
+# chave PÚBLICA age (age1...): a privada fica fora do servidor e só serve para restaurar.
+FREENFSE_BACKUP_DIR = env("FREENFSE_BACKUP_DIR", default="/var/lib/freenfse/backups")
+FREENFSE_BACKUP_DESTINATARIO = env("FREENFSE_BACKUP_DESTINATARIO", default="")
+FREENFSE_BACKUP_RETENCAO_DIAS = env.int("FREENFSE_BACKUP_RETENCAO_DIAS", default=14)
+
 # --- Internacionalização ------------------------------------------------------
 LANGUAGE_CODE = "pt-br"
 TIME_ZONE = "America/Sao_Paulo"
 USE_I18N = True
 USE_TZ = True
 
-# --- Logs (saída padrão, capturada pelo Docker) -------------------------------
+# --- Logs (saída padrão, capturada pelo Docker/journald) --------------------------
+# Estruturados (JSON, uma linha por evento) e SEM segredos nem CPF/e-mail: a máscara é feita
+# pelo formatador e pelo filtro (operacao/logs.py), não por quem chama o log. LOG_FORMATO=texto
+# serve só ao desenvolvimento; o filtro de segredos vale nos dois formatos.
+LOG_FORMATO = env("LOG_FORMATO", default="json")
 LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,
-    "handlers": {"console": {"class": "logging.StreamHandler"}},
+    "filters": {"segredos": {"()": "operacao.logs.FiltroDeSegredos"}},
+    "formatters": {
+        "json": {"()": "operacao.logs.FormatadorJson"},
+        "texto": {"format": "%(asctime)s %(levelname)s %(name)s %(message)s"},
+    },
+    "handlers": {
+        "console": {
+            "class": "logging.StreamHandler",
+            "formatter": LOG_FORMATO if LOG_FORMATO in ("json", "texto") else "json",
+            "filters": ["segredos"],
+        }
+    },
     "root": {"handlers": ["console"], "level": env("LOG_LEVEL", default="INFO")},
 }
+# O worker e o beat usam esta mesma configuração (sem o formato próprio do Celery).
+CELERY_WORKER_HIJACK_ROOT_LOGGER = False

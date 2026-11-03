@@ -26,6 +26,23 @@ curl http://localhost:8080/api/versao/
 
 A interface fica em `http://localhost:8080/` (porta definida por `HTTP_PORT`).
 
+## Instalar em produção
+
+Em um servidor (interno, VPS ou nuvem) use o instalador: ele gera o `.env` com segredos aleatórios, sobe o sistema, liga o
+HTTPS e confere a saúde. É seguro rodar de novo (nunca troca chaves nem apaga dados).
+
+```bash
+sudo python3 instalador/instalar.py compose --dominio nfse.suaempresa.com.br \
+  --tls letsencrypt --email ti@suaempresa.com.br --gerar-chave-backup /root/freenfse-backup.key
+```
+
+* Manual de instalação (Compose e nativo): [`docs/instalacao.md`](docs/instalacao.md)
+* **Chaves, backup e restauração** (leia antes de produção): [`docs/chaves-e-backup.md`](docs/chaves-e-backup.md)
+* Manual do usuário: [`docs/manual-do-usuario.md`](docs/manual-do-usuario.md) · Checklist de entrada em produção:
+  [`docs/checklist-producao.md`](docs/checklist-producao.md)
+* Privacidade e retenção de dados (LGPD): [`docs/privacidade.md`](docs/privacidade.md) · Dados para BI: [`docs/bi.md`](docs/bi.md)
+* Saúde do sistema: `GET /api/saude/`
+
 ## Primeiro acesso
 
 Não há cadastro público: só entra quem o administrador (**Master**) cadastrou. O primeiro Master é criado pela linha de comando:

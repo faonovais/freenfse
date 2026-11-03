@@ -71,14 +71,35 @@ jobs:
           cache: pip
           cache-dependency-path: backend/requirements-dev.txt
       - run: pip install -r requirements-dev.txt
+      - name: Ferramentas do backup (pg_dump da série 18, igual ao servidor, e age)
+        working-directory: .
+        run: |
+          # O pg_dump precisa ser da mesma série (ou mais nova) que o servidor do job (18).
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl -fsSL -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc \
+            https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          . /etc/os-release
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt ${VERSION_CODENAME}-pgdg main" \
+            | sudo tee /etc/apt/sources.list.d/pgdg.list > /dev/null
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends postgresql-client-18 age
+          echo "/usr/lib/postgresql/18/bin" >> "$GITHUB_PATH"
       - name: ruff (lint)
         run: ruff check .
       - name: ruff (formatação)
         run: ruff format --check .
+      - name: ruff (instalador)
+        working-directory: .
+        run: |
+          ruff check --config backend/ruff.toml instalador
+          ruff format --check --config backend/ruff.toml instalador
       - name: Migrações em dia
         run: python manage.py makemigrations --check --dry-run
       - name: pytest
         run: pytest
+      - name: Testes do instalador
+        working-directory: instalador
+        run: python -m pytest
 
   frontend:
     name: Frontend (eslint, vitest, build)
@@ -111,7 +132,7 @@ jobs:
           sed -i "s|^POSTGRES_PASSWORD=.*|POSTGRES_PASSWORD=$(python3 -c 'import secrets; print(secrets.token_urlsafe(24))')|" .env
           sed -i "s|^FREENFSE_CHAVES=.*|FREENFSE_CHAVES=1:$(python3 -c 'import base64, os; print(base64.urlsafe_b64encode(os.urandom(32)).decode())')|" .env
       - name: Subir a pilha
-        run: docker compose up -d --build --wait --wait-timeout 300
+        run: docker compose up -d --build --wait --wait-timeout 420
       - name: /api/versao/ responde pelo Nginx com a versão do arquivo VERSION
         run: |
           resposta=$(curl -fsS http://localhost:8080/api/versao/)
@@ -142,6 +163,21 @@ jobs:
             backend python manage.py createsuperuser --noinput --email master@example.com --nome Master
       - name: Worker Celery está de pé
         run: docker compose exec -T worker celery -A config inspect ping
+      - name: Saúde (banco, Redis, worker, agendador) responde pelo Nginx
+        run: |
+          resposta=$(curl -fsS http://localhost:8080/api/saude/)
+          echo "${resposta}"
+          echo "${resposta}" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["status"] in ("ok","degradado"), d; assert d["banco"]=="ok" and d["redis"]=="ok" and d["worker"]=="ok", d'
+      - name: Dados cifrados em repouso (nenhum valor em claro)
+        run: docker compose exec -T backend python manage.py verificar_cifragem
+      - name: Backend fora do ar mostra erro em linguagem simples
+        run: |
+          docker compose stop backend worker beat
+          resposta=$(curl -s -w '\n%{http_code}' http://localhost:8080/api/versao/)
+          echo "${resposta}"
+          test "$(echo "${resposta}" | tail -1)" = "503"
+          echo "${resposta}" | grep -q '"codigo":"indisponivel"'
+          curl -s http://localhost:8080/accounts/google/login/ | grep -q "O sistema está indisponível"
       - name: Logs (em caso de falha)
         if: failure()
         run: docker compose logs --no-color

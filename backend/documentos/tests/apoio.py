@@ -3,6 +3,8 @@
 import datetime as dt
 from decimal import Decimal
 
+from django.db import connection
+
 from documentos.models import ConfiguracaoDrive, ConfiguracaoEmail
 from documentos.tests.simulados import SEGREDO_DE_TESTE, conta_de_servico_json
 from fiscal.models import Nfse
@@ -17,6 +19,13 @@ def emitir(empresa, nova_nota, **ajustes):
     nota.refresh_from_db()
     assert nota.situacao == Nfse.Situacao.AUTORIZADA, nota.mensagem
     return nota
+
+
+def xml_bruto(nota):
+    """O que está de fato na coluna do XML da nota (SQL puro, sem decifrar): um token `v<n>:`."""
+    with connection.cursor() as cursor:
+        cursor.execute("SELECT xml_nfse FROM fiscal_nfse WHERE id = %s", [nota.pk])
+        return bytes(cursor.fetchone()[0])
 
 
 def nota_avulsa(numero, *, chave=None, emitida_em=None, situacao=Nfse.Situacao.AUTORIZADA, **extra):

@@ -14,6 +14,7 @@ from core.services import acesso, auditoria
 # Rotas que não pertencem a uma empresa: públicas, do usuário logado e de administração global.
 PREFIXOS_SEM_EMPRESA = (
     "/api/versao/",
+    "/api/saude/",
     "/api/eu/",
     "/api/admin-global/",
     "/_allauth/",
@@ -21,7 +22,7 @@ PREFIXOS_SEM_EMPRESA = (
 )
 # Rotas liberadas mesmo quando o 2FA é obrigatório e ainda não foi configurado: as
 # necessárias para configurá-lo e saber o estado.
-PREFIXOS_SEM_2FA = ("/api/versao/", "/api/eu/", "/_allauth/", "/accounts/")
+PREFIXOS_SEM_2FA = ("/api/versao/", "/api/saude/", "/api/eu/", "/_allauth/", "/accounts/")
 
 
 def _erro(status, codigo, detalhe):

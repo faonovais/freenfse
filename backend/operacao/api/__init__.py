@@ -1,0 +1,1 @@
+"""API do app operacao."""

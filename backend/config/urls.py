@@ -7,6 +7,7 @@ urlpatterns = [
     path("api/fiscal/", include("fiscal.api.urls")),
     path("api/documentos/", include("documentos.api.urls")),
     path("api/agendamentos/", include("agendamentos.api.urls")),
+    path("api/", include("operacao.api.urls")),
     path("api/", include("core.api.urls")),
     # Autenticação (django-allauth, modo headless): API JSON para a SPA.
     path("_allauth/", include("allauth.headless.urls")),

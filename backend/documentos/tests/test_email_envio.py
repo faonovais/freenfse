@@ -13,7 +13,7 @@ from documentos.models import ConfiguracaoEmail, EnvioEmail
 from documentos.services import contexto, envio_email
 from documentos.services.email import fabrica
 from documentos.services.email.base import ErroDeEnvio
-from documentos.tests.apoio import configurar_email, emitir
+from documentos.tests.apoio import configurar_email, emitir, xml_bruto
 from documentos.tests.simulados import SEGREDO_DE_TESTE
 from fiscal.models import Certificado
 from fiscal.services import emissao, vencimento
@@ -90,6 +90,22 @@ def test_envio_manual_pelo_smtp_com_variaveis_substituidas_e_os_dois_anexos(
     assert _anexos(mime) == ["NFSe-1.xml", "NFSe-1.pdf"]
     xml = next(p for p in mime.walk() if p.get_filename() == "NFSe-1.xml")
     assert xml.get_payload(decode=True) == bytes(nota.xml_nfse)
+
+
+def test_o_anexo_do_email_e_o_xml_em_claro_mesmo_com_a_coluna_cifrada(
+    empresa_pronta, nova_nota, sefin, provedores
+):
+    configurar_email("smtp")
+    nota = emitir(empresa_pronta, nova_nota)
+    original = sefin.nfses[nota.chave]
+    bruto = xml_bruto(nota)
+    assert bruto.startswith(b"v1:") and original not in bruto  # no banco só há o token
+    pedido = _pedir(nota)
+
+    assert envio_email.processar(pedido.pk) == "enviado"
+
+    xml = next(p for p in _mime(provedores).walk() if p.get_filename() == "NFSe-1.xml")
+    assert xml.get_payload(decode=True) == original
 
 
 @pytest.mark.parametrize(

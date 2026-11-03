@@ -8,6 +8,8 @@ coloca a nota "em envio" e a interface acompanha a situação.
 """
 
 import datetime as dt
+import hashlib
+import logging
 
 from django.db import transaction
 from django.db.models import Q
@@ -194,6 +196,9 @@ class EntradaDeSubstituicao(serializers.Serializer):
 
     codigo_motivo = serializers.CharField(max_length=2)
     motivo = serializers.CharField(required=False, allow_blank=True, max_length=300)
+
+
+logger = logging.getLogger(__name__)
 
 
 def _erro(codigo, detalhe, http=status.HTTP_409_CONFLICT, **extra):
@@ -477,7 +482,18 @@ class NotaViewSet(viewsets.GenericViewSet):
         nfse = self.get_object()
         if not nfse.xml_nfse:
             return _erro("sem_xml", "Esta nota ainda não tem XML (não foi autorizada).")
-        resposta = HttpResponse(bytes(nfse.xml_nfse), content_type="application/xml")
+        xml = bytes(nfse.xml_nfse)
+        # O XML é guardado cifrado (ADR 0008) e o hash é o do XML em claro: se não conferem, o
+        # valor gravado foi trocado ou corrompido, e entregá-lo seria entregar um documento falso.
+        if nfse.hash_xml_nfse and hashlib.sha256(xml).hexdigest() != nfse.hash_xml_nfse:
+            logger.error("XML da NFS-e %s não confere com o hash gravado.", nfse.pk)
+            return _erro(
+                "xml_nao_confere",
+                "O XML guardado desta nota não confere com o registro de integridade. "
+                "Ele não foi entregue; avise o suporte.",
+                http=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+        resposta = HttpResponse(xml, content_type="application/xml")
         resposta["Content-Disposition"] = f'attachment; filename="nfse-{nfse.chave}.xml"'
         return resposta
 

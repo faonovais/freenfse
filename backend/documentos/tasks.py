@@ -82,3 +82,19 @@ def expurgar_exportacoes():
         with schema_context(empresa.schema_name):
             apagados += exportacao.expurgar()
     return apagados
+
+
+@shared_task
+def expurgar_envios_email():
+    """Apaga os registros de envio de e-mail com mais de 5 anos (todas as empresas).
+
+    Só os registros de envio: nenhum documento fiscal é apagado por expurgo automático.
+    """
+    from core.models import Empresa
+    from documentos.services import retencao
+
+    apagados = 0
+    for empresa in Empresa.objects.all():  # a retenção vale também para empresas inativas
+        with schema_context(empresa.schema_name):
+            apagados += retencao.expurgar_envios_de_email()
+    return apagados

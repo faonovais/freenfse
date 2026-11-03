@@ -14,6 +14,8 @@ RUN npm run build
 
 # Série do Nginx fixada; atualizar na revisão semestral.
 FROM nginx:1.30-alpine
-COPY docker/nginx.conf /etc/nginx/conf.d/default.conf
+COPY docker/nginx/http.conf /etc/nginx/conf.d/default.conf
+COPY docker/nginx/locais.conf docker/nginx/proxy.conf /etc/nginx/freenfse/
+COPY docker/erros /usr/share/nginx/erros
 COPY --from=frontend /build/frontend/dist /usr/share/nginx/html
 EXPOSE 80

@@ -28,3 +28,6 @@ FREENFSE_EMISSAO_EM_TRANSACAO_PERMITIDA = True
 
 # Idem para as travas de sessão genéricas (core/travas.py).
 FREENFSE_TRAVA_EM_TRANSACAO_PERMITIDA = True
+
+# O endpoint de saúde não guarda resposta nos testes (um teste específico liga o memo).
+FREENFSE_SAUDE_CACHE_SEGUNDOS = 0
