@@ -61,6 +61,13 @@ class LogAuditoria(models.Model):
         NFSE_CANCELAMENTO_RECUSADO = "nfse_cancelamento_recusado", "Cancelamento de NFS-e recusado"
         NFSE_SUBSTITUICAO_CRIADA = "nfse_substituicao_criada", "Substituição de NFS-e iniciada"
         NFSE_SUBSTITUIDA = "nfse_substituida", "NFS-e substituída"
+        EMAIL_CONFIG_ALTERADA = "email_config_alterada", "Configuração de e-mail alterada"
+        EMAIL_TESTE_ENVIADO = "email_teste_enviado", "E-mail de teste enviado"
+        EMAIL_REENVIADO = "email_reenviado", "E-mail da NFS-e reenviado"
+        DRIVE_CONFIG_ALTERADA = "drive_config_alterada", "Configuração do Google Drive alterada"
+        DRIVE_REENVIADO = "drive_reenviado", "Cópia ao Google Drive refeita"
+        EXPORTACAO_SOLICITADA = "exportacao_solicitada", "Download em lote solicitado"
+        EXPORTACAO_BAIXADA = "exportacao_baixada", "Download em lote baixado"
 
     usuario = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="+"

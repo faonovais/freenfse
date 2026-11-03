@@ -92,9 +92,13 @@ services:
       POSTGRES_PORT: "5432"
       REDIS_URL: redis://redis:6379/0
       EXECUTAR_MIGRACOES: "1"
+      # ZIPs do download em lote: o worker gera, o backend entrega (mesmo volume).
+      FREENFSE_EXPORTACOES_DIR: /var/lib/freenfse/exportacoes
       # O backend só é alcançável pelo Nginx (nenhuma porta publicada), que escreve
       # X-Real-IP com o IP da conexão: seguro para auditoria e bloqueio por IP.
       IP_CABECALHO_CONFIAVEL: X-Real-IP
+    volumes:
+      - exportacoes:/var/lib/freenfse/exportacoes
     depends_on:
       postgres:
         condition: service_healthy
@@ -123,6 +127,9 @@ services:
       POSTGRES_HOST: postgres
       POSTGRES_PORT: "5432"
       REDIS_URL: redis://redis:6379/0
+      FREENFSE_EXPORTACOES_DIR: /var/lib/freenfse/exportacoes
+    volumes:
+      - exportacoes:/var/lib/freenfse/exportacoes
     depends_on:
       backend:
         condition: service_healthy
@@ -166,3 +173,5 @@ services:
 volumes:
   postgres_data:
   redis_data:
+  # ZIPs temporários do download em lote (apagados pelo expurgo periódico do worker).
+  exportacoes:

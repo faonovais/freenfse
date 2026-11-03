@@ -67,6 +67,28 @@ na fila (Celery), **uma por vez por empresa**, e a tela acompanha o resultado.
 O roteiro para validar tudo isto com um certificado real, incluindo o teste de timeout, está em
 [`docs/verificacao-fase-3.md`](docs/verificacao-fase-3.md); as decisões, em [`docs/adr/0004-nucleo-fiscal.md`](docs/adr/0004-nucleo-fiscal.md).
 
+### Documentos: lote, e-mail e Google Drive
+
+Depois de autorizada, a nota pode ser entregue de três formas, todas em segundo plano (Celery) e **sem nunca atrapalhar a
+emissão**:
+
+- **Download em lote** (*Documentos › Download em lote*): ZIP com o XML, o PDF e uma planilha-resumo das notas de um
+  período, competência, situação ou tomador. Tem limite de notas e de tamanho, fica disponível por tempo limitado e só quem
+  pediu consegue baixar. Os ZIPs ficam no volume `exportacoes` do Compose (compartilhado entre backend e worker).
+- **E-mail** (*Configuração fiscal › E-mail da empresa*): SMTP, Gmail (conta de serviço com delegação em todo o domínio) ou
+  Microsoft 365 (Graph), com remetente, modelos de mensagem com variáveis, anexos e cópias por empresa. Envio manual
+  (padrão), automático ao autorizar e aviso de cancelamento. Falhas temporárias são tentadas de novo sozinhas; o histórico
+  fica na nota, com reenvio.
+- **Google Drive** (*Configuração fiscal › Google Drive*): conta de serviço por empresa e modelos de pastas e de nome de
+  arquivo, validados ao salvar (o caminho precisa identificar uma única nota). XML e PDF vão sozinhos na autorização; no
+  cancelamento o PDF é trocado pelo da nota cancelada e o XML do evento é gravado ao lado.
+
+As credenciais (senha SMTP, segredo do Microsoft 365, chaves JSON do Google) ficam **cifradas** no banco e nunca são
+mostradas de volta. Variáveis opcionais do lote: `FREENFSE_LOTE_MAX_NOTAS`, `FREENFSE_LOTE_MAX_MB` e
+`FREENFSE_LOTE_RETENCAO_HORAS` (ver `.env.example`). O roteiro para validar com contas reais (pasta de teste no Drive e caixa
+de e-mail de teste) está em [`docs/verificacao-fase-4.md`](docs/verificacao-fase-4.md); as decisões, em
+[`docs/adr/0005-documentos.md`](docs/adr/0005-documentos.md).
+
 ### Chaves de criptografia
 
 `FREENFSE_CHAVES` guarda as chaves que cifram dados sensíveis (certificados, senhas, tokens). Gere uma com `docker compose run --rm backend python manage.py gerar_chave` e use o formato `1:<chave>`. **Guarde-a fora do servidor e do repositório**: sem ela, o que foi cifrado não pode ser recuperado. A rotação de chaves está descrita no `.env.example`.

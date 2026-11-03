@@ -152,6 +152,14 @@ export default function Layout() {
               </NavLink>
             </>
           )}
+          {temPermissao('documentos.exportar') && (
+            <>
+              <p className="titulo-grupo-menu mt-4 px-3">Documentos</p>
+              <NavLink to="/documentos/exportacoes" className={classeLink}>
+                Download em lote
+              </NavLink>
+            </>
+          )}
           {temPermissao('cadastro.consultar') && (
             <>
               <p className="titulo-grupo-menu mt-4 px-3">Cadastros</p>
@@ -174,6 +182,13 @@ export default function Layout() {
               </NavLink>
               <NavLink to="/fiscal/logo" className={classeLink}>
                 Logo da empresa
+              </NavLink>
+              <p className="titulo-grupo-menu mt-4 px-3">Envio de documentos</p>
+              <NavLink to="/documentos/email" className={classeLink}>
+                E-mail da empresa
+              </NavLink>
+              <NavLink to="/documentos/drive" className={classeLink}>
+                Google Drive
               </NavLink>
             </>
           )}

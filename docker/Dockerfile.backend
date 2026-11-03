@@ -34,8 +34,12 @@ COPY backend backend
 COPY docker/entrypoint-backend.sh /usr/local/bin/entrypoint-backend.sh
 
 # Execução sem privilégios de root.
+# A pasta dos ZIPs do download em lote existe na imagem, com o dono certo: um volume nomeado
+# montado nela herda esse dono na primeira vez (backend e worker o compartilham).
 RUN useradd --system --uid 10001 --no-create-home freenfse \
-    && chmod 0755 /usr/local/bin/entrypoint-backend.sh
+    && chmod 0755 /usr/local/bin/entrypoint-backend.sh \
+    && mkdir -p /var/lib/freenfse/exportacoes \
+    && chown freenfse /var/lib/freenfse/exportacoes
 USER freenfse
 
 WORKDIR /app/backend

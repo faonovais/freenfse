@@ -34,6 +34,9 @@ class Api:
             url, {campo: enviado, **campos}, format="multipart", **self._cabecalho()
         )
 
+    def put(self, url, dados):
+        return self.cliente.put(url, dados, format="json", **self._cabecalho())
+
     def put_arquivo(self, url, arquivo, nome="arquivo.bin", campo="arquivo", **campos):
         """PUT multipart com um arquivo."""
         enviado = SimpleUploadedFile(nome, arquivo)

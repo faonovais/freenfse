@@ -4,12 +4,17 @@ import { notas } from '../../api/fiscal.js'
 import Aviso from '../../components/Aviso.jsx'
 import Campo from '../../components/Campo.jsx'
 import CampoSelecao from '../../components/CampoSelecao.jsx'
+import { useAuth } from '../../contexts/AuthContext.jsx'
 import { useConfirmacao } from '../../contexts/ConfirmacaoContext.jsx'
 import { errosPorCampo, mensagemErro } from '../../utils/erros.js'
 import { formatarData, formatarDataHora } from '../../utils/formatar.js'
+import EnviosDaNota from '../documentos/EnviosDaNota.jsx'
 import { AMBIENTES, SITUACOES, dinheiro, rotuloDaSituacao, seloDaSituacao } from './situacoes.js'
 
 export const INTERVALO_DE_ACOMPANHAMENTO = 3000
+
+// Notas que já têm XML: só elas podem ser enviadas por e-mail ou ao Drive.
+const SITUACOES_COM_DOCUMENTO = ['autorizada', 'cancelada', 'substituida']
 
 const MOTIVOS_DE_CANCELAMENTO = [
   { valor: '1', rotulo: 'Erro na emissão' },
@@ -214,6 +219,7 @@ export default function DetalheNota() {
   const { id } = useParams()
   const navegar = useNavigate()
   const confirmar = useConfirmacao()
+  const { temPermissao } = useAuth()
   const [nota, setNota] = useState(null)
   const [erro, setErro] = useState('')
   const [aviso, setAviso] = useState('')
@@ -414,6 +420,10 @@ export default function DetalheNota() {
           </dl>
         </Bloco>
       </div>
+
+      {temPermissao('documentos.consultar') && SITUACOES_COM_DOCUMENTO.includes(nota.situacao) && (
+        <EnviosDaNota notaId={nota.id} />
+      )}
 
       <Bloco titulo="Eventos">
         {nota.eventos.length === 0 ? (
