@@ -1,20 +1,17 @@
-"""IBS/CBS no modelo de NFS-e (issue #20, ADR 0007): o modelo herda da empresa e pode sobrescrever.
+"""IBS/CBS no modelo de NFS-e (issue #29, ADR 0010): o modelo só ajusta o que herda.
 
-Prioridade, campo a campo (`informar`, `cIndOp`, `indDest`): nota/rascunho > modelo > empresa.
-Campo vazio no modelo = herda o valor da empresa **de quando o rascunho é gerado** (nada é
-copiado para o modelo). O serviço continua só com NBS, CST e cClassTrib.
+Se o grupo vai é decidido pela classificação do serviço. O modelo pode ajustar, para exceções, o
+`cIndOp` (vazio = herda o do **serviço**) e o `indDest` (vazio = herda o da **empresa**), sempre
+**de quando o rascunho é gerado**: nada é copiado para o modelo. Prioridade: nota > modelo > serviço
+(cIndOp) e nota > modelo > empresa (indDest).
 """
 
 import datetime as dt
-import importlib
 from decimal import Decimal
 
 import pytest
-from django.db import connection
-from django.db.migrations.executor import MigrationExecutor
 from django.utils import timezone
 from django_tenants.utils import schema_context
-from lxml import etree
 
 from agendamentos.models import ModeloNfse
 from agendamentos.services import agenda, modelos
@@ -23,15 +20,13 @@ from cadastros.models import Servico
 from core.models import Empresa
 from core.permissoes import Perfil
 from fiscal.models import Nfse, ParametrosFiscais
-from fiscal.services import emissao
-from fiscal.services import nfse as servico_nfse
 from fiscal.tests.apoio import criar_cadastros_de_teste
 
 pytestmark = pytest.mark.django_db
 MODELOS = "/api/agendamentos/modelos/"
 NOTAS = "/api/fiscal/notas/"
-PADRAO, OUTRO, TERCEIRO = "010101", "020202", "030303"
-NS = "{http://www.sped.fazenda.gov.br/nfse}"
+DO_SERVICO, OUTRO, TERCEIRO = "100301", "050101", "050102"  # Anexo VIII: item 01.01 + NBS 1.1502.10
+EXIGE, NAO_EXIGE = "000001", "410009"
 
 
 def origens(nota):
@@ -43,20 +38,25 @@ def responsavel(empresa_pronta):
     return criar_usuario("resp@exemplo.test", empresa_pronta)
 
 
+def _servico(municipal, **campos):
+    base = {
+        "nome": f"Serviço {municipal}",
+        "descricao": "Análise e desenvolvimento de sistemas.",
+        "codigo_tributacao_nacional": "010101",
+        "codigo_tributacao_municipal": municipal,
+        "nbs": "115021000",
+        "aliquota_iss": Decimal("2.00"),
+        "vigencia_inicio": dt.date(2026, 1, 1),
+    }
+    return Servico.objects.create(**{**base, **campos})
+
+
 @pytest.fixture
 def servico_ibs(empresa_pronta):
-    """Serviço com NBS, CST e cClassTrib: a classificação continua só no serviço."""
+    """Serviço cuja classificação EXIGE o grupo de IBS/CBS, com o cIndOp do Anexo VIII."""
     criar_cadastros_de_teste()
-    return Servico.objects.create(
-        nome="Consultoria com IBS/CBS",
-        descricao="Consultoria em gestão agrícola.",
-        codigo_tributacao_nacional="170101",
-        codigo_tributacao_municipal="002",
-        nbs="113011000",
-        cst_ibs_cbs="200",
-        c_class_trib="200003",
-        aliquota_iss=Decimal("2.00"),
-        vigencia_inicio=dt.date(2026, 1, 1),
+    return _servico(
+        "002", cst_ibs_cbs="000", c_class_trib=EXIGE, codigo_indicador_operacao=DO_SERVICO
     )
 
 
@@ -65,14 +65,17 @@ def no_esquema():
     return schema_context(Empresa.objects.exclude(schema_name="public").get().schema_name)
 
 
-def empresa(informar=True, indicador=PADRAO, destinatario=0):
-    """Define o padrão de IBS/CBS da empresa (os parâmetros fiscais)."""
+def empresa(destinatario=0):
+    """Define o padrão de destinatário da empresa (a única coisa de IBS/CBS que ela tem)."""
     with no_esquema():
-        ParametrosFiscais.objects.update(
-            ibs_cbs_informar=informar,
-            ibs_cbs_indicador_operacao=indicador,
-            ibs_cbs_indicador_destinatario=destinatario,
-        )
+        ParametrosFiscais.objects.update(ibs_cbs_indicador_destinatario=destinatario)
+
+
+def servico_muda(servico, **campos):
+    with no_esquema():
+        for campo, valor in campos.items():
+            setattr(servico, campo, valor)
+        servico.save()
 
 
 def hoje():
@@ -90,17 +93,10 @@ def recarregar(objeto):
     return objeto
 
 
-def emitir(empresa_, nota):
-    emissao.solicitar_emissao(nota, usuario=None, empresa=empresa_)
-    emissao.executar_emissao(empresa_, nota.pk)
-    nota.refresh_from_db()
-    return nota
+# -- as origens e a prioridade --------------------------------------------------------------
 
 
-# -- as três origens e a prioridade ---------------------------------------------------------
-
-
-def test_modelo_que_herda_leva_tudo_da_empresa_e_o_rascunho_diz_isso(
+def test_modelo_que_herda_leva_o_cindop_do_servico_e_o_destinatario_da_empresa(
     empresa_pronta, responsavel, servico_ibs
 ):
     empresa(destinatario=1)
@@ -108,35 +104,30 @@ def test_modelo_que_herda_leva_tudo_da_empresa_e_o_rascunho_diz_isso(
 
     nota = gerar(modelo, responsavel)
 
-    assert nota.complementos["ibs_cbs"]["codigo_indicador_operacao"] == PADRAO
+    assert nota.complementos["ibs_cbs"]["codigo_indicador_operacao"] == DO_SERVICO
     assert nota.complementos["ibs_cbs"]["indicador_destinatario"] == 1
     assert origens(nota) == {
-        "informar": "empresa",
-        "codigo_indicador_operacao": "empresa",
+        "codigo_indicador_operacao": "servico",
         "indicador_destinatario": "empresa",
     }
 
 
-def test_modelo_com_valor_proprio_vale_mais_que_a_empresa_so_nos_campos_dele(
+def test_modelo_com_valor_proprio_vale_mais_que_o_servico_so_nos_campos_dele(
     empresa_pronta, responsavel, servico_ibs
 ):
     empresa(destinatario=0)
-    modelo = criar_modelo(
-        servico=servico_ibs, ibs_cbs_indicador_operacao=OUTRO, ibs_cbs_indicador_destinatario=1
-    )
+    modelo = criar_modelo(servico=servico_ibs, ibs_cbs_indicador_operacao=OUTRO)
 
     nota = gerar(modelo, responsavel)
 
-    grupo = nota.complementos["ibs_cbs"]
-    assert (grupo["codigo_indicador_operacao"], grupo["indicador_destinatario"]) == (OUTRO, 1)
+    assert nota.complementos["ibs_cbs"]["codigo_indicador_operacao"] == OUTRO
     assert origens(nota) == {
-        "informar": "modelo",
         "codigo_indicador_operacao": "modelo",
-        "indicador_destinatario": "modelo",
+        "indicador_destinatario": "empresa",
     }
 
 
-def test_so_o_destinatario_no_modelo_mantem_o_indicador_e_a_opcao_da_empresa(
+def test_so_o_destinatario_no_modelo_mantem_o_cindop_do_servico(
     empresa_pronta, responsavel, servico_ibs
 ):
     empresa()
@@ -144,156 +135,103 @@ def test_so_o_destinatario_no_modelo_mantem_o_indicador_e_a_opcao_da_empresa(
 
     nota = gerar(modelo, responsavel)
 
+    assert nota.complementos["ibs_cbs"]["codigo_indicador_operacao"] == DO_SERVICO
     assert nota.complementos["ibs_cbs"]["indicador_destinatario"] == 1
     assert origens(nota) == {
-        "informar": "empresa",
-        "codigo_indicador_operacao": "empresa",
+        "codigo_indicador_operacao": "servico",
         "indicador_destinatario": "modelo",
     }
 
 
-def test_modelo_que_nao_informa_manda_o_rascunho_sem_o_grupo_e_diz_o_motivo(
-    empresa_pronta, responsavel, servico_ibs
-):
-    empresa()
-    modelo = criar_modelo(servico=servico_ibs, ibs_cbs_informar=False)
-
-    nota = gerar(modelo, responsavel)
-
-    assert nota.complementos["ibs_cbs"] is None
-    # A conferência do rascunho diz por quê, com a origem da decisão.
-    preparo = servico_nfse.preparar(
-        {"tomador": nota.tomador_ref_id, "servico": servico_ibs.pk, "competencia": nota.competencia,
-         "valores": nota.valores, "ibs_cbs_modelo": nota.complementos["ibs_cbs_modelo"]},
-        hoje=hoje(),
-    )  # fmt: skip
-    assert preparo.ibs_cbs_dps["motivo"] == "O modelo de NFS-e não informa o IBS/CBS."
-    assert preparo.ibs_cbs_dps["origens"]["informar"] == "modelo"
-
-
-def test_modelo_pode_mandar_informar_mesmo_com_a_opcao_da_empresa_desligada(
-    empresa_pronta, responsavel, servico_ibs
-):
-    empresa(informar=False)  # o indicador da empresa continua guardado
-    modelo = criar_modelo(servico=servico_ibs, ibs_cbs_informar=True)
-
-    nota = gerar(modelo, responsavel)
-
-    assert nota.complementos["ibs_cbs"]["codigo_indicador_operacao"] == PADRAO
-    assert origens(nota)["informar"] == "modelo"
-    assert origens(nota)["codigo_indicador_operacao"] == "empresa"
-
-
-def test_modelo_que_manda_informar_sem_indicador_em_lugar_nenhum_nao_gera_rascunho(
-    empresa_pronta, responsavel, servico_ibs
-):
-    empresa(informar=False, indicador="")
-    modelo = criar_modelo(servico=servico_ibs, ibs_cbs_informar=True)
-
-    with pytest.raises(servico_nfse.ErroDeNota) as erro:
-        gerar(modelo, responsavel)
-
-    assert "do modelo ou dos parâmetros fiscais da empresa" in erro.value.erros["ibs_cbs"]
-    assert Nfse.objects.count() == 0
-    # E o modelo ativo já avisa ao ser salvo, não só na hora de gerar.
-    assert "ibs_cbs" in modelos.validar_modelo(modelo, hoje=hoje())
-
-
-def test_modelo_manda_informar_e_o_servico_sem_classificacao_e_recusado(
+def test_modelo_de_servico_que_nao_exige_o_grupo_gera_rascunho_sem_grupo(
     empresa_pronta, responsavel
 ):
-    empresa()
-    modelo = criar_modelo(ibs_cbs_informar=True)  # o serviço padrão dos testes não tem NBS/CST
+    criar_cadastros_de_teste()
+    servico = _servico("003", cst_ibs_cbs="410", c_class_trib=NAO_EXIGE)
+    modelo = criar_modelo(servico=servico, ibs_cbs_indicador_operacao=OUTRO)
 
-    with pytest.raises(servico_nfse.ErroDeNota) as erro:
-        gerar(modelo, responsavel)
+    nota = gerar(modelo, responsavel)
 
-    assert "NBS, CST e classificação do IBS/CBS" in erro.value.erros["ibs_cbs"]
+    assert nota.complementos["ibs_cbs"] is None  # o ajuste do modelo não vale sem tributação
+
+
+def test_servico_que_exige_o_grupo_sem_cindop_em_lugar_nenhum_nao_gera_rascunho(
+    empresa_pronta, responsavel, servico_ibs
+):
+    servico_muda(servico_ibs, codigo_indicador_operacao="")
+    modelo = criar_modelo(servico=servico_ibs)
+
+    problemas = modelos.erros_de_preparo(modelo, hoje=hoje())
+
+    assert "E0860" in problemas["ibs_cbs"]
+
+
+def test_o_ajuste_do_modelo_supre_o_cindop_que_o_servico_nao_tem(
+    empresa_pronta, responsavel, servico_ibs
+):
+    servico_muda(servico_ibs, codigo_indicador_operacao="")
+    modelo = criar_modelo(servico=servico_ibs, ibs_cbs_indicador_operacao=OUTRO)
+
+    nota = gerar(modelo, responsavel)
+
+    assert nota.complementos["ibs_cbs"]["codigo_indicador_operacao"] == OUTRO
 
 
 # -- herda de verdade: sem cópia ------------------------------------------------------------
 
 
-def test_campo_vazio_herda_o_valor_da_empresa_de_agora_e_nada_e_copiado_para_o_modelo(
+def test_campo_vazio_herda_o_valor_de_agora_e_nada_e_copiado_para_o_modelo(
     empresa_pronta, responsavel, servico_ibs
 ):
-    empresa(indicador=PADRAO)
     modelo = criar_modelo(servico=servico_ibs)
-    primeira = gerar(modelo, responsavel)
 
-    empresa(indicador=TERCEIRO, destinatario=1)  # a empresa muda DEPOIS de o modelo existir
-    segunda = gerar(modelo, responsavel)
+    servico_muda(servico_ibs, codigo_indicador_operacao=DO_SERVICO)
+    antes = gerar(modelo, responsavel)
+    servico_muda(servico_ibs, codigo_indicador_operacao=TERCEIRO)
+    depois = gerar(modelo, responsavel)
 
-    assert primeira.complementos["ibs_cbs"]["codigo_indicador_operacao"] == PADRAO
-    assert segunda.complementos["ibs_cbs"]["codigo_indicador_operacao"] == TERCEIRO
-    assert segunda.complementos["ibs_cbs"]["indicador_destinatario"] == 1
-    modelo.refresh_from_db()  # o modelo continua vazio: herdar não é copiar
-    assert modelo.padroes_de_ibs_cbs() == {
-        "informar": None,
+    assert antes.complementos["ibs_cbs"]["codigo_indicador_operacao"] == DO_SERVICO
+    assert depois.complementos["ibs_cbs"]["codigo_indicador_operacao"] == TERCEIRO
+    assert recarregar(modelo).padroes_de_ibs_cbs() == {
         "codigo_indicador_operacao": "",
         "indicador_destinatario": None,
     }
 
 
 def test_mudar_a_empresa_altera_os_rascunhos_futuros_de_quem_herda_mas_nao_o_resto(
-    empresa_pronta, responsavel, servico_ibs, sefin
+    empresa_pronta, responsavel, servico_ibs
 ):
-    empresa(indicador=PADRAO)
     herda = criar_modelo(nome="Herda", servico=servico_ibs)
-    proprio = criar_modelo(nome="Próprio", servico=servico_ibs, ibs_cbs_indicador_operacao=OUTRO)
-    emitida = emitir(empresa_pronta, gerar(herda, responsavel))  # nota já emitida
-    rascunho_antigo = gerar(herda, responsavel)  # rascunho que já existia
-    rascunho_proprio = gerar(proprio, responsavel)
+    proprio = criar_modelo(nome="Próprio", servico=servico_ibs, ibs_cbs_indicador_destinatario=1)
 
-    empresa(indicador=TERCEIRO)  # a empresa muda o padrão
+    empresa(destinatario=0)
+    antes = gerar(herda, responsavel)
+    empresa(destinatario=1)
+    herdado_depois = gerar(herda, responsavel)
+    proprio_depois = gerar(proprio, responsavel)
 
-    futuro_que_herda = gerar(herda, responsavel)
-    futuro_proprio = gerar(proprio, responsavel)
-    for nota in (emitida, rascunho_antigo, rascunho_proprio):
-        nota.refresh_from_db()
-    cind = lambda nota: nota.complementos["ibs_cbs"]["codigo_indicador_operacao"]  # noqa: E731
-    assert cind(futuro_que_herda) == TERCEIRO  # rascunhos FUTUROS de quem herda mudam
-    assert cind(futuro_proprio) == OUTRO  # o modelo com valor próprio não muda
-    assert cind(rascunho_proprio) == OUTRO
-    assert cind(rascunho_antigo) == PADRAO  # rascunho já criado é uma cópia: não muda sozinho
-    assert cind(emitida) == PADRAO  # nota emitida nunca muda
-    raiz = etree.fromstring(bytes(emitida.xml_dps))
-    assert raiz.find(f".//{NS}IBSCBS").findtext(f"{NS}cIndOp") == PADRAO
+    assert antes.complementos["ibs_cbs"]["indicador_destinatario"] == 0  # o rascunho já nascido
+    assert herdado_depois.complementos["ibs_cbs"]["indicador_destinatario"] == 1
+    assert proprio_depois.complementos["ibs_cbs"]["indicador_destinatario"] == 1
+    assert origens(herdado_depois)["indicador_destinatario"] == "empresa"
+    assert origens(proprio_depois)["indicador_destinatario"] == "modelo"
 
 
 def test_rascunho_guarda_o_que_o_modelo_definia_e_mudar_o_modelo_depois_nao_o_altera(
     empresa_pronta, responsavel, servico_ibs
 ):
-    empresa()
     modelo = criar_modelo(servico=servico_ibs, ibs_cbs_indicador_operacao=OUTRO)
     nota = gerar(modelo, responsavel)
 
-    ModeloNfse.objects.filter(pk=modelo.pk).update(ibs_cbs_indicador_operacao=TERCEIRO)
-    nota.refresh_from_db()
+    with no_esquema():
+        ModeloNfse.objects.filter(pk=modelo.pk).update(ibs_cbs_indicador_operacao=TERCEIRO)
 
-    assert nota.complementos["ibs_cbs_modelo"] == {
-        "informar": None,
-        "codigo_indicador_operacao": OUTRO,
-        "indicador_destinatario": None,
-    }
+    recarregar(nota)
     assert nota.complementos["ibs_cbs"]["codigo_indicador_operacao"] == OUTRO
+    assert nota.complementos["ibs_cbs_modelo"]["codigo_indicador_operacao"] == OUTRO
 
 
-# -- o rascunho do agendamento continua ajustável -------------------------------------------
-
-
-def test_rascunho_gerado_pelo_agendamento_leva_o_valor_efetivo(
-    empresa_pronta, responsavel, servico_ibs
-):
-    empresa()
-    modelo = criar_modelo(servico=servico_ibs, ibs_cbs_indicador_operacao=OUTRO)
-    criar_agendamento(modelo, responsavel, agora=utc("2026-11-01T12:00"))
-
-    agenda.despachar(utc("2026-11-05T11:01"), empresa=empresa_pronta)
-
-    nota = Nfse.objects.get()
-    assert nota.complementos["ibs_cbs"]["codigo_indicador_operacao"] == OUTRO
-    assert origens(nota)["codigo_indicador_operacao"] == "modelo"
+# -- o rascunho do agendamento continua ajustável ---------------------------------------------
 
 
 @pytest.fixture
@@ -312,12 +250,24 @@ def corpo_da_nota(nota, **extra):
     }
 
 
+def test_rascunho_gerado_pelo_agendamento_leva_o_valor_efetivo(
+    empresa_pronta, responsavel, servico_ibs
+):
+    modelo = criar_modelo(servico=servico_ibs, ibs_cbs_indicador_operacao=OUTRO)
+    criar_agendamento(modelo, responsavel, agora=utc("2026-11-01T12:00"))
+
+    agenda.despachar(utc("2026-11-05T11:01"), empresa=empresa_pronta)
+
+    nota = Nfse.objects.get()
+    assert nota.complementos["ibs_cbs"]["codigo_indicador_operacao"] == OUTRO
+    assert origens(nota)["codigo_indicador_operacao"] == "modelo"
+
+
 def test_rascunho_do_agendamento_pode_ser_ajustado_antes_da_aprovacao(
     empresa_pronta, responsavel, servico_ibs, emissor
 ):
-    empresa()
     modelo = criar_modelo(servico=servico_ibs, ibs_cbs_indicador_operacao=OUTRO)
-    nota = gerar(modelo, responsavel)  # o mesmo caminho que o agendamento usa para gerar o rascunho
+    nota = gerar(modelo, responsavel)
 
     ajustada = emissor.patch(
         f"{NOTAS}{nota.pk}/",
@@ -331,18 +281,12 @@ def test_rascunho_do_agendamento_pode_ser_ajustado_antes_da_aprovacao(
     grupo = nota.complementos["ibs_cbs"]
     assert (grupo["codigo_indicador_operacao"], grupo["indicador_destinatario"]) == (TERCEIRO, 1)
     assert grupo["origens"]["codigo_indicador_operacao"] == "nota"  # a nota passa à frente
-    assert nota.complementos["ibs_cbs_nota"] == {
-        "codigo_indicador_operacao": TERCEIRO,
-        "indicador_destinatario": 1,
-    }
-    # O que o modelo definia segue guardado: dá para "voltar a herdar" no rascunho.
     assert nota.complementos["ibs_cbs_modelo"]["codigo_indicador_operacao"] == OUTRO
 
 
-def test_voltar_a_herdar_no_rascunho_restaura_o_modelo_e_depois_a_empresa(
+def test_voltar_a_herdar_no_rascunho_restaura_o_modelo(
     empresa_pronta, responsavel, servico_ibs, emissor
 ):
-    empresa()
     modelo = criar_modelo(servico=servico_ibs, ibs_cbs_indicador_operacao=OUTRO)
     nota = gerar(modelo, responsavel)
     emissor.patch(
@@ -360,7 +304,6 @@ def test_voltar_a_herdar_no_rascunho_restaura_o_modelo_e_depois_a_empresa(
 def test_editar_o_rascunho_sem_mexer_no_ibs_cbs_mantem_o_que_o_modelo_definia(
     empresa_pronta, responsavel, servico_ibs, emissor
 ):
-    empresa()
     modelo = criar_modelo(servico=servico_ibs, ibs_cbs_indicador_destinatario=1)
     nota = gerar(modelo, responsavel)
 
@@ -374,67 +317,42 @@ def test_editar_o_rascunho_sem_mexer_no_ibs_cbs_mantem_o_que_o_modelo_definia(
     assert origens(nota)["indicador_destinatario"] == "modelo"
 
 
-def test_a_nota_pode_dispensar_o_grupo_que_o_modelo_manda_informar(
-    empresa_pronta, responsavel, servico_ibs, emissor
-):
-    empresa()
-    modelo = criar_modelo(servico=servico_ibs, ibs_cbs_informar=True)
-    nota = gerar(modelo, responsavel)
-    assert nota.complementos["ibs_cbs"] is not None
-
-    emissor.patch(f"{NOTAS}{nota.pk}/", corpo_da_nota(nota, ibs_cbs={"informar": False}))
-
-    recarregar(nota)
-    assert nota.complementos["ibs_cbs"] is None
-    assert nota.complementos["ibs_cbs_nota"] == {"informar": False}
-
-
 # -- a prévia mostra o valor e a origem -----------------------------------------------------
 
 
 def test_previa_do_rascunho_mostra_cada_campo_com_a_origem(
     empresa_pronta, responsavel, servico_ibs, emissor
 ):
-    empresa(indicador=PADRAO, destinatario=0)
     modelo = criar_modelo(servico=servico_ibs, ibs_cbs_indicador_operacao=OUTRO)
     nota = gerar(modelo, responsavel)
 
-    previa = emissor.post(
-        f"{NOTAS}previa/",
-        {**corpo_da_nota(nota), "rascunho": nota.pk, "ibs_cbs": {"indicador_destinatario": 1}},
-    ).json()["ibs_cbs"]
+    previa = emissor.post(f"{NOTAS}previa/", corpo_da_nota(nota, rascunho=nota.pk)).json()
 
-    assert previa["na_dps"] is True
-    assert (previa["codigo_indicador_operacao"], previa["indicador_destinatario"]) == (OUTRO, 1)
-    assert previa["origens"] == {
-        "informar": "modelo",
-        "codigo_indicador_operacao": "modelo",  # do modelo do rascunho
-        "indicador_destinatario": "nota",  # ajustado na conferência
-    }
-
-
-def test_previa_de_nota_nova_sem_modelo_mostra_a_empresa_como_origem(
-    empresa_pronta, servico_ibs, emissor
-):
-    empresa()
-    tomador, _ = criar_cadastros_de_teste()
-    corpo = {
-        "tomador": tomador.pk,
-        "servico": servico_ibs.pk,
-        "competencia": "2026-10-01",
-        "valores": {"servico": "100.00"},
-    }
-
-    previa = emissor.post(f"{NOTAS}previa/", corpo).json()["ibs_cbs"]
-
-    assert previa["origens"] == {
-        "informar": "empresa",
-        "codigo_indicador_operacao": "empresa",
+    ibs = previa["ibs_cbs"]
+    assert (ibs["na_dps"], ibs["codigo_indicador_operacao"]) == (True, OUTRO)
+    assert ibs["origens"] == {
+        "codigo_indicador_operacao": "modelo",
         "indicador_destinatario": "empresa",
     }
 
 
-# -- a API do modelo: valor próprio, herdado, efetivo e "voltar a herdar" -------------------
+def test_previa_de_nota_nova_sem_modelo_mostra_o_servico_como_origem(
+    empresa_pronta, servico_ibs, emissor
+):
+    tomador, _ = criar_cadastros_de_teste()
+    corpo = {
+        "tomador": tomador.pk,
+        "servico": servico_ibs.pk,
+        "competencia": hoje().isoformat(),
+        "valores": {"servico": "100.00"},
+    }
+
+    ibs = emissor.post(f"{NOTAS}previa/", corpo).json()["ibs_cbs"]
+
+    assert ibs["origens"]["codigo_indicador_operacao"] == "servico"
+
+
+# -- a API do modelo: valor próprio, herdado, efetivo e "voltar a herdar" ---------------------
 
 
 @pytest.fixture
@@ -454,78 +372,72 @@ def modelo_api(empresa_pronta, emissor, servico_ibs):
     return resposta.json()
 
 
-def test_api_do_modelo_mostra_o_proprio_o_herdado_da_empresa_e_o_efetivo_com_a_origem(
+def test_api_do_modelo_mostra_o_proprio_o_herdado_e_o_efetivo_com_a_origem(
     empresa_pronta, emissor, modelo_api
 ):
-    empresa(indicador=PADRAO, destinatario=0)
+    empresa(destinatario=0)
 
     corpo = emissor.get(f"{MODELOS}{modelo_api['id']}/").json()
 
-    assert corpo["ibs_cbs_informar"] is None  # o modelo não define: herda
+    assert "ibs_cbs_informar" not in corpo
     assert corpo["ibs_cbs_indicador_operacao"] == ""
     assert corpo["ibs_cbs_indicador_destinatario"] is None
     assert corpo["ibs_cbs_herdado"] == {
-        "informar": True,
-        "codigo_indicador_operacao": PADRAO,
         "indicador_destinatario": 0,
+        "codigo_indicador_operacao": DO_SERVICO,
     }
-    assert corpo["ibs_cbs_efetivo"]["codigo_indicador_operacao"] == PADRAO
+    assert corpo["ibs_cbs_efetivo"]["codigo_indicador_operacao"] == DO_SERVICO
     assert corpo["ibs_cbs_efetivo"]["origens"] == {
-        "informar": "empresa",
-        "codigo_indicador_operacao": "empresa",
+        "codigo_indicador_operacao": "servico",
         "indicador_destinatario": "empresa",
     }
 
 
 def test_api_sobrescrever_e_voltar_a_herdar_campo_a_campo(empresa_pronta, emissor, modelo_api):
-    empresa(indicador=PADRAO)
     url = f"{MODELOS}{modelo_api['id']}/"
 
     sobrescrito = emissor.patch(
-        url,
-        {
-            "ibs_cbs_informar": True,
-            "ibs_cbs_indicador_operacao": "020.202",  # só os dígitos valem
-            "ibs_cbs_indicador_destinatario": 1,
-        },
-    ).json()
+        url, {"ibs_cbs_indicador_operacao": "050.101", "ibs_cbs_indicador_destinatario": 1}
+    ).json()  # só os dígitos valem
     assert sobrescrito["ibs_cbs_indicador_operacao"] == OUTRO
     assert sobrescrito["ibs_cbs_efetivo"]["origens"] == {
-        "informar": "modelo",
         "codigo_indicador_operacao": "modelo",
         "indicador_destinatario": "modelo",
     }
 
     # "Voltar a herdar": nulo/vazio por campo. Um de cada vez, para provar que são independentes.
     sem_indicador = emissor.patch(url, {"ibs_cbs_indicador_operacao": ""}).json()
-    assert sem_indicador["ibs_cbs_efetivo"]["origens"]["codigo_indicador_operacao"] == "empresa"
-    assert sem_indicador["ibs_cbs_efetivo"]["origens"]["indicador_destinatario"] == "modelo"
+    assert sem_indicador["ibs_cbs_efetivo"]["origens"] == {
+        "codigo_indicador_operacao": "servico",
+        "indicador_destinatario": "modelo",
+    }
     sem_destinatario = emissor.patch(url, {"ibs_cbs_indicador_destinatario": None}).json()
     assert sem_destinatario["ibs_cbs_efetivo"]["origens"]["indicador_destinatario"] == "empresa"
-    sem_opcao = emissor.patch(url, {"ibs_cbs_informar": None}).json()
-    assert sem_opcao["ibs_cbs_efetivo"]["origens"] == {
-        "informar": "empresa",
-        "codigo_indicador_operacao": "empresa",
-        "indicador_destinatario": "empresa",
-    }
     with no_esquema():
         modelo = ModeloNfse.objects.get(pk=modelo_api["id"])
     assert modelo.padroes_de_ibs_cbs() == {
-        "informar": None,
         "codigo_indicador_operacao": "",
         "indicador_destinatario": None,
     }
 
 
-def test_api_o_efetivo_do_modelo_acompanha_a_empresa_na_hora(empresa_pronta, emissor, modelo_api):
+def test_api_o_efetivo_do_modelo_acompanha_o_servico_na_hora(
+    empresa_pronta, emissor, modelo_api, servico_ibs
+):
     url = f"{MODELOS}{modelo_api['id']}/"
-    empresa(indicador=PADRAO)
     antes = emissor.get(url).json()["ibs_cbs_efetivo"]["codigo_indicador_operacao"]
 
-    empresa(indicador=TERCEIRO)
+    servico_muda(servico_ibs, codigo_indicador_operacao=TERCEIRO)
     depois = emissor.get(url).json()["ibs_cbs_efetivo"]["codigo_indicador_operacao"]
 
-    assert (antes, depois) == (PADRAO, TERCEIRO)
+    assert (antes, depois) == (DO_SERVICO, TERCEIRO)
+
+
+def test_api_ignora_o_campo_informar_de_clientes_defasados(empresa_pronta, emissor, modelo_api):
+    resposta = emissor.patch(f"{MODELOS}{modelo_api['id']}/", {"ibs_cbs_informar": False})
+
+    assert resposta.status_code == 200, resposta.json()
+    assert "ibs_cbs_informar" not in resposta.json()
 
 
 @pytest.mark.parametrize(
@@ -545,62 +457,25 @@ def test_api_recusa_indicador_e_destinatario_invalidos_no_modelo(
     assert trecho in str(resposta.json()[campo])
 
 
-def test_api_opcoes_traz_o_padrao_de_ibs_cbs_da_empresa_de_agora(empresa_pronta, emissor):
-    empresa(informar=True, indicador=TERCEIRO, destinatario=1)
+def test_api_opcoes_traz_so_o_destinatario_da_empresa_de_agora(empresa_pronta, emissor):
+    empresa(destinatario=1)
 
     opcoes = emissor.get("/api/agendamentos/opcoes/").json()
 
-    assert opcoes["ibs_cbs_empresa"] == {
-        "informar": True,
-        "codigo_indicador_operacao": TERCEIRO,
-        "indicador_destinatario": 1,
-    }
+    assert opcoes["ibs_cbs_empresa"] == {"indicador_destinatario": 1}
 
 
 def test_api_conferir_o_modelo_mostra_o_ibs_cbs_com_a_origem_de_cada_campo(
     empresa_pronta, emissor, modelo_api
 ):
-    empresa(indicador=PADRAO, destinatario=0)
     emissor.patch(f"{MODELOS}{modelo_api['id']}/", {"ibs_cbs_indicador_destinatario": 1})
 
     conferencia = emissor.post(f"{MODELOS}{modelo_api['id']}/previa/").json()
 
     assert conferencia["ok"] is True
     ibs = conferencia["ibs_cbs"]
-    assert (ibs["codigo_indicador_operacao"], ibs["indicador_destinatario"]) == (PADRAO, 1)
+    assert (ibs["codigo_indicador_operacao"], ibs["indicador_destinatario"]) == (DO_SERVICO, 1)
     assert ibs["origens"] == {
-        "informar": "empresa",
-        "codigo_indicador_operacao": "empresa",
+        "codigo_indicador_operacao": "servico",
         "indicador_destinatario": "modelo",
     }
-
-
-# -- migração: modelos existentes ficam "herda da empresa" ----------------------------------
-
-
-def test_modelos_que_ja_existiam_ficam_herdando_da_empresa_depois_da_migracao(empresa_a):
-    antes = [("agendamentos", "0001_fase_5")]
-    depois = [("agendamentos", "0002_ibs_cbs_no_modelo")]
-    migracao = importlib.import_module("agendamentos.migrations.0002_ibs_cbs_no_modelo").Migration
-    assert {type(op).__name__ for op in migracao.operations} == {"AddField"}  # só acrescenta
-
-    with schema_context(empresa_a.schema_name):
-        executor = MigrationExecutor(connection)
-        executor.migrate(antes)
-        antigo = MigrationExecutor(connection).loader.project_state(antes).apps
-        existente = antigo.get_model("agendamentos", "ModeloNfse").objects.create(
-            nome="Modelo de antes", valores={"servico": "100.00"}
-        )
-
-        # Restrições diferidas da linha inserida precisam valer antes do ALTER TABLE da migração.
-        connection.cursor().execute("SET CONSTRAINTS ALL IMMEDIATE")
-        executor = MigrationExecutor(connection)
-        executor.migrate(depois)
-
-        modelo = ModeloNfse.objects.get(pk=existente.pk)
-        assert modelo.nome == "Modelo de antes" and modelo.valores == {"servico": "100.00"}
-        assert modelo.padroes_de_ibs_cbs() == {
-            "informar": None,
-            "codigo_indicador_operacao": "",
-            "indicador_destinatario": None,
-        }

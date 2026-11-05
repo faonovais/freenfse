@@ -16,6 +16,7 @@ from cadastros.services import copia, servicos
 from core.api.permissions import PermissaoPorOperacao, QualquerVinculado
 from core.models import Empresa, Municipio
 from core.municipios import normalizar_nome
+from fiscal.referencias import classificacao, indop
 
 from .serializers import (
     PerfilPessoaSerializer,
@@ -111,6 +112,7 @@ class ServicoViewSet(
         "list": "cadastro.consultar",
         "retrieve": "cadastro.consultar",
         "vigente": "cadastro.consultar",
+        "referencias_ibs_cbs": "cadastro.consultar",
         "create": "cadastro.editar",
         "update": "cadastro.editar",
         "partial_update": "cadastro.editar",
@@ -180,6 +182,75 @@ class ServicoViewSet(
                 status=status.HTTP_404_NOT_FOUND,
             )
         return Response(self.get_serializer(servico).data)
+
+    @action(detail=False, methods=["get"], url_path="referencias-ibs-cbs")
+    def referencias_ibs_cbs(self, request):
+        """Apoio ao cadastro: sugestão de cIndOp (Anexo VIII) e situação da classificação.
+
+        `?codigo_nacional=&nbs=&c_class_trib=&data=` — todos opcionais. Só leitura de tabelas
+        oficiais versionadas; nada é gravado nem consultado na rede.
+        """
+        params = request.query_params
+        try:
+            data = dt.date.fromisoformat(params.get("data") or timezone.localdate().isoformat())
+        except ValueError:
+            raise serializers.ValidationError(
+                {"data": "Use a data no formato AAAA-MM-DD."}
+            ) from None
+        nacional = "".join(c for c in params.get("codigo_nacional", "") if c.isdigit())
+        sugestao = indop.sugerir(nacional, params.get("nbs", "")) if len(nacional) == 6 else None
+        return Response(
+            {
+                "indop": sugestao
+                and {
+                    **sugestao,
+                    "locais": {o: indop.local_de_incidencia_do_ibs(o) for o in sugestao["opcoes"]},
+                    "classes_possiveis": indop.classes_possiveis(nacional, params.get("nbs", "")),
+                },
+                "classificacao": _classificacao_para_a_tela(params.get("c_class_trib", ""), data),
+            }
+        )
+
+
+def _classificacao_para_a_tela(c_class_trib, data):
+    """Situação oficial da classificação numa data, em linguagem para a tela (ou `None`)."""
+    codigo = "".join(c for c in c_class_trib if c.isdigit())
+    if not codigo:
+        return None
+    todas = classificacao.todas()
+    oficial = classificacao.consultar(codigo, data)
+    if oficial is None:
+        return {
+            "codigo": codigo,
+            "consta": codigo in todas,
+            "vigente": False,
+            "mensagem": (
+                f"A classificação {codigo} não vigora em {data:%d/%m/%Y} na tabela oficial."
+                if codigo in todas
+                else f"A classificação {codigo} não consta da tabela oficial da calculadora."
+            ),
+        }
+    if not oficial.aceita_nfse:
+        mensagem = f"A classificação {codigo} não vale para NFS-e (regra E0958 da Sefin)."
+    elif oficial.exige_grupo_ibs_cbs:
+        mensagem = (
+            f"A classificação {codigo} exige o grupo de IBS/CBS: a nota precisa do indicador da "
+            "operação (cIndOp)."
+        )
+    else:
+        mensagem = (
+            f"A classificação {codigo} não tem tributação de IBS/CBS: a nota sai sem o grupo e "
+            "sem o indicador da operação."
+        )
+    return {
+        "codigo": codigo,
+        "consta": True,
+        "vigente": True,
+        "descricao": oficial.descricao,
+        "aceita_nfse": oficial.aceita_nfse,
+        "exige_grupo_ibs_cbs": oficial.exige_grupo_ibs_cbs,
+        "mensagem": mensagem,
+    }
 
 
 def _sem_acesso_a_origem():

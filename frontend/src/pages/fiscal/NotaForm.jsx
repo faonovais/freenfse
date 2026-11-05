@@ -27,7 +27,6 @@ const vazio = () => ({
   deducao_percentual: '',
   informacoes: '',
   percentual_simples: '',
-  ibs_nao_informar: false,
   indicador_operacao: '',
   indicador_destinatario: '', // vazio = herda do modelo (se a nota veio de um) ou da empresa
 })
@@ -47,16 +46,14 @@ function formularioDe(nota) {
     informacoes: complementos.informacoes_complementares ?? '',
     percentual_simples: complementos.percentual_total_tributos_simples ?? '',
     // Só o que a PRÓPRIA nota ajustou volta preenchido; o resto continua herdando do modelo ou da empresa.
-    ibs_nao_informar: complementos.ibs_cbs_nota?.informar === false,
     indicador_operacao: complementos.ibs_cbs_nota?.codigo_indicador_operacao ?? '',
     indicador_destinatario:
       complementos.ibs_cbs_nota?.indicador_destinatario == null ? '' : String(complementos.ibs_cbs_nota.indicador_destinatario),
   }
 }
 
-/** Ajuste pontual de IBS/CBS: `null` = nada a ajustar (vale o padrão da empresa). */
+/** Ajuste pontual de IBS/CBS (cIndOp e indDest): `null` = nada a ajustar (valem o serviço e a empresa). */
 function ibsCbsDe(f) {
-  if (f.ibs_nao_informar) return { informar: false }
   const ajuste = {}
   if (f.indicador_operacao) ajuste.codigo_indicador_operacao = f.indicador_operacao
   if (f.indicador_destinatario !== '') ajuste.indicador_destinatario = Number(f.indicador_destinatario)
@@ -92,7 +89,7 @@ function Linha({ rotulo, children }) {
   )
 }
 
-const ROTULO_DA_ORIGEM = { nota: 'ajuste desta nota', modelo: 'do modelo', empresa: 'padrão da empresa' }
+const ROTULO_DA_ORIGEM = { nota: 'ajuste desta nota', modelo: 'do modelo', servico: 'do serviço', empresa: 'padrão da empresa' }
 
 /** O grupo de IBS/CBS como vai na DPS: cada valor com a sua origem (nota, modelo ou empresa) ou por que não vai. */
 function IbsCbsNaDps({ ibs, servico }) {
@@ -106,6 +103,29 @@ function IbsCbsNaDps({ ibs, servico }) {
       {ibs.indicador_destinatario === 0 ? 'é o próprio tomador' : 'é outra pessoa'}{' '}
       <span className="text-xs text-gray-600 dark:text-gray-400">({origem('indicador_destinatario')})</span> · NBS {ibs.nbs} · CST{' '}
       {ibs.cst} · cClassTrib {ibs.c_class_trib}
+    </Linha>
+  )
+}
+
+/** Se a alíquota do ISS vai na DPS (pAliq) e por quê: a regra do Anexo VI, com o código da Sefin. */
+function AliquotaNaDps({ decisao }) {
+  if (!decisao) return null
+  const regra = decisao.codigo_regra ? ` (regra ${decisao.codigo_regra})` : ''
+  const onde = `ISSQN devido no ${decisao.regra_incidencia_descricao}`
+  if (decisao.bloqueio) {
+    return (
+      <Linha rotulo="Alíquota do ISS na DPS">
+        <span className="text-estado-erro">Bloqueia o envio{regra}.</span> {decisao.bloqueio}
+      </Linha>
+    )
+  }
+  return (
+    <Linha rotulo="Alíquota do ISS na DPS">
+      {decisao.envia ? 'Vai na nota' : 'Não vai na nota'}
+      {regra}. {decisao.explicacao}{' '}
+      <span className="text-xs text-gray-600 dark:text-gray-400">
+        ({onde}, município {decisao.municipio_incidencia})
+      </span>
     </Linha>
   )
 }
@@ -136,6 +156,7 @@ function Previa({ previa, ambiente, leiauteDescricao }) {
         <Linha rotulo="Valor líquido a receber">
           <strong>{dinheiro(t.valor_liquido)}</strong>
         </Linha>
+        <AliquotaNaDps decisao={previa.complementos?.aliquota_issqn} />
         <IbsCbsNaDps ibs={previa.ibs_cbs} servico={previa.servico} />
         <Linha rotulo="Ambiente">{AMBIENTES[ambiente] ?? ambiente}</Linha>
         <Linha rotulo="Leiaute">{leiauteDescricao}</Linha>
@@ -216,17 +237,16 @@ export default function NotaForm() {
     }
   }, [f.competencia])
 
-  // O que a nota herda quando deixa o campo em branco: o do modelo (se o rascunho veio de um), senão o da empresa.
+  // O que a nota herda quando deixa o campo em branco: o cIndOp do modelo (se o rascunho veio de um) ou
+  // do serviço; o destinatário, do modelo ou da empresa.
   const empresaIbs = prontidao?.ibs_cbs
   const doModelo = padroesDoModelo ?? {}
-  const indicadorHerdado = doModelo.codigo_indicador_operacao || empresaIbs?.codigo_indicador_operacao || ''
-  const origemDoIndicador = doModelo.codigo_indicador_operacao ? 'modelo' : 'empresa'
-  const informaHerdado =
-    doModelo.informar ?? (doModelo.codigo_indicador_operacao ? true : (empresaIbs?.informar ?? false))
   const origemDoDestinatario = doModelo.indicador_destinatario != null ? 'modelo' : 'empresa'
   const destinatarioHerdado = doModelo.indicador_destinatario ?? empresaIbs?.indicador_destinatario ?? 0
 
   const servicoEscolhido = useMemo(() => servicos.find((s) => s.id === f.servico), [servicos, f.servico])
+  const indicadorHerdado = doModelo.codigo_indicador_operacao || servicoEscolhido?.codigo_indicador_operacao || ''
+  const origemDoIndicador = doModelo.codigo_indicador_operacao ? 'do modelo' : 'do serviço'
   const mudar = (campo) => (evento) => {
     setPrevia(null)
     setF((atual) => ({ ...atual, [campo]: evento.target.value }))
@@ -430,46 +450,31 @@ export default function NotaForm() {
             erro={erros.percentual_total_tributos_simples}
             dica="Só para ME/EPP optante pelo Simples. Em branco, a nota segue sem essa informação."
           />
-          {servicoEscolhido?.cst_ibs_cbs && (
-            <div className="space-y-2">
-              <div className="grid gap-3 sm:grid-cols-2">
-                <Campo
-                  rotulo="Indicador da operação (IBS/CBS)"
-                  inputMode="numeric"
-                  maxLength={6}
-                  value={f.indicador_operacao}
-                  onChange={mudar('indicador_operacao')}
-                  disabled={f.ibs_nao_informar}
-                  erro={erros.ibs_cbs}
-                  dica={
-                    informaHerdado && indicadorHerdado
-                      ? `6 dígitos. Em branco: vale o ${origemDoIndicador === 'modelo' ? 'do modelo' : 'padrão da empresa'} (${indicadorHerdado}).`
-                      : `${doModelo.informar === false ? 'O modelo não informa' : 'A empresa não informa'} IBS/CBS por padrão. Preencha (6 dígitos) para informar só nesta nota.`
-                  }
-                />
-                <CampoSelecao
-                  rotulo="O destinatário é o próprio tomador?"
-                  vazio={`Herdar (${origemDoDestinatario === 'modelo' ? 'do modelo' : 'da empresa'}: ${destinatarioHerdado === 0 ? 'sim' : 'não'})`}
-                  opcoes={[
-                    { valor: '0', rotulo: 'Sim' },
-                    { valor: '1', rotulo: 'Não' },
-                  ]}
-                  value={f.indicador_destinatario}
-                  onChange={mudar('indicador_destinatario')}
-                  disabled={f.ibs_nao_informar}
-                />
-              </div>
-              <label className="flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  checked={f.ibs_nao_informar}
-                  onChange={(evento) => {
-                    setPrevia(null)
-                    setF((atual) => ({ ...atual, ibs_nao_informar: evento.target.checked }))
-                  }}
-                />
-                Não informar o IBS/CBS nesta nota
-              </label>
+          {servicoEscolhido?.c_class_trib && (
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Campo
+                rotulo="Ajustar o indicador da operação (IBS/CBS)"
+                inputMode="numeric"
+                maxLength={6}
+                value={f.indicador_operacao}
+                onChange={mudar('indicador_operacao')}
+                erro={erros.ibs_cbs}
+                dica={
+                  indicadorHerdado
+                    ? `Só para exceções (6 dígitos). Em branco: vale o ${origemDoIndicador} (${indicadorHerdado}). O grupo de IBS/CBS só vai se a classificação do serviço exigir.`
+                    : 'O serviço não tem indicador da operação. Complete o cadastro do serviço ou informe aqui (6 dígitos) para esta nota; o grupo só vai se a classificação exigir.'
+                }
+              />
+              <CampoSelecao
+                rotulo="O destinatário é o próprio tomador?"
+                vazio={`Herdar (${origemDoDestinatario === 'modelo' ? 'do modelo' : 'da empresa'}: ${destinatarioHerdado === 0 ? 'sim' : 'não'})`}
+                opcoes={[
+                  { valor: '0', rotulo: 'Sim' },
+                  { valor: '1', rotulo: 'Não' },
+                ]}
+                value={f.indicador_destinatario}
+                onChange={mudar('indicador_destinatario')}
+              />
             </div>
           )}
         </fieldset>

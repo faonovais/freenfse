@@ -41,7 +41,6 @@ const OPCOES = {
 const PARAMS = {
   regime_tributario: 'simples_nacional', regime_apuracao_simples: 1, regime_especial: 0, serie_dps: 1,
   ambiente: 'producao_restrita', codigo_municipio_emissor: '2101400', opcao_simples: 3,
-  ibs_cbs_informar: false, ibs_cbs_indicador_operacao: '',
   municipio_emissor: 'Balsas/MA', convenio: null, atualizado_em: '2026-10-30T12:00:00Z', opcoes: OPCOES,
 }  // fmt: skip
 const CONVENIO = {
@@ -247,27 +246,23 @@ describe('Parâmetros fiscais', () => {
     expect(screen.getByText(/pode consultar os parâmetros, mas não alterá-los/)).toBeInTheDocument()
   })
 
-  it('IBS/CBS é da empresa: liga a opção e informa o indicador padrão', async () => {
+  it('a empresa não tem mais a opção nem o indicador do IBS/CBS: sobra só o destinatário padrão (issue #29)', async () => {
     const { chamadas } = abrirParametros({
-      [`PATCH ${PARAMETROS}`]: (chamada) => ({
-        status: 200,
-        dados: { ...PARAMS, ibs_cbs_informar: chamada.corpo.ibs_cbs_informar, ibs_cbs_indicador_operacao: chamada.corpo.ibs_cbs_indicador_operacao },
-      }),
+      [`PATCH ${PARAMETROS}`]: { status: 200, dados: PARAMS },
     })
-    const opcao = await screen.findByLabelText('Informar o IBS/CBS nas notas desta empresa')
-    expect(opcao).not.toBeChecked()
-    expect(screen.getByLabelText('Indicador da operação padrão (cIndOp)')).toHaveValue('')
+    await screen.findByLabelText('Destinatário padrão (indDest)')
 
-    fireEvent.click(opcao)
-    fireEvent.change(screen.getByLabelText('Indicador da operação padrão (cIndOp)'), { target: { value: '010101' } })
+    expect(screen.queryByLabelText('Informar o IBS/CBS nas notas desta empresa')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('Indicador da operação padrão (cIndOp)')).not.toBeInTheDocument()
+
+    fireEvent.change(screen.getByLabelText('Destinatário padrão (indDest)'), { target: { value: '1' } })
     fireEvent.click(screen.getByRole('button', { name: 'Salvar parâmetros' }))
-
-    await waitFor(() => expect(chamadas.find((c) => c.metodo === 'PATCH')?.corpo).toMatchObject({
-      ibs_cbs_informar: true, ibs_cbs_indicador_operacao: '010101',
-    }))  // fmt: skip
-    expect(chamadas.find((c) => c.metodo === 'PATCH').corpo).not.toHaveProperty('confirmar_producao')
+    await waitFor(() => expect(chamadas.find((c) => c.metodo === 'PATCH')).toBeTruthy())
+    const corpo = chamadas.find((c) => c.metodo === 'PATCH').corpo
+    expect(corpo).not.toHaveProperty('ibs_cbs_informar')
+    expect(corpo).not.toHaveProperty('ibs_cbs_indicador_operacao')
+    expect(corpo).toMatchObject({ ibs_cbs_indicador_destinatario: 1 })
   })
-
   it('o destinatário padrão da empresa começa como o próprio tomador e pode mudar', async () => {
     const { chamadas } = abrirParametros({
       [`GET ${PARAMETROS}`]: { status: 200, dados: { ...PARAMS, ibs_cbs_indicador_destinatario: 0 } },
@@ -294,34 +289,17 @@ describe('Parâmetros fiscais', () => {
     expect(await screen.findByLabelText('Destinatário padrão (indDest)')).toHaveValue('0')
   })
 
-  it('mostra o erro do indicador padrão junto do campo', async () => {
-    abrirParametros({
-      [`PATCH ${PARAMETROS}`]: {
-        status: 400,
-        dados: { ibs_cbs_indicador_operacao: ['Para informar o IBS/CBS nas notas, informe o indicador da operação padrão da empresa (6 dígitos).'] },
-      },
-    })
-    fireEvent.click(await screen.findByLabelText('Informar o IBS/CBS nas notas desta empresa'))
-
-    fireEvent.click(screen.getByRole('button', { name: 'Salvar parâmetros' }))
-
-    expect(await screen.findByText(/informe o indicador da operação padrão da empresa/)).toBeInTheDocument()
-  })
-
-  it('a configuração de IBS/CBS aparece preenchida e o Emissor só a consulta', async () => {
+  it('o Emissor só consulta o destinatário padrão da empresa', async () => {
     abrirParametros(
-      { [`GET ${PARAMETROS}`]: { status: 200, dados: { ...PARAMS, ibs_cbs_informar: true, ibs_cbs_indicador_operacao: '010101' } } },
+      { [`GET ${PARAMETROS}`]: { status: 200, dados: { ...PARAMS, ibs_cbs_indicador_destinatario: 1 } } },
       [EMPRESA_EMISSOR],
     )
 
-    const opcao = await screen.findByLabelText('Informar o IBS/CBS nas notas desta empresa')
+    const campo = await screen.findByLabelText('Destinatário padrão (indDest)')
 
-    expect(opcao).toBeChecked()
-    expect(opcao).toBeDisabled()
-    expect(screen.getByLabelText('Indicador da operação padrão (cIndOp)')).toHaveValue('010101')
-    expect(screen.getByLabelText('Indicador da operação padrão (cIndOp)')).toBeDisabled()
+    expect(campo).toHaveValue('1')
+    expect(campo).toBeDisabled()
   })
-
   it('o Emissor vê os parâmetros e o certificado, mas não altera nem verifica o convênio', async () => {
     abrirParametros({}, [EMPRESA_EMISSOR])
 

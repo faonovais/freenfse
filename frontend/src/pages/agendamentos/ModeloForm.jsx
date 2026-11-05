@@ -34,8 +34,7 @@ const VAZIO = {
   email_corpo: '',
   copias_proprias: false,
   email_copias: '',
-  // IBS/CBS do modelo: vazio = herda da empresa (nada é copiado para o modelo).
-  ibs_informar: '',
+  // IBS/CBS do modelo: só ajustes de exceção; vazio = herda do serviço (cIndOp) ou da empresa (indDest).
   ibs_indicador: '',
   ibs_destinatario: '',
 }
@@ -48,7 +47,7 @@ const comoLista = (texto) =>
     .split(/[,;\n]/)
     .map((item) => item.trim())
     .filter(Boolean)
-const ORIGEM = { nota: 'ajuste da nota', modelo: 'do modelo', empresa: 'da empresa' }
+const ORIGEM = { nota: 'ajuste da nota', modelo: 'do modelo', servico: 'do serviço', empresa: 'da empresa' }
 const OPCOES_TRI = [
   { valor: 'sim', rotulo: 'Sim' },
   { valor: 'nao', rotulo: 'Não' },
@@ -77,7 +76,6 @@ function formularioDe(m) {
     email_corpo: m.email_corpo_modelo ?? '',
     copias_proprias: m.email_copias_fixas !== null && m.email_copias_fixas !== undefined,
     email_copias: (m.email_copias_fixas ?? []).join(', '),
-    ibs_informar: tristate(m.ibs_cbs_informar),
     ibs_indicador: m.ibs_cbs_indicador_operacao ?? '',
     ibs_destinatario:
       m.ibs_cbs_indicador_destinatario === null || m.ibs_cbs_indicador_destinatario === undefined
@@ -110,7 +108,6 @@ function corpoDe(f) {
     email_assunto_modelo: f.email_assunto,
     email_corpo_modelo: f.email_corpo,
     email_copias_fixas: f.copias_proprias ? comoLista(f.email_copias) : null,
-    ibs_cbs_informar: deTristate(f.ibs_informar),
     ibs_cbs_indicador_operacao: f.ibs_indicador,
     ibs_cbs_indicador_destinatario: f.ibs_destinatario === '' ? null : Number(f.ibs_destinatario),
   }
@@ -368,33 +365,19 @@ export default function ModeloForm() {
           <section aria-label="IBS e CBS do modelo" className="space-y-2 text-sm">
             <h3 className="text-base text-gray-900 dark:text-gray-100">IBS e CBS</h3>
             <p className="text-xs text-gray-600 dark:text-gray-400">
-              O modelo herda da empresa (parâmetros fiscais) a opção, o indicador da operação e o destinatário. Preencha só o
-              que for diferente para as notas deste modelo; cada rascunho ainda pode ajustar. A classificação (NBS, CST e
-              cClassTrib) fica no cadastro do serviço.
+              Se a nota leva o grupo de IBS/CBS é decidido pela classificação do serviço. O indicador da operação (cIndOp) é
+              do serviço e o destinatário padrão é o da empresa. Preencha aqui só o que for uma exceção para as notas deste
+              modelo; cada rascunho ainda pode ajustar.
             </p>
-            <div className="grid gap-3 sm:grid-cols-3">
-              <CampoSelecao
-                rotulo="Informar o IBS/CBS"
-                vazio={`Herdar da empresa (hoje: ${empresaIbs?.informar ? 'informa' : 'não informa'})`}
-                opcoes={[
-                  { valor: 'sim', rotulo: 'Informar' },
-                  { valor: 'nao', rotulo: 'Não informar' },
-                ]}
-                value={f.ibs_informar}
-                onChange={mudar('ibs_informar')}
-              />
+            <div className="grid gap-3 sm:grid-cols-2">
               <Campo
-                rotulo="Indicador da operação (cIndOp)"
+                rotulo="Ajustar o indicador da operação (cIndOp)"
                 inputMode="numeric"
                 maxLength={6}
                 value={f.ibs_indicador}
                 onChange={mudar('ibs_indicador')}
                 erro={erros.ibs_cbs_indicador_operacao}
-                dica={
-                  empresaIbs?.codigo_indicador_operacao
-                    ? `Vazio: herda o da empresa (${empresaIbs.codigo_indicador_operacao}).`
-                    : 'Vazio: herda o da empresa (nenhum definido ainda).'
-                }
+                dica="Vazio: herda o do serviço."
               />
               <CampoSelecao
                 rotulo="O destinatário é o próprio tomador?"
@@ -408,13 +391,13 @@ export default function ModeloForm() {
                 erro={erros.ibs_cbs_indicador_destinatario}
               />
             </div>
-            {podeEditar && (f.ibs_informar || f.ibs_indicador || f.ibs_destinatario) && (
+            {podeEditar && (f.ibs_indicador || f.ibs_destinatario) && (
               <button
                 type="button"
                 className="botao-leve"
-                onClick={() => setF((atual) => ({ ...atual, ibs_informar: '', ibs_indicador: '', ibs_destinatario: '' }))}
+                onClick={() => setF((atual) => ({ ...atual, ibs_indicador: '', ibs_destinatario: '' }))}
               >
-                Voltar a herdar tudo da empresa
+                Voltar a herdar do serviço e da empresa
               </button>
             )}
           </section>

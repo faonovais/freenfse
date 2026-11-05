@@ -30,6 +30,7 @@ function formularioDe(servico) {
     nbs: servico?.nbs ?? '',
     cst_ibs_cbs: servico?.cst_ibs_cbs ?? '',
     c_class_trib: servico?.c_class_trib ?? '',
+    codigo_indicador_operacao: servico?.codigo_indicador_operacao ?? '',
     aliquota_iss: servico?.aliquota_iss ?? '',
     iss_retido: servico?.iss_retido ?? false,
     ...Object.fromEntries(RETENCOES.map(([campo]) => [campo, servico?.[campo] ?? ''])),
@@ -58,10 +59,24 @@ function FormServico({ servico, aoSalvar, aoCancelar }) {
   const [erroGeral, setErroGeral] = useState('')
   const [salvando, setSalvando] = useState(false)
   const [salvo, setSalvo] = useState(false)
+  const [referencias, setReferencias] = useState(null)
+  const [consultandoReferencias, setConsultandoReferencias] = useState(false)
   const mudar = (campo) => (evento) => setF((atual) => ({ ...atual, [campo]: evento.target.value }))
   const marcar = (campo) => (evento) => setF((atual) => ({ ...atual, [campo]: evento.target.checked }))
 
   useFormularioSujo(!salvo && JSON.stringify(f) !== JSON.stringify(inicial))
+
+  /** Sugestão do cIndOp (Anexo VIII) e situação da classificação na tabela oficial; só leitura. */
+  async function consultarReferencias() {
+    setConsultandoReferencias(true)
+    const resposta = await servicos.referenciasIbsCbs({
+      codigo_nacional: f.codigo_tributacao_nacional,
+      nbs: f.nbs,
+      c_class_trib: f.c_class_trib,
+    })
+    setConsultandoReferencias(false)
+    setReferencias(resposta.ok ? resposta.dados : { erro: mensagemErro(resposta) })
+  }
 
   async function salvar(evento) {
     evento.preventDefault()
@@ -143,7 +158,9 @@ function FormServico({ servico, aoSalvar, aoCancelar }) {
           IBS e CBS (reforma tributária){' '}
           <BotaoAjuda rotulo="IBS e CBS">
             São os novos tributos sobre o consumo, em transição de 2026 a 2033. Informe o CST (3 dígitos) e a
-            classificação tributária (6 dígitos) juntos, ou deixe os dois em branco.
+            classificação tributária (6 dígitos) juntos, ou deixe os dois em branco. É a classificação que decide se a
+            nota leva o grupo de IBS/CBS: quando exige, a nota precisa do indicador da operação (cIndOp), que é do
+            serviço. O CST deve ser igual aos 3 primeiros dígitos da classificação.
           </BotaoAjuda>
         </legend>
         <div className="grid gap-3 sm:grid-cols-2">
@@ -154,7 +171,59 @@ function FormServico({ servico, aoSalvar, aoCancelar }) {
             onChange={mudar('c_class_trib')}
             erro={erros.c_class_trib}
           />
+          <Campo
+            rotulo="Indicador da operação (cIndOp)"
+            inputMode="numeric"
+            maxLength={6}
+            value={f.codigo_indicador_operacao}
+            onChange={mudar('codigo_indicador_operacao')}
+            erro={erros.codigo_indicador_operacao}
+            dica="6 dígitos. Obrigatório quando a classificação exige o grupo de IBS/CBS."
+          />
         </div>
+        <button type="button" className="botao-leve" onClick={consultarReferencias} disabled={consultandoReferencias}>
+          {consultandoReferencias ? 'Consultando…' : 'Ver sugestão do indicador e situação da classificação'}
+        </button>
+        {referencias?.erro && <Aviso tipo="erro">{referencias.erro}</Aviso>}
+        {referencias?.classificacao && (
+          <Aviso tipo={referencias.classificacao.vigente && referencias.classificacao.aceita_nfse ? 'info' : 'atencao'}>
+            {referencias.classificacao.mensagem}
+          </Aviso>
+        )}
+        {referencias?.indop && (
+          <div className="space-y-1 text-sm" aria-label="Sugestão do indicador da operação">
+            {referencias.indop.encontrado ? (
+              <>
+                <p>
+                  Anexo VIII (item {referencias.indop.item}, NBS informada):{' '}
+                  {referencias.indop.sugestao
+                    ? 'o anexo indica um único indicador.'
+                    : 'o anexo indica mais de um indicador; escolha o que corresponde à operação.'}
+                </p>
+                <ul className="flex flex-wrap gap-2">
+                  {referencias.indop.opcoes.map((opcao) => (
+                    <li key={opcao}>
+                      <button
+                        type="button"
+                        className="botao-leve"
+                        onClick={() => setF((atual) => ({ ...atual, codigo_indicador_operacao: opcao }))}
+                      >
+                        Usar {opcao}
+                      </button>
+                      {referencias.indop.locais?.[opcao] && (
+                        <span className="ml-1 text-xs text-gray-600 dark:text-gray-400">
+                          ({referencias.indop.locais[opcao]})
+                        </span>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </>
+            ) : (
+              <p>O Anexo VIII não traz este código de tributação com esta NBS; confira os dois campos.</p>
+            )}
+          </div>
+        )}
       </fieldset>
 
       <fieldset className="space-y-3">

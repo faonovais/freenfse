@@ -175,6 +175,9 @@ def solicitar_emissao(nfse, *, usuario, request=None, empresa=None):
     )
     if bloqueio_de_aliquota:
         raise ErroDeEmissao(bloqueio_de_aliquota)
+    _grupo, _na_dps, erros_ibs_cbs, _avisos = servico_nfse.avaliar_ibs_cbs_da_nota(nfse, parametros)
+    if erros_ibs_cbs:
+        raise ErroDeEmissao(" ".join(erros_ibs_cbs.values()))
     transicionar(nfse, S.ENVIANDO, motivo="Emissão solicitada", usuario=usuario)
     auditoria.registrar(
         LogAuditoria.Acao.NFSE_EMISSAO_SOLICITADA,
@@ -217,6 +220,12 @@ def executar_emissao(empresa, nfse_id):
     nfse.complementos = {**(nfse.complementos or {}), "aliquota_issqn": avaliacao.para_dict()}
     nfse.save(update_fields=["complementos", "atualizado_em"])
 
+    ibs_cbs, _na_dps, erros_ibs_cbs, _avisos = servico_nfse.avaliar_ibs_cbs_da_nota(
+        nfse, parametros
+    )
+    if erros_ibs_cbs:
+        return _voltar_ao_rascunho(nfse, " ".join(erros_ibs_cbs.values()))
+
     existente = EmissaoDps.objects.filter(nfse=nfse).order_by("-id").first()
     dados = servico_nfse.dados_da_dps(
         nfse,
@@ -224,6 +233,7 @@ def executar_emissao(empresa, nfse_id):
         parametros=parametros,
         numero=existente.numero if existente else None,
         aliquota_issqn=avaliacao.para_dict(),
+        ibs_cbs=ibs_cbs,
     )
     resultado = gateway.emitir(contexto, dados)
     return aplicar_resultado(empresa, nfse, resultado, contexto)

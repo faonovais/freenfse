@@ -75,20 +75,8 @@ class ParametrosFiscais(_UnicoPorEmpresa):
         "município emissor (código IBGE)", max_length=7, blank=True
     )
 
-    # IBS/CBS (issue #20): a opção e o indicador da operação são **da empresa**; a classificação
-    # (NBS, CST, cClassTrib) fica no cadastro do serviço. Cada nota herda este padrão na hora de
-    # nascer e pode ajustá-lo pontualmente (ADR 0007).
-    ibs_cbs_informar = models.BooleanField(
-        "informar o IBS/CBS nas notas",
-        default=False,
-        help_text="Quando ligado, as notas de serviços com classificação de IBS/CBS levam o grupo.",
-    )
-    ibs_cbs_indicador_operacao = models.CharField(
-        "indicador da operação (cIndOp) padrão",
-        max_length=6,
-        blank=True,
-        help_text="6 dígitos, da tabela de indicadores da operação do IBS/CBS.",
-    )
+    # IBS/CBS (issue #29, ADR 0010): o grupo vai ou não pela classificação tributária do serviço, e
+    # o indicador da operação (cIndOp) é do serviço. Da empresa fica só o padrão do destinatário.
     ibs_cbs_indicador_destinatario = models.PositiveSmallIntegerField(
         "destinatário padrão (indDest)",
         choices=[(0, "O destinatário é o próprio tomador"), (1, "O destinatário é outra pessoa")],
@@ -157,17 +145,6 @@ class ParametrosFiscais(_UnicoPorEmpresa):
                 municipios.validar_codigo_ibge(self.codigo_municipio_emissor)
             except ValidationError as erro:
                 erros["codigo_municipio_emissor"] = erro.messages[0]
-        self.ibs_cbs_indicador_operacao = "".join(
-            c for c in (self.ibs_cbs_indicador_operacao or "") if c.isdigit()
-        )
-        indicador = self.ibs_cbs_indicador_operacao
-        if indicador and len(indicador) != 6:
-            erros["ibs_cbs_indicador_operacao"] = "O indicador da operação tem 6 dígitos."
-        elif self.ibs_cbs_informar and not indicador:
-            erros["ibs_cbs_indicador_operacao"] = (
-                "Para informar o IBS/CBS nas notas, informe o indicador da operação padrão da "
-                "empresa (6 dígitos)."
-            )
         if self.ibs_cbs_indicador_destinatario not in (0, 1):
             erros["ibs_cbs_indicador_destinatario"] = (
                 "Informe se o destinatário é o próprio tomador (0) ou outra pessoa (1)."

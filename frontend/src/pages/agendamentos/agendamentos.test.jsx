@@ -36,7 +36,7 @@ const OPCOES = {
   modelos: [{ id: 1, nome: 'Mensalidade' }],
   responsaveis: [{ id: 7, email: 'ana@example.com', nome: 'Ana' }],
   tolerancia_horas: 12,
-  ibs_cbs_empresa: { informar: true, codigo_indicador_operacao: '010101', indicador_destinatario: 0 },
+  ibs_cbs_empresa: { indicador_destinatario: 0 },
 }
 const MODELO = {
   id: 1, nome: 'Mensalidade', ativo: true, tomador: 4, tomador_nome: 'TOMADOR FICTICIO LTDA', servico: 3,
@@ -44,11 +44,11 @@ const MODELO = {
   percentual_total_tributos_simples: null, competencia_padrao: 'mes_da_execucao',
   email_envio_automatico: null, email_avisar_cancelamento: null, email_anexar_pdf: null, email_anexar_xml: null,
   email_assunto_modelo: '', email_corpo_modelo: '', email_copias_fixas: null, agendamentos_em_uso: 2, problemas: {},
-  ibs_cbs_informar: null, ibs_cbs_indicador_operacao: '', ibs_cbs_indicador_destinatario: null,
+  ibs_cbs_indicador_operacao: '', ibs_cbs_indicador_destinatario: null,
   atualizado_em: '2026-11-01T12:00:00Z',
 } // prettier-ignore
 const MODELO_COM_IBS_PROPRIO = {
-  ...MODELO, ibs_cbs_informar: true, ibs_cbs_indicador_operacao: '020202', ibs_cbs_indicador_destinatario: 1,
+  ...MODELO, ibs_cbs_indicador_operacao: '020202', ibs_cbs_indicador_destinatario: 1,
 } // prettier-ignore
 const AGENDAMENTO = {
   id: 5, nome: 'Cobrança mensal', modelo: 1, modelo_nome: 'Mensalidade', responsavel: 7, responsavel_email: 'ana@example.com',
@@ -306,8 +306,8 @@ describe('Formulário do modelo', () => {
     expect(texto.value).toContain('{ano}')
   })
 
-  describe('IBS e CBS do modelo: herda da empresa e pode sobrescrever', () => {
-    const IBS_VAZIO = { ibs_cbs_informar: null, ibs_cbs_indicador_operacao: '', ibs_cbs_indicador_destinatario: null }
+  describe('IBS e CBS do modelo: só ajusta o que herda do serviço e da empresa', () => {
+    const IBS_VAZIO = { ibs_cbs_indicador_operacao: '', ibs_cbs_indicador_destinatario: null }
     const salvar = async (chamadas) => {
       fireEvent.click(screen.getByRole('button', { name: 'Salvar modelo' }))
       await waitFor(() => expect(corpoDe(chamadas, 'PATCH', `${B}/modelos/1/`)).toBeDefined())
@@ -325,59 +325,58 @@ describe('Formulário do modelo', () => {
         empresa,
       )
 
-    it('mostra o que o modelo herda da empresa de agora e não envia valor nenhum se nada for mudado', async () => {
+    it('mostra o que o modelo herda e não envia valor nenhum se nada for mudado', async () => {
       const { chamadas } = abrirModelo()
       await screen.findByLabelText('Nome do modelo')
 
-      expect(await screen.findByRole('option', { name: 'Herdar da empresa (hoje: informa)' })).toBeInTheDocument()
-      expect(screen.getByText('Vazio: herda o da empresa (010101).')).toBeInTheDocument()
-      expect(screen.getByRole('option', { name: 'Herdar da empresa (hoje: sim)' })).toBeInTheDocument()
-      expect(screen.queryByRole('button', { name: 'Voltar a herdar tudo da empresa' })).not.toBeInTheDocument()
+      expect(screen.getByText('Vazio: herda o do serviço.')).toBeInTheDocument()
+      expect(await screen.findByRole('option', { name: 'Herdar da empresa (hoje: sim)' })).toBeInTheDocument()
+      expect(screen.queryByLabelText('Informar o IBS/CBS')).not.toBeInTheDocument() // decidido pela classificação do serviço
+      expect(screen.queryByRole('button', { name: 'Voltar a herdar do serviço e da empresa' })).not.toBeInTheDocument()
 
-      expect(await salvar(chamadas)).toMatchObject(IBS_VAZIO) // nada é copiado: segue herdando
+      const corpo = await salvar(chamadas)
+      expect(corpo).toMatchObject(IBS_VAZIO) // nada é copiado: segue herdando
+      expect(corpo).not.toHaveProperty('ibs_cbs_informar')
     })
 
-    it('o modelo novo também mostra o que herda (o padrão vem das opções)', async () => {
+    it('o modelo novo também mostra o que herda', async () => {
       abrir('/agendamentos/modelos/novo')
 
-      expect(await screen.findByRole('option', { name: 'Herdar da empresa (hoje: informa)' })).toBeInTheDocument()
-      expect(screen.getByText('Vazio: herda o da empresa (010101).')).toBeInTheDocument()
+      expect(await screen.findByText('Vazio: herda o do serviço.')).toBeInTheDocument()
+      expect(await screen.findByRole('option', { name: 'Herdar da empresa (hoje: sim)' })).toBeInTheDocument()
     })
 
     it('sobrescreve campo a campo', async () => {
       const { chamadas } = abrirModelo()
       await screen.findByLabelText('Nome do modelo')
 
-      fireEvent.change(screen.getByLabelText('Informar o IBS/CBS'), { target: { value: 'nao' } })
-      fireEvent.change(screen.getByLabelText('Indicador da operação (cIndOp)'), { target: { value: '020202' } })
+      fireEvent.change(screen.getByLabelText('Ajustar o indicador da operação (cIndOp)'), { target: { value: '050101' } })
       fireEvent.change(screen.getByLabelText('O destinatário é o próprio tomador?'), { target: { value: '1' } })
 
       expect(await salvar(chamadas)).toMatchObject({
-        ibs_cbs_informar: false, ibs_cbs_indicador_operacao: '020202', ibs_cbs_indicador_destinatario: 1,
+        ibs_cbs_indicador_operacao: '050101', ibs_cbs_indicador_destinatario: 1,
       }) // prettier-ignore
     })
 
     it('o modelo com valor próprio reabre preenchido e dá para voltar a herdar tudo', async () => {
       const { chamadas } = abrirModelo(MODELO_COM_IBS_PROPRIO)
-      expect(await screen.findByLabelText('Indicador da operação (cIndOp)')).toHaveValue('020202')
-      expect(screen.getByLabelText('Informar o IBS/CBS')).toHaveValue('sim')
+      expect(await screen.findByLabelText('Ajustar o indicador da operação (cIndOp)')).toHaveValue('020202')
       expect(screen.getByLabelText('O destinatário é o próprio tomador?')).toHaveValue('1')
 
-      fireEvent.click(screen.getByRole('button', { name: 'Voltar a herdar tudo da empresa' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Voltar a herdar do serviço e da empresa' }))
 
-      expect(screen.getByLabelText('Indicador da operação (cIndOp)')).toHaveValue('')
-      expect(screen.getByLabelText('Informar o IBS/CBS')).toHaveValue('')
+      expect(screen.getByLabelText('Ajustar o indicador da operação (cIndOp)')).toHaveValue('')
       expect(screen.getByLabelText('O destinatário é o próprio tomador?')).toHaveValue('')
-      expect(screen.queryByRole('button', { name: 'Voltar a herdar tudo da empresa' })).not.toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: 'Voltar a herdar do serviço e da empresa' })).not.toBeInTheDocument()
       expect(await salvar(chamadas)).toMatchObject(IBS_VAZIO)
     })
 
-    it('voltar a herdar um campo só (esvaziar) mantém os outros', async () => {
+    it('voltar a herdar um campo só (esvaziar) mantém o outro', async () => {
       const { chamadas } = abrirModelo(MODELO_COM_IBS_PROPRIO)
-      fireEvent.change(await screen.findByLabelText('Indicador da operação (cIndOp)'), { target: { value: '' } })
+      fireEvent.change(await screen.findByLabelText('Ajustar o indicador da operação (cIndOp)'), { target: { value: '' } })
 
       expect(await salvar(chamadas)).toMatchObject({
-        ibs_cbs_informar: true, ibs_cbs_indicador_operacao: '', ibs_cbs_indicador_destinatario: 1,
+        ibs_cbs_indicador_operacao: '', ibs_cbs_indicador_destinatario: 1,
       }) // prettier-ignore
     })
 
@@ -385,7 +384,7 @@ describe('Formulário do modelo', () => {
       abrirModelo(MODELO, {
         [`PATCH ${B}/modelos/1/`]: { status: 400, dados: { ibs_cbs_indicador_operacao: 'O indicador da operação tem 6 dígitos.' } },
       })
-      fireEvent.change(await screen.findByLabelText('Indicador da operação (cIndOp)'), { target: { value: '12' } })
+      fireEvent.change(await screen.findByLabelText('Ajustar o indicador da operação (cIndOp)'), { target: { value: '12' } })
 
       fireEvent.click(screen.getByRole('button', { name: 'Salvar modelo' }))
 
@@ -401,8 +400,8 @@ describe('Formulário do modelo', () => {
             totais: { valor_servico: '1500.00', valor_iss: '30.00', valor_liquido: '1470.00' }, avisos: [],
             informacoes_complementares: '',
             ibs_cbs: {
-              na_dps: true, codigo_indicador_operacao: '020202', indicador_destinatario: 0,
-              origens: { informar: 'modelo', codigo_indicador_operacao: 'modelo', indicador_destinatario: 'empresa' },
+              na_dps: true, codigo_indicador_operacao: '100301', indicador_destinatario: 0,
+              origens: { codigo_indicador_operacao: 'servico', indicador_destinatario: 'empresa' },
             },
           },
         },
@@ -412,31 +411,31 @@ describe('Formulário do modelo', () => {
 
       const previa = await screen.findByRole('region', { name: 'Como ficaria o rascunho' })
       expect(within(previa).getByText('IBS/CBS na DPS')).toBeInTheDocument()
-      expect(within(previa).getByText(/Indicador 020202 \(do modelo\) · destinatário é o próprio tomador \(da empresa\)/)).toBeInTheDocument()
+      expect(within(previa).getByText(/Indicador 100301 \(do serviço\) · destinatário é o próprio tomador \(da empresa\)/)).toBeInTheDocument()
     })
 
-    it('a conferência diz por que o grupo não vai (e de quem é a decisão)', async () => {
+    it('a conferência diz por que o grupo não vai (a classificação do serviço decide)', async () => {
       abrirModelo(MODELO, {
         [`POST ${B}/modelos/1/previa/`]: {
           status: 200,
           dados: {
             ok: true, competencia: '2026-11-01', tomador: 'T', totais: { valor_servico: '1.00', valor_iss: '0.00', valor_liquido: '1.00' },
             avisos: [], informacoes_complementares: '',
-            ibs_cbs: { na_dps: false, motivo: 'O modelo de NFS-e não informa o IBS/CBS.', origens: {} },
+            ibs_cbs: { na_dps: false, motivo: 'A classificação 410009 não tem tributação de IBS/CBS (ind_gIBSCBS = 0).', origens: {} },
           },
         },
       }) // prettier-ignore
 
       fireEvent.click(await screen.findByRole('button', { name: 'Conferir como ficaria hoje' }))
 
-      expect(await screen.findByText('Não vai na nota. O modelo de NFS-e não informa o IBS/CBS.')).toBeInTheDocument()
+      expect(await screen.findByText(/Não vai na nota\. A classificação 410009 não tem tributação de IBS\/CBS/)).toBeInTheDocument()
     })
 
     it('quem só consulta vê os campos bloqueados e sem o atalho de voltar a herdar', async () => {
       abrirModelo(MODELO_COM_IBS_PROPRIO, {}, SO_CONSULTA)
 
-      expect(await screen.findByLabelText('Indicador da operação (cIndOp)')).toBeDisabled()
-      expect(screen.queryByRole('button', { name: 'Voltar a herdar tudo da empresa' })).not.toBeInTheDocument()
+      expect(await screen.findByLabelText('Ajustar o indicador da operação (cIndOp)')).toBeDisabled()
+      expect(screen.queryByRole('button', { name: 'Voltar a herdar do serviço e da empresa' })).not.toBeInTheDocument()
     })
   })
 

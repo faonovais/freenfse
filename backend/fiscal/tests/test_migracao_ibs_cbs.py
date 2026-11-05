@@ -15,8 +15,10 @@ from django.db import connection, migrations
 from django.db.migrations.executor import MigrationExecutor
 from django_tenants.utils import schema_context
 
-ANTES = [("fiscal", "0003_situacao_descartada")]
-DEPOIS = [("fiscal", "0004_ibs_cbs_por_empresa")]
+# O estado "antes" também volta o cadastro de serviços ao que era (a issue #29 acrescentou uma
+# coluna a `Servico`): senão o modelo histórico do teste não conheceria a coluna que o banco tem.
+ANTES = [("fiscal", "0003_situacao_descartada"), ("cadastros", "0002_perfis_padrao")]
+DEPOIS = [("fiscal", "0004_ibs_cbs_por_empresa"), ("cadastros", "0002_perfis_padrao")]
 GRUPO_DA_NOTA = {"codigo_indicador_operacao": "010101", "indicador_destinatario": 0}
 
 pytestmark = pytest.mark.django_db

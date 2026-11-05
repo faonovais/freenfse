@@ -286,12 +286,8 @@ class NotaViewSet(viewsets.GenericViewSet):
                 "pronta": not pendencias,
                 "bloqueios": [b.para_dict() for b in pendencias],
                 "ambiente": parametros.ambiente,
-                # Padrão da empresa para o IBS/CBS: a nota herda e pode ajustar pontualmente.
-                "ibs_cbs": {
-                    "informar": parametros.ibs_cbs_informar,
-                    "codigo_indicador_operacao": parametros.ibs_cbs_indicador_operacao,
-                    "indicador_destinatario": parametros.ibs_cbs_indicador_destinatario,
-                },
+                # Padrão da empresa para o destinatário do IBS/CBS (o cIndOp é do serviço).
+                "ibs_cbs": {"indicador_destinatario": parametros.ibs_cbs_indicador_destinatario},
                 "leiaute": gateway.leiaute_em_vigor(ambiente_producao),
                 "leiaute_descricao": gateway.descricao_do_leiaute(
                     gateway.leiaute_em_vigor(ambiente_producao)
