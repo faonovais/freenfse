@@ -114,3 +114,5 @@ Itens do checklist que esta correção altera:
   **mais** [`verificacao-issue-29.md`](verificacao-issue-29.md) (`pAliq` e IBS/CBS pelo serviço).
 - *"`pAliq` e `totTrib`"*: `pAliq` agora segue as regras E0600 a E0640 (confirmar o convênio na produção restrita, Parte A); `totTrib` segue como estava.
 - *"Indicador da operação (cIndOp)"*: agora é **do serviço**, sugerido pelo Anexo VIII; a tabela oficial está versionada. Confirmar a aceitação pela Sefin (Parte B).
+- Novo item: **revalidar a tabela de classificação tributária (`cClassTrib`) antes da produção** (ela vem do ambiente piloto da calculadora; comparar com
+  outra fonte oficial se a RFB publicar uma). Está em [`checklist-producao.md`](checklist-producao.md), seção 4.

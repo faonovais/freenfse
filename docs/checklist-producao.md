@@ -43,6 +43,10 @@ Marque cada item **antes** de emitir a primeira nota com valor fiscal. Os itens 
 - [ ] Cada serviço com **classificação de IBS/CBS** (NBS, CST e `cClassTrib`) tem o **indicador da operação (`cIndOp`)** preenchido
       quando a classificação exige o grupo (a tela do serviço mostra a situação e sugere o indicador pelo Anexo VIII); o contador
       confirmou o indicador. Ver [`verificacao-issue-29.md`](verificacao-issue-29.md).
+- [ ] 🔴 **Tabela de classificação tributária (`cClassTrib`) revalidada antes da produção.** Ela veio do ambiente **piloto** da calculadora do
+      IBS/CBS (`piloto-cbs.tributos.gov.br`). Regrave com `atualizar_classificacao_tributaria`, compare com o que o contador usa e, se a RFB
+      tiver publicado a tabela em outra fonte oficial (planilha), compare com ela também. Confirme o Anexo VIII vigente. Origem e SHA-256 em
+      [`backend/fiscal/referencias/dados/LEIAME.md`](../backend/fiscal/referencias/dados/LEIAME.md) e [ADR 0010](adr/0010-paliq-e-ibs-cbs-pela-regra-oficial.md).
 - [ ] Alíquotas de ISS e retenções (ISS, IRRF, CSLL, INSS) conferidas pelo contador para cada serviço. **A alíquota do ISS só vai na
       nota quando a regra oficial manda** (depende do convênio do município na competência): a conferência da nota mostra se ela vai e
       o código da regra.

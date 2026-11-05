@@ -32,6 +32,23 @@ Três tabelas em `backend/fiscal/referencias/dados/`, cada uma regravada por um 
 | Item da LC 116 + NBS → INDOP → cClassTrib | Anexo VIII **v01.02.00 (2026-10-26)** | `importar_anexos_rtc` |
 | Classificação tributária com vigência e `ind_gIBSCBS` | Dados abertos da calculadora do IBS/CBS (RFB/CGIBS) | `atualizar_classificacao_tributaria` |
 
+**Arquivos oficiais e tabelas geradas** (obtidos em 2026-11-04, horário de Brasília; o `LEIAME.md` da pasta tem a origem completa):
+
+| Arquivo | SHA-256 |
+|---|---|
+| Anexo VI v1.04.01 (`anexovi-leiautesrn_rtc_ibscbs-v1-04-01-nt009.xlsx`) | `103a150dd6f56ec8edcaa3a453b59a1b0e096d7cd5025d7bd06a387f141ddf39` |
+| Anexo VIII **v01.02.00 de 2026-10-26** (`anexo_viii-tabela-correlacao-v01-02-00-20261026.xlsx`; **substitui a v1.01.00 do plano**) | `12cc80bc92687856b47e961b98cdbaa3f8cae568c099b3ef71994e73482ac7d0` |
+| `localidade_incidencia.json` | `68ade5da910d09d45d04887c847297ac0a50aebcd3ae07d9a638ede8cba978d1` |
+| `correlacao_indop.json` | `a80780e3e3502a8c65be4e8769adbe006ccde4ab2c4a7738ebe7f07ed840c497` |
+| `classificacao_tributaria.json` (calculadora piloto, app 1.6.2-a39944eb) | `3c667289bfec6a975e3054f2cc12fcf1db277d6aea5285172ded2c5614391604` |
+
+**Condições da fonte da classificação** (aprovadas pelo Supervisor): a tabela vem do ambiente **piloto** da calculadora
+(`piloto-cbs.tributos.gov.br`), fica **versionada no repositório** com vigência, data de obtenção, SHA-256 e URL, e **nada consulta a
+calculadora na hora de emitir** (sem dependência de rede nem do firewall). O baixador é só ferramenta de atualização. Por ser piloto, a
+tabela **deve ser revalidada antes da produção** (item do checklist de produção e da issue #27); se a RFB publicar a tabela de `cClassTrib`
+em outra fonte oficial (por exemplo uma planilha), a **comparação entra nessa revalidação**. `cClassTrib` desconhecido, fora da vigência na data
+de competência ou que não vale para NFS-e **bloqueia a emissão com mensagem (E0958)**; nunca é presumido.
+
 O que a fonte real mostrou, diferente do que o plano supunha (comunicado ao Supervisor antes de seguir):
 
 - **Anexo VIII**: o portal já publica a v01.02.00, mais nova que a v1.01.00 citada no plano; usada a vigente. Ele é feito de
@@ -131,5 +148,9 @@ decidir, a nota **volta a rascunho** com a mensagem e nada vai à Sefin.
 1. Confirmar na produção restrita: o convênio de verdade (campos `aderenteAmbienteNacional`/`dataAtivacao`), a aceitação do `cIndOp` sugerido e
    a classificação do piloto (roteiro em `docs/verificacao-issue-29.md`).
 2. Regras E0239/E0243/E0919 (endereço do tomador e destinatário conforme o `cIndOp`).
-3. Local da prestação em município diferente do emissor; `tribISSQN` não tributável; benefício municipal.
+3. Local da prestação em município diferente do emissor (hoje o sistema não guarda esse dado: a DPS leva sempre o município do emissor em
+   `cLocPrestacao`, e a prévia **avisa** nos serviços de incidência no local da prestação. **Decisão pendente**: bloquear esses serviços ou criar o campo,
+   reaproveitando `cLocPrestacao`, com teste);
+   `tribISSQN` não tributável; benefício municipal.
 4. Retenção de PIS/COFINS continua **bloqueada** (sem regra na tabela).
+5. **Revalidar a classificação tributária antes da produção** (tabela do piloto), comparando com outra fonte oficial se a RFB publicar uma.
