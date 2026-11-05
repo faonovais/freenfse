@@ -13,7 +13,7 @@ from django.utils import timezone
 
 from cadastros.models import Pessoa, Servico
 from fiscal.models import Nfse, ParametrosFiscais
-from fiscal.services import calculo
+from fiscal.services import aliquota_nota, calculo
 
 MOTIVOS_DE_SUBSTITUICAO = {
     "01": "Desenquadramento do Simples Nacional",
@@ -95,6 +95,7 @@ class Preparo:
     totais: dict
     complementos: dict
     ibs_cbs_dps: dict | None = None
+    aliquota_issqn: dict | None = None
     avisos: list = field(default_factory=list)
 
 
@@ -325,14 +326,25 @@ def preparar(dados, *, hoje=None):
         complementos_erros,
     )
     avisos = []
+    parametros = ParametrosFiscais.obter()
     ibs, ibs_na_dps = _ibs_cbs(
         dados.get("ibs_cbs"),
         dados.get("ibs_cbs_modelo"),
         servico,
-        ParametrosFiscais.obter(),
+        parametros,
         complementos_erros,
         avisos,
     )
+    # Alíquota do ISSQN (pAliq): regra única do Anexo VI (issue #29). Na prévia só vale o convênio
+    # já gravado; a conferência com a Sefin, quando preciso, é feita no envio.
+    aliquota = aliquota_nota.avaliar_nota(
+        parametros=parametros,
+        servico=copia_servico,
+        competencia=competencia,
+        iss_retido=totais.iss_retido,
+        tomador=snapshot_tomador(pessoa),
+        resolver=aliquota_nota.convenio_gravado(parametros),
+    ).para_dict()
     if complementos_erros:
         raise ErroDeNota(complementos_erros)
 
@@ -353,12 +365,14 @@ def preparar(dados, *, hoje=None):
             "informacoes_complementares": (dados.get("informacoes_complementares") or "").strip(),
             "percentual_total_tributos_simples": None if simples is None else str(simples),
             "ibs_cbs": ibs,
+            "aliquota_issqn": aliquota,
             # O que a nota sobrescreveu e o que o modelo definia ao gerar: a tela reabre fiel e a
             # edição do rascunho resolve de novo sem consultar o app de agendamentos.
             "ibs_cbs_nota": ajuste_da_nota(dados.get("ibs_cbs")),
             "ibs_cbs_modelo": dados.get("ibs_cbs_modelo"),
         },
         ibs_cbs_dps=ibs_na_dps,
+        aliquota_issqn=aliquota,
         avisos=avisos,
     )
 
@@ -451,10 +465,18 @@ def criar_substituta(original, *, codigo_motivo, motivo, usuario):
     )
 
 
-def dados_da_dps(nfse, *, empresa, parametros=None, numero=None):
-    """Dados simples da DPS (para o gateway) a partir do snapshot da nota."""
+def dados_da_dps(nfse, *, empresa, parametros=None, numero=None, aliquota_issqn=None):
+    """Dados simples da DPS (para o gateway) a partir do snapshot da nota.
+
+    `aliquota_issqn` é a decisão de `pAliq` já avaliada (o envio a refaz com o convênio atual);
+    sem ela, avalia aqui com o convênio gravado.
+    """
     parametros = parametros or ParametrosFiscais.obter()
     complementos = nfse.complementos or {}
+    if aliquota_issqn is None:
+        aliquota_issqn = aliquota_nota.avaliar_da_nota(
+            nfse, parametros, aliquota_nota.convenio_gravado(parametros)
+        ).para_dict()
     return {
         "serie": nfse.serie,
         "numero": numero,
@@ -473,6 +495,7 @@ def dados_da_dps(nfse, *, empresa, parametros=None, numero=None):
         "informacoes_complementares": complementos.get("informacoes_complementares", ""),
         "percentual_total_tributos_simples": complementos.get("percentual_total_tributos_simples"),
         "ibs_cbs": complementos.get("ibs_cbs"),
+        "aliquota_issqn": aliquota_issqn,
         "substituicao": (
             {
                 "chave": nfse.substitui.chave,

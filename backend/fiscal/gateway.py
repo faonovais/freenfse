@@ -38,7 +38,6 @@ from freedfe.nfse.modelo import (
     Dps,
     Endereco,
     IbsCbs,
-    OpcaoSimplesNacional,
     Prestador,
     RetencaoIssqn,
     Servico,
@@ -230,23 +229,13 @@ def _tomador(dados):
     )
 
 
-def _informa_aliquota(prestador):
-    """HIPÓTESE (a confirmar em produção restrita): quem informa a alíquota do ISSQN.
-
-    Não optante: sempre. ME/EPP: só com o ISSQN fora do Simples (apuração 2 ou 3). MEI: nunca.
-    """
-    opcao = int(prestador["opcao_simples"])
-    if opcao == OpcaoSimplesNacional.NAO_OPTANTE:
-        return True
-    if opcao == OpcaoSimplesNacional.ME_EPP:
-        return prestador.get("regime_apuracao_simples") in (2, 3)
-    return False
-
-
 def montar_dps(dados):
     """Monta o `Dps` da biblioteca a partir dos dados simples da nota.
 
-    Levanta `DadosInvalidosErro` (mensagem em português) se a biblioteca recusar algum campo.
+    `dados["aliquota_issqn"]["envia"]` diz se `pAliq` vai na DPS: quem decide é
+    `fiscal/services/aliquota_issqn.py`, pelo convênio do município de incidência na data de
+    competência e pela retenção do ISSQN. Levanta `DadosInvalidosErro` (mensagem em português) se a
+    biblioteca recusar algum campo.
     """
     try:
         prestador = dados["prestador"]
@@ -258,7 +247,8 @@ def montar_dps(dados):
         trib_municipal = TribMunicipal(
             tributacao=TributacaoIssqn.TRIBUTAVEL,
             retencao=RetencaoIssqn.RETIDO_PELO_TOMADOR if retido else RetencaoIssqn.NAO_RETIDO,
-            aliquota=aliquota if _informa_aliquota(prestador) else None,
+            # Decidido pela regra única (Anexo VI, E0600–E0640); o gateway só obedece.
+            aliquota=aliquota if dados["aliquota_issqn"]["envia"] else None,
         )
         federal = {
             "retencao_irrf": _decimal(totais.get("retencao_irrf")) or None,
@@ -585,6 +575,31 @@ def verificar_convenio(
         avisos=avisos,
         contribuinte=contribuinte,
     )
+
+
+def consultar_convenio_municipio(contexto, codigo_municipio):
+    """Convênio de um município com a NFS-e Nacional, **usando o cache** (24 h) da empresa.
+
+    Serve à regra de `pAliq` quando o município de incidência não é o do emissor (a verificação
+    manual da Fase 2 cobre só o do emissor). Se a Sefin não responde e há valor guardado, a
+    biblioteca usa o último conhecido; sem nenhum valor guardado, levanta `ErroDeConsultaFiscal`
+    (nada de adivinhar). Devolve `{"aderente": bool|None, "data_ativacao": "AAAA-MM-DD"|None}`.
+    """
+    try:
+        convenio = _criar_servico(contexto).convenio(codigo_municipio)
+    except ComunicacaoErro:
+        raise ErroDeConsultaFiscal(
+            "Não foi possível falar com o ambiente nacional da NFS-e para conferir o convênio "
+            f"do município {codigo_municipio}. Tente novamente em alguns minutos."
+        ) from None
+    except CertificadoErro, RejeicaoNfseErro, RespostaInvalidaErro, ValidacaoErro, FreeDFeErro:
+        raise ErroDeConsultaFiscal(
+            f"Não foi possível conferir o convênio do município {codigo_municipio} agora."
+        ) from None
+    return {
+        "aderente": convenio.aderente,
+        "data_ativacao": convenio.data_ativacao.isoformat() if convenio.data_ativacao else None,
+    }
 
 
 def _consultar_contribuinte(servico, codigo_municipio):

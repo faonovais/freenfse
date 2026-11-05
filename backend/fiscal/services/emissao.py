@@ -31,8 +31,8 @@ from fiscal.models import (
 )
 from fiscal.persistencia.fabrica import criar_persistencia
 from fiscal.persistencia.modelos import EmissaoDps, EventoFiscal
+from fiscal.services import aliquota_nota, mensagens_sefin
 from fiscal.services import bloqueios as servico_bloqueios
-from fiscal.services import mensagens_sefin
 from fiscal.services import nfse as servico_nfse
 from fiscal.services.certificado import abrir_em_memoria
 from fiscal.services.nfse_estados import transicionar
@@ -169,6 +169,12 @@ def solicitar_emissao(nfse, *, usuario, request=None, empresa=None):
                 "Aguarde a conferência com a Sefin antes de emitir outra: numerar por cima "
                 "poderia duplicar uma nota."
             )
+    bloqueio_de_aliquota = aliquota_nota.bloqueio_na_solicitacao(
+        aliquota_nota.avaliar_da_nota(nfse, parametros, aliquota_nota.convenio_gravado(parametros)),
+        parametros,
+    )
+    if bloqueio_de_aliquota:
+        raise ErroDeEmissao(bloqueio_de_aliquota)
     transicionar(nfse, S.ENVIANDO, motivo="Emissão solicitada", usuario=usuario)
     auditoria.registrar(
         LogAuditoria.Acao.NFSE_EMISSAO_SOLICITADA,
@@ -201,9 +207,23 @@ def executar_emissao(empresa, nfse_id):
     except ErroDeEmissao as erro:
         return _voltar_ao_rascunho(nfse, str(erro))
 
+    # pAliq depende do convênio do município de incidência na competência: confere de novo agora,
+    # com o certificado aberto, antes de enviar. Se não dá para decidir, nada vai à Sefin.
+    avaliacao = aliquota_nota.avaliar_da_nota(
+        nfse, parametros, aliquota_nota.convenio_com_consulta(parametros, contexto)
+    )
+    if avaliacao.bloqueio:
+        return _voltar_ao_rascunho(nfse, avaliacao.bloqueio)
+    nfse.complementos = {**(nfse.complementos or {}), "aliquota_issqn": avaliacao.para_dict()}
+    nfse.save(update_fields=["complementos", "atualizado_em"])
+
     existente = EmissaoDps.objects.filter(nfse=nfse).order_by("-id").first()
     dados = servico_nfse.dados_da_dps(
-        nfse, empresa=empresa, parametros=parametros, numero=existente.numero if existente else None
+        nfse,
+        empresa=empresa,
+        parametros=parametros,
+        numero=existente.numero if existente else None,
+        aliquota_issqn=avaliacao.para_dict(),
     )
     resultado = gateway.emitir(contexto, dados)
     return aplicar_resultado(empresa, nfse, resultado, contexto)

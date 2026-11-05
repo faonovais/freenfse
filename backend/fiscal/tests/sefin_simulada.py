@@ -58,6 +58,7 @@ class SefinSimulada(TransporteRest):
     def __init__(self):
         self.chamadas = []  # (método, caminho) de tudo o que a biblioteca pediu
         self.posts_de_emissao = []  # Id da DPS de cada POST /nfse que chegou
+        self.dps_recebidas = []  # XML (assinado) de cada DPS que chegou, na mesma ordem
         self.roteiro_emissao = deque()  # respostas forçadas, uma por POST /nfse
         self.fora_do_ar = False  # toda chamada falha com erro de rede
         self.cancelamento_recusado = None  # (código, descrição) para recusar o cancelamento
@@ -66,7 +67,8 @@ class SefinSimulada(TransporteRest):
         self.eventos = {}  # chave -> [bytes do XML]
         self._contador = {}  # emitente -> último número de NFS-e
         self.agora = dt.datetime(2026, 11, 2, 15, 0, tzinfo=dt.UTC)
-        self.municipio_aderente = True  # convênio do município (parametrização)
+        self.municipio_aderente = True  # convênio dos municípios (parametrização)
+        self.municipios_nao_aderentes = set()  # códigos IBGE sem convênio (exceção ao padrão acima)
         self.registrar_substituicao = True  # False: a Sefin autoriza mas não registra o evento
         self.latencia = 0.0  # demora de cada POST de emissão, para expor concorrência
         self.simultaneas = 0
@@ -94,12 +96,13 @@ class SefinSimulada(TransporteRest):
         self.chamadas.append((metodo, caminho))
         if self.fora_do_ar:
             raise ComunicacaoErro("Sefin fora do ar (simulado).")
-        if metodo == "GET" and re.search(r"/parametrizacao/[0-9]{7}/convenio$", caminho):
+        if metodo == "GET" and (m := re.search(r"/parametrizacao/([0-9]{7})/convenio$", caminho)):
+            aderente = self.municipio_aderente and m.group(1) not in self.municipios_nao_aderentes
             return _json(
                 200,
                 {
                     "parametrosConvenio": {
-                        "aderenteAmbienteNacional": int(self.municipio_aderente),
+                        "aderenteAmbienteNacional": int(aderente),
                         "aderenteEmissorNacional": 1,
                         "dataAtivacao": "2024-05-02",
                     }
@@ -136,6 +139,7 @@ class SefinSimulada(TransporteRest):
         inf = _achar(dps, "infDPS")
         id_dps = inf.get("Id")
         self.posts_de_emissao.append(id_dps)
+        self.dps_recebidas.append(dps_xml)
 
         comportamento = self.roteiro_emissao.popleft() if self.roteiro_emissao else "ok"
         if comportamento == "timeout":
