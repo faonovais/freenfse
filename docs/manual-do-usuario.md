@@ -40,8 +40,8 @@ configuração) é da empresa escolhida. Cada aba do navegador pode ficar com um
 No menu **Configuração fiscal**:
 
 1. **Parâmetros fiscais** — regime tributário, **série** da DPS, **município emissor** e o **ambiente** (comece em *Produção
-   restrita*). Clique em **Verificar convênio**: o sistema confere se o município aderiu à NFS-e Nacional. Se a empresa
-   informa IBS/CBS, preencha também o indicador da operação (quem cuida da contabilidade informa o código de 6 dígitos).
+   restrita*). Clique em **Verificar convênio**: o sistema confere se o município aderiu à NFS-e Nacional. Sobre o
+   IBS/CBS, a empresa só define aqui o destinatário padrão; o resto é do **serviço** (veja o item 5).
 2. **Certificado A1** — envie o arquivo `.pfx` e a senha. O CNPJ do certificado precisa ser o da empresa. O sistema avisa
    por e-mail quando faltarem 30, 15 e 7 dias para vencer. **A senha e o arquivo nunca ficam visíveis depois de enviados.**
 3. **Logo da empresa** — a imagem que aparece no DANFSe.
@@ -50,7 +50,13 @@ Em **Cadastros**:
 
 4. **Pessoas** — os tomadores (seus clientes): documento (CPF/CNPJ), nome, endereço com município e e-mail para envio.
 5. **Serviços** — o serviço que você presta: código de tributação nacional, descrição, alíquota do ISS e o período de
-   vigência.
+   vigência. Para o IBS/CBS, informe a NBS, o CST e a **classificação tributária** e clique em **Ver sugestão do indicador e
+   situação da classificação**: a tela diz se a classificação **exige** o grupo de IBS/CBS na nota e sugere o **indicador da
+   operação** (`cIndOp`) pelo Anexo VIII. Se o anexo indicar mais de uma opção, escolha a que corresponde à operação. Quando a
+   classificação exige o grupo e o serviço não tem o indicador, a nota não é emitida e a mensagem pede para completar o cadastro.
+
+   > **Alíquota do ISS na nota.** Em muitos casos a Sefin **não aceita** a alíquota na nota (ela aplica a do município). A tela de
+   > conferência diz se a alíquota vai ou não, o motivo e o código da regra; você não precisa decidir isso.
 
 ## 4. Emitir uma nota
 

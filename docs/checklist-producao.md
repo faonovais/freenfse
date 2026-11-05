@@ -40,9 +40,12 @@ Marque cada item **antes** de emitir a primeira nota com valor fiscal. Os itens 
 - [ ] 🔴 **Convênio** do município com a NFS-e Nacional verificado **em produção** (o sistema exige na troca).
 - [ ] 🔴 **Retenção de PIS/COFINS continua BLOQUEADA** no sistema até o teste em produção restrita com a regra validada pelo
       contador. Se a empresa precisar reter PIS/COFINS, **não emita pelo sistema** até isso ser liberado.
-- [ ] O serviço tem NBS, CST e classificação do IBS/CBS preenchidos, se a empresa informa IBS/CBS; o contador confirmou o
-      indicador da operação (`cIndOp`).
-- [ ] Alíquotas de ISS e retenções (ISS, IRRF, CSLL, INSS) conferidas pelo contador para cada serviço.
+- [ ] Cada serviço com **classificação de IBS/CBS** (NBS, CST e `cClassTrib`) tem o **indicador da operação (`cIndOp`)** preenchido
+      quando a classificação exige o grupo (a tela do serviço mostra a situação e sugere o indicador pelo Anexo VIII); o contador
+      confirmou o indicador. Ver [`verificacao-issue-29.md`](verificacao-issue-29.md).
+- [ ] Alíquotas de ISS e retenções (ISS, IRRF, CSLL, INSS) conferidas pelo contador para cada serviço. **A alíquota do ISS só vai na
+      nota quando a regra oficial manda** (depende do convênio do município na competência): a conferência da nota mostra se ela vai e
+      o código da regra.
 
 ## 5. Troca para produção
 
