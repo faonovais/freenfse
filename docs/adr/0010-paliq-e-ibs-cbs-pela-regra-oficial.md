@@ -87,9 +87,9 @@ O que a fonte real mostrou, diferente do que o plano supunha (comunicado ao Supe
 a alíquota do cadastro do serviço, e **a emissão é bloqueada** com mensagem didática e o código da regra se ela faltar ou ficar abaixo do mínimo.
 
 **Município de incidência** (`municipio_de_incidencia`): pela tabela do Anexo VI. Estabelecimento do prestador → município do emissor;
-local da prestação → o município do emissor (é o que a DPS informa em `cLocPrestacao`; **a prévia avisa**); estabelecimento do tomador →
-município do tomador. Serviço que a tabela não traz, ou caso que não dá para resolver (tomador sem município brasileiro, serviço "sem
-incidência"), usa a **regra geral** (município do prestador) e **avisa na prévia**.
+local da prestação → o **município da prestação da nota** (decisão 4); estabelecimento do tomador → município do tomador. Serviço que a
+tabela não traz, ou caso que não dá para resolver (tomador sem município brasileiro, serviço "sem incidência"), usa a **regra geral**
+(município do prestador) e **avisa na prévia**. Serviço do local da prestação **sem** município da prestação não segue: a emissão é bloqueada.
 
 **Convênio ativo na competência** (`convenio_ativo_na_data`): aderente **e** data de ativação menor ou igual à competência (ativação no
 próprio dia já vale). Aderente sem data de ativação conhecida vale como ativo. A consulta é por município: para o emissor usa-se a última
@@ -116,6 +116,24 @@ decidir, a nota **volta a rascunho** com a mensagem e nada vai à Sefin.
 - A mesma avaliação roda **na solicitação e no envio, a partir do snapshot da nota**: um rascunho anterior à regra, para um serviço que
   agora exige o grupo, não segue sem `cIndOp`.
 
+### 4. Município da prestação: um dado da nota (decisão do usuário, 2026-11-06)
+
+Primeiro o plano mandava usar o município do emissor como local da prestação, com aviso. O usuário decidiu **criar o campo**:
+
+- **Onde está**: na **nota** (`codigo_municipio_prestacao`, guardado em `complementos`, sem coluna nova), no **modelo de NFS-e**
+  (`ModeloNfse.codigo_municipio_prestacao`, migração `agendamentos/0004`) e, portanto, no **rascunho**. Vazio = herda.
+- **Prioridade** (`fiscal/services/local_prestacao.py`): **nota > modelo > município do emissor**. O padrão é o emissor **de agora**; nada
+  é copiado para o modelo. O rascunho guarda o que a nota ajustou (`municipio_prestacao_nota`), o que o modelo definia
+  (`municipio_prestacao_modelo`) e o resultado com a origem (`local_prestacao`), como no IBS/CBS.
+- **Na DPS**: é o `cLocPrestacao` (antes, `gateway.py` gravava sempre o município do emissor). Vale para **todo** serviço.
+- **Na regra da alíquota**: só pesa nos serviços cujo ISSQN é devido no **local da prestação** (aba MUN.INCID_INFO.SERV.): o convênio
+  consultado, na data de competência, é o do município da prestação. Os serviços do estabelecimento do prestador (EP), do tomador (ET,
+  17.05.01) e o 990101 **não mudam**: nesses o campo só consta da nota, e a prévia avisa quando ele difere do emissor.
+- **Validação**: o código precisa ser de um município da tabela do IBGE (7 dígitos); só os dígitos valem. Rascunhos anteriores à
+  correção não guardam nada e caem no município do emissor, o que a DPS sempre informou.
+- **Conferência**: mostra o município da prestação com a origem (da nota, do modelo, padrão), e, na linha da alíquota, o município de
+  incidência. Sem município (emissor não definido), o serviço do local da prestação é bloqueado com mensagem, nunca presumido.
+
 ## O que o Anexo VI não decide (tratado sem inventar regra; avisado ao Supervisor)
 
 1. **Não optante, convênio não ativo, `regEspTrib` 9 ("outros")**: E0619 exige com `regEspTrib` 0 e E0604 proíbe de 1 a 6; o 9 fica sem regra.
@@ -127,7 +145,7 @@ decidir, a nota **volta a rascunho** com a mensagem e nada vai à Sefin.
    adotada (aderente e ativação até a competência) é a mesma que a Fase 2 já usava para liberar a emissão. **Hipótese a confirmar na produção restrita.**
 4. **Grupo de IBS/CBS sem classificação no serviço**: não há regra no anexo que o torne obrigatório; a nota sai sem o grupo, com a explicação.
 5. **Competência anterior a 2026-01-01**: a tabela da calculadora não informa vigência antes disso; a nota sai sem o grupo, com aviso.
-6. **Local da prestação** diferente do município do emissor: o sistema não coleta; a prévia avisa e orienta o emissor oficial.
+6. **Local da prestação** diferente do município do emissor: resolvido pela decisão 4 (a nota passou a ter o município da prestação).
 7. **Regras que ligam o `cIndOp` ao endereço do tomador e ao destinatário** (E0239, E0243, E0919): fora do escopo da issue; ficam como
    pendência (podem rejeitar notas de serviços cujo `cIndOp` indica o município do adquirente quando o tomador não tem endereço completo).
 8. **Prestador com regime diferente na data de competência**: usa-se o regime dos parâmetros de agora.
@@ -148,9 +166,6 @@ decidir, a nota **volta a rascunho** com a mensagem e nada vai à Sefin.
 1. Confirmar na produção restrita: o convênio de verdade (campos `aderenteAmbienteNacional`/`dataAtivacao`), a aceitação do `cIndOp` sugerido e
    a classificação do piloto (roteiro em `docs/verificacao-issue-29.md`).
 2. Regras E0239/E0243/E0919 (endereço do tomador e destinatário conforme o `cIndOp`).
-3. Local da prestação em município diferente do emissor (hoje o sistema não guarda esse dado: a DPS leva sempre o município do emissor em
-   `cLocPrestacao`, e a prévia **avisa** nos serviços de incidência no local da prestação. **Decisão pendente**: bloquear esses serviços ou criar o campo,
-   reaproveitando `cLocPrestacao`, com teste);
-   `tribISSQN` não tributável; benefício municipal.
+3. `tribISSQN` não tributável (imunidade, exportação); benefício municipal.
 4. Retenção de PIS/COFINS continua **bloqueada** (sem regra na tabela).
 5. **Revalidar a classificação tributária antes da produção** (tabela do piloto), comparando com outra fonte oficial se a RFB publicar uma.

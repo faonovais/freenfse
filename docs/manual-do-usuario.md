@@ -63,6 +63,12 @@ Em **Cadastros**:
 1. **Notas fiscais › NFS-e emitidas › Nova nota**.
 2. Escolha o **tomador**, a **competência** (mês de referência), o **serviço** e o **valor**. Se houver retenções ou
    desconto, preencha-os.
+
+   > **Município da prestação.** Por padrão é o município do emissor (a tela mostra qual). Se o serviço foi prestado em outro
+   > município, escolha-o em **Município da prestação**; **Voltar ao padrão** devolve o campo ao padrão. Ele vai na nota
+   > (`cLocPrestacao`) e, **só nos serviços cujo ISS é devido no local da prestação**, define de qual município a conferência
+   > olha o convênio para decidir se a alíquota vai. Nos demais serviços, o campo só consta da nota (a conferência avisa
+   > quando ele difere do emissor).
 3. Clique em **Conferir a nota**. A tela mostra tudo já calculado (ISS, retenções, valor líquido), o ambiente e eventuais
    avisos. **Leia com atenção** — depois de autorizada, a nota não se corrige: só se cancela ou se substitui.
 4. Clique em **Emitir nota** e confirme. Em produção, a confirmação lembra que a nota tem valor fiscal.
@@ -97,7 +103,8 @@ Abra a nota na lista **NFS-e emitidas**:
 Para cobranças mensais, por exemplo:
 
 1. **Agendamentos › Modelos de NFS-e** — crie um modelo com tomador, serviço, valor e texto. Use **Conferir como ficaria
-   hoje** para ver o resultado e **Gerar rascunho agora** para testar.
+   hoje** para ver o resultado e **Gerar rascunho agora** para testar. O **município da prestação** do modelo é opcional:
+   em branco, vale o município do emissor de quando o rascunho é gerado; cada rascunho ainda pode ajustar.
 2. **Agendamentos › Agendamentos** — escolha o modelo, a frequência (mensal, a cada N semanas, anual…), o dia, a hora e o
    responsável. A tela mostra as **próximas datas**.
 3. Na data, o sistema cria um **rascunho** (nunca emite sozinho). Vá em **Agendamentos › Rascunhos**, revise e

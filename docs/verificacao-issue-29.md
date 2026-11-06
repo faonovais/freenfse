@@ -32,6 +32,23 @@ emitir, **baixe o XML da DPS/NFS-e** e confira se `pAliq` está presente ou ause
    *aderente e ativação até a competência* é o "convênio ativo" da regra. Se a Sefin rejeitar uma nota que a conferência liberou (ou o contrário),
    anote o **código do erro**: é a hipótese a corrigir.
 
+### Parte A2 — município da prestação (`cLocPrestacao`)
+
+Decisão do usuário em 2026-11-06 ([ADR 0010](adr/0010-paliq-e-ibs-cbs-pela-regra-oficial.md), decisão 4). Precisa de um serviço do **local da
+prestação** (exemplo: `03.04.01`) e de um segundo município com convênio conhecido.
+
+1. **Padrão.** Nota nova, campo *Município da prestação* em branco: a tela diz *Em branco, vale o município do emissor* com o nome dele. Baixe o
+   XML da DPS depois de emitir: `cLocPrestacao` é o município do emissor.
+2. **Outro município.** Escolha outro município (busca pelo nome). A conferência mostra *Município da prestação: Nome/UF (informado nesta
+   nota)*. Com o serviço do local da prestação, a linha da alíquota passa a dizer *município Nome/UF* e a regra usa o convênio **dele**
+   (anote o que a consulta devolve). `cLocPrestacao` no XML é o município escolhido.
+3. **Serviço que não é do local da prestação** (exemplo: `17.01.01`). O mesmo campo só consta da nota (`cLocPrestacao`); a alíquota continua
+   decidida pelo emissor, e a conferência avisa que o município difere do emissor.
+4. **Modelo.** Em *Modelos de NFS-e*, defina o município da prestação: os rascunhos nascem com *do modelo*. Deixe em branco e mude o município do
+   emissor: o rascunho novo herda o novo emissor. Na nota, escolha outro município e depois *Voltar ao padrão*: volta ao do modelo.
+5. **Município inexistente** é recusado junto do campo (*não encontrado*).
+6. **Confirme com a Sefin** que ela aceita `cLocPrestacao` diferente do emissor com o serviço escolhido; se rejeitar, anote o **código do erro**.
+
 ### Parte B — IBS/CBS
 
 1. **Cadastro do serviço.** Em *Cadastros › Serviços*, informe código de tributação nacional, NBS, CST e classificação (exemplo: `01.01.01`,
@@ -62,6 +79,7 @@ emitir, **baixe o XML da DPS/NFS-e** e confira se `pAliq` está presente ou ause
 | E0859, E0860, E0960/E0961 | `fiscal/tests/test_ibs_cbs.py` | grupo e `cIndOp` presentes ou ausentes no XML conforme `ind_gIBSCBS` |
 | E0958, E0959, E0902, E0322 | idem e `test_referencias_oficiais.py` | classificação inexistente, fora da vigência, que não vale para NFS-e; CST incoerente; 99.03; NBS faltando |
 | Sugestão pelo Anexo VIII | `test_ibs_cbs.py`, `test_referencias_oficiais.py` | única, várias opções (não escolhe), item/NBS fora do anexo |
+| Município da prestação: `cLocPrestacao` no XML, LP consulta o convênio dele, EP/ET ignoram, nota > modelo > emissor, validação | `fiscal/tests/test_municipio_da_prestacao.py`, `agendamentos/tests/test_municipio_da_prestacao_no_modelo.py`, `test_aliquota_issqn.py` | XML assinado; modelo herda e sobrescreve; "voltar a herdar"; rascunho antigo cai no emissor |
 | Prioridade nota > modelo > serviço (`cIndOp`) | `test_ibs_cbs.py`, `agendamentos/tests/test_ibs_cbs_no_modelo.py` | por campo; chaves antigas (`informar`) ignoradas |
 | Tabelas oficiais | `test_referencias_oficiais.py` | leitor de `.xlsx` com mesclagens, extratores (recusam forma inesperada), baixador contra uma fonte falsa (firewall HTML, nova tentativa, busca binária de vigência), SHA-256 do `LEIAME` |
 | Rascunho antigo, migração, API | `test_ibs_cbs.py`, `test_migracao_ibs_cbs.py` | rascunho sem `cIndOp` é barrado; a migração não copia o `cIndOp` da empresa |
@@ -104,7 +122,36 @@ Resultado de 2026-11-05: **nenhuma sobreviveu**. Nenhuma exigiu teste novo depoi
 | B12 | E0902 removida do cadastro do serviço | E0902 | idem |
 | B13 | ajuste de `cIndOp` sem tributação deixa de avisar | E0961 | idem |
 
-O executor das mutações é um script de uso local (não versionado); a lista acima é a especificação para repeti-las.
+### Mutações do município da prestação (21 de 21 detectadas)
+
+Mesma técnica (trecho original conferido uma única vez, teste, restauração). Resultado de 2026-11-06: **nenhuma sobreviveu**. A primeira
+tentativa do C5 rodou sobre um trecho que não existia mais (virou no-op e "sobreviveu"); refeita com o trecho certo, foi detectada.
+
+| # | Mutação | Testes que a pegam |
+|---|---|---|
+| C1 | serviço do local da prestação usa o município do emissor | `test_aliquota_issqn`, `test_municipio_da_prestacao` |
+| C2 | `cLocPrestacao` fixo no município do emissor | `test_municipio_da_prestacao` |
+| C3 | serviço do estabelecimento do prestador passa a usar o município da prestação | idem |
+| C4 | local da prestação sem município da prestação não bloqueia | `test_aliquota_issqn` |
+| C5 | origem da prestação exposta fora do local da prestação | idem |
+| C6 | prioridade invertida (modelo vale mais que a nota) | os três arquivos |
+| C7 | o município do modelo é ignorado | idem |
+| C8 | validação do código IBGE removida | `test_municipio_da_prestacao`, `..._no_modelo` |
+| C9 | a execução ignora o município que a nota guardou | idem |
+| C10 | o código não é reduzido aos dígitos | idem |
+| C11 | corrigir o rascunho esquece o que o modelo definia | `..._no_modelo` |
+| C12 | a DPS leva o município do emissor, não o resolvido | `test_municipio_da_prestacao` |
+| C13 | a prévia usa o emissor na regra da alíquota | `test_municipio_da_prestacao`, `..._no_modelo` |
+| C14 | aviso "só consta da nota" também no serviço do local da prestação | `test_municipio_da_prestacao` |
+| C15 | validação do município da nota removida | idem |
+| C16 | a avaliação da nota gravada usa o emissor | `test_municipio_da_prestacao`, `test_aliquota_na_emissao` |
+| C17 | o modelo não leva o município ao gerar o rascunho | `..._no_modelo` |
+| C18 | validação do município no cadastro do modelo removida | idem |
+| C19 | a API do modelo não reduz o código aos dígitos | idem |
+| C20 | a prévia do rascunho esquece o município do modelo | idem |
+| C21 | o resolvedor inventa um município quando o emissor não está definido | `test_municipio_da_prestacao` |
+
+O executor das mutações é um script de uso local (não versionado); as listas acima são a especificação para repeti-las.
 
 ## Atualização da issue #27
 
