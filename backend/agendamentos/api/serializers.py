@@ -6,6 +6,7 @@ from agendamentos.models import Agendamento, ExecucaoAgendamento, ModeloNfse
 from agendamentos.services import modelos
 from cadastros.models import Pessoa, Servico
 from fiscal.models import ParametrosFiscais
+from fiscal.services import local_prestacao
 from fiscal.services import nfse as servico_nfse
 from fiscal.services.nfse import CAMPOS_DE_VALORES
 
@@ -49,6 +50,10 @@ class ModeloEntrada(serializers.Serializer):
     ibs_cbs_indicador_destinatario = serializers.ChoiceField(
         choices=[0, 1], required=False, allow_null=True
     )
+    # Município da prestação (código IBGE): vazio = herda o padrão (o município do emissor).
+    codigo_municipio_prestacao = serializers.CharField(
+        max_length=9, required=False, allow_blank=True, allow_null=True
+    )
     email_envio_automatico = serializers.BooleanField(required=False, allow_null=True)
     email_avisar_cancelamento = serializers.BooleanField(required=False, allow_null=True)
     email_anexar_pdf = serializers.BooleanField(required=False, allow_null=True)
@@ -69,6 +74,10 @@ def aplicar_modelo(modelo, dados):
             if campo == "ibs_cbs_indicador_operacao":  # só os dígitos; vazio = herda
                 valor = "".join(c for c in valor if c.isdigit())
             setattr(modelo, campo, valor.strip() if campo == "nome" else valor)
+    if "codigo_municipio_prestacao" in dados:  # só os dígitos; vazio = herda o padrão
+        modelo.codigo_municipio_prestacao = (
+            local_prestacao.normalizar(dados["codigo_municipio_prestacao"]) or ""
+        )
     for campo, classe, rotulo in (
         ("tomador", Pessoa, "Tomador"),
         ("servico", Servico, "Serviço"),
@@ -124,6 +133,16 @@ def ibs_cbs_saida(modelo):
     }
 
 
+def local_prestacao_saida(modelo):
+    """Município da prestação do modelo para a tela: o que ele define e o que valeria hoje."""
+    parametros = ParametrosFiscais.obter()
+    codigo, origem = local_prestacao.resolver(None, modelo.codigo_municipio_prestacao, parametros)
+    return {
+        "codigo_municipio_prestacao": modelo.codigo_municipio_prestacao,
+        "local_prestacao_efetivo": {"codigo": codigo, "origem": origem},
+    }
+
+
 def modelo_saida(modelo, *, problemas=None, em_uso=0):
     """Dados do modelo para a tela, com os problemas que o impedem de gerar rascunho hoje."""
     complementos = modelo.complementos or {}
@@ -140,6 +159,7 @@ def modelo_saida(modelo, *, problemas=None, em_uso=0):
         "percentual_total_tributos_simples": complementos.get("percentual_total_tributos_simples"),
         "competencia_padrao": modelo.competencia_padrao,
         **ibs_cbs_saida(modelo),
+        **local_prestacao_saida(modelo),
         "email_envio_automatico": modelo.email_envio_automatico,
         "email_avisar_cancelamento": modelo.email_avisar_cancelamento,
         "email_anexar_pdf": modelo.email_anexar_pdf,

@@ -12,7 +12,7 @@ uma mensagem, em vez de adivinhar.
 """
 
 from fiscal import gateway
-from fiscal.services import aliquota_issqn
+from fiscal.services import aliquota_issqn, local_prestacao
 
 
 def convenio_gravado(parametros):
@@ -46,20 +46,37 @@ def convenio_com_consulta(parametros, contexto):
     return resolver
 
 
-def avaliar_nota(*, parametros, servico, competencia, iss_retido, tomador, resolver):
-    """Aplica a regra de `pAliq` aos dados de uma nota (snapshots de serviço e tomador)."""
+def avaliar_nota(
+    *,
+    parametros,
+    servico,
+    competencia,
+    iss_retido,
+    tomador,
+    resolver,
+    municipio_prestacao,
+    origem_prestacao,
+):
+    """Aplica a regra de `pAliq` aos dados de uma nota (snapshots de serviço e tomador).
+
+    `municipio_prestacao` e `origem_prestacao` vêm de `local_prestacao.resolver`: só pesam nos
+    serviços cujo ISSQN é devido no local da prestação.
+    """
     return aliquota_issqn.avaliar(
         parametros=parametros,
         servico=servico,
         competencia=competencia,
         iss_retido=iss_retido,
         municipio_tomador=(tomador or {}).get("codigo_municipio") or None,
+        municipio_prestacao=municipio_prestacao,
+        origem_prestacao=origem_prestacao,
         convenio_do_municipio=resolver,
     )
 
 
 def avaliar_da_nota(nfse, parametros, resolver):
     """Mesma avaliação, a partir de uma `Nfse` já gravada (usa o snapshot dela)."""
+    prestacao, origem = local_prestacao.da_nota(nfse, parametros)
     return avaliar_nota(
         parametros=parametros,
         servico=nfse.servico,
@@ -67,6 +84,8 @@ def avaliar_da_nota(nfse, parametros, resolver):
         iss_retido=bool((nfse.totais or {}).get("iss_retido")),
         tomador=nfse.tomador,
         resolver=resolver,
+        municipio_prestacao=prestacao,
+        origem_prestacao=origem,
     )
 
 

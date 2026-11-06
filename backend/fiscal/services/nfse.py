@@ -12,8 +12,8 @@ from django.utils import timezone
 
 from cadastros.models import Pessoa, Servico
 from fiscal.models import Nfse, ParametrosFiscais
-from fiscal.referencias import classificacao, indop
-from fiscal.services import aliquota_nota, calculo
+from fiscal.referencias import classificacao, incidencia, indop
+from fiscal.services import aliquota_nota, calculo, local_prestacao
 
 MOTIVOS_DE_SUBSTITUICAO = {
     "01": "Desenquadramento do Simples Nacional",
@@ -400,6 +400,11 @@ def preparar(dados, *, hoje=None):
             "Este serviço tem retenção de PIS/COFINS, que o sistema ainda não envia na nota. "
             "Remova a retenção no cadastro do serviço ou emita esta nota pelo emissor oficial."
         )
+    prestacao_nota = local_prestacao.normalizar(dados.get("codigo_municipio_prestacao"))
+    prestacao_modelo = local_prestacao.normalizar(dados.get("codigo_municipio_prestacao_modelo"))
+    for codigo in (prestacao_nota, prestacao_modelo):
+        if codigo and (erro := local_prestacao.erro_do_codigo(codigo)):
+            erros["codigo_municipio_prestacao"] = erro
     if erros:
         raise ErroDeNota(erros)
 
@@ -429,6 +434,11 @@ def preparar(dados, *, hoje=None):
         avisos,
         adquirente_no_exterior=pessoa.tipo == Pessoa.Tipo.ESTRANGEIRO,
     )
+    # Município da prestação (nota > modelo > emissor): vai na DPS como `cLocPrestacao` e é o
+    # município de incidência dos serviços cujo ISSQN é devido no local da prestação.
+    codigo_prestacao, origem_prestacao = local_prestacao.resolver(
+        prestacao_nota, prestacao_modelo, parametros
+    )
     # Alíquota do ISSQN (pAliq): regra única do Anexo VI (issue #29). Na prévia só vale o convênio
     # já gravado; a conferência com a Sefin, quando preciso, é feita no envio.
     aliquota = aliquota_nota.avaliar_nota(
@@ -438,12 +448,23 @@ def preparar(dados, *, hoje=None):
         iss_retido=totais.iss_retido,
         tomador=snapshot_tomador(pessoa),
         resolver=aliquota_nota.convenio_gravado(parametros),
+        municipio_prestacao=codigo_prestacao,
+        origem_prestacao=origem_prestacao,
     ).para_dict()
     if complementos_erros:
         raise ErroDeNota(complementos_erros)
 
     if competencia.replace(day=1) != hoje.replace(day=1):
         avisos.append("A competência é de outro mês. Confira se é isso mesmo.")
+    if (
+        codigo_prestacao
+        and codigo_prestacao != parametros.codigo_municipio_emissor
+        and aliquota["regra_incidencia"] != incidencia.LP
+    ):
+        avisos.append(
+            "O município da prestação é diferente do município do emissor. Para este serviço o "
+            "ISSQN não é devido no local da prestação, então isso só consta da nota."
+        )
 
     return Preparo(
         pessoa=pessoa,
@@ -460,6 +481,11 @@ def preparar(dados, *, hoje=None):
             "percentual_total_tributos_simples": None if simples is None else str(simples),
             "ibs_cbs": ibs,
             "aliquota_issqn": aliquota,
+            # Município da prestação (cLocPrestacao): o efetivo e de onde veio; abaixo, o que a
+            # nota ajustou e o que o modelo definia ao gerar (a tela reabre fiel, como no IBS/CBS).
+            "local_prestacao": {"codigo": codigo_prestacao, "origem": origem_prestacao},
+            "municipio_prestacao_nota": prestacao_nota,
+            "municipio_prestacao_modelo": prestacao_modelo,
             # O que a nota sobrescreveu e o que o modelo definia ao gerar: a tela reabre fiel e a
             # edição do rascunho resolve de novo sem consultar o app de agendamentos.
             "ibs_cbs_nota": ajuste_da_nota(dados.get("ibs_cbs")),
@@ -507,7 +533,12 @@ def atualizar_rascunho(nfse, dados):
             f"Uma nota {nfse.get_situacao_display().lower()} não pode mais ser alterada."
         )
     # O que o modelo definia quando o rascunho nasceu continua valendo (a entrada não o controla).
-    dados = {**dados, "ibs_cbs_modelo": (nfse.complementos or {}).get("ibs_cbs_modelo")}
+    complementos = nfse.complementos or {}
+    dados = {
+        **dados,
+        "ibs_cbs_modelo": complementos.get("ibs_cbs_modelo"),
+        "codigo_municipio_prestacao_modelo": complementos.get("municipio_prestacao_modelo"),
+    }
     preparo = preparar(dados)
     for campo, valor in _campos_da_nota(preparo).items():
         setattr(nfse, campo, valor)
@@ -583,6 +614,7 @@ def dados_da_dps(
         "numero": numero,
         "competencia": nfse.competencia,
         "codigo_municipio_emissor": parametros.codigo_municipio_emissor,
+        "codigo_municipio_prestacao": local_prestacao.da_nota(nfse, parametros)[0],
         "prestador": {
             "cnpj": empresa.cnpj,
             "opcao_simples": parametros.opcao_simples,

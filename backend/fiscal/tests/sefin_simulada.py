@@ -69,6 +69,7 @@ class SefinSimulada(TransporteRest):
         self.agora = dt.datetime(2026, 11, 2, 15, 0, tzinfo=dt.UTC)
         self.municipio_aderente = True  # convênio dos municípios (parametrização)
         self.municipios_nao_aderentes = set()  # códigos IBGE sem convênio (exceção ao padrão acima)
+        self.ativacao_do_convenio = {}  # código IBGE -> data de ativação (padrão: 2024-05-02)
         self.registrar_substituicao = True  # False: a Sefin autoriza mas não registra o evento
         self.latencia = 0.0  # demora de cada POST de emissão, para expor concorrência
         self.simultaneas = 0
@@ -104,7 +105,7 @@ class SefinSimulada(TransporteRest):
                     "parametrosConvenio": {
                         "aderenteAmbienteNacional": int(aderente),
                         "aderenteEmissorNacional": 1,
-                        "dataAtivacao": "2024-05-02",
+                        "dataAtivacao": self.ativacao_do_convenio.get(m.group(1), "2024-05-02"),
                     }
                 },
             )

@@ -273,7 +273,7 @@ def montar_dps(dados):
             servico=Servico(
                 codigo_tributacao_nacional=servico["codigo_tributacao_nacional"],
                 descricao=servico["descricao"],
-                codigo_municipio_prestacao=dados["codigo_municipio_emissor"],
+                codigo_municipio_prestacao=dados["codigo_municipio_prestacao"],
                 codigo_tributacao_municipal=servico.get("codigo_tributacao_municipal") or None,
                 codigo_nbs=servico.get("nbs") or None,
                 informacoes_complementares=dados.get("informacoes_complementares") or None,

@@ -6,7 +6,9 @@ import Aviso from '../../components/Aviso.jsx'
 import BotaoAjuda from '../../components/BotaoAjuda.jsx'
 import Campo from '../../components/Campo.jsx'
 import CampoSelecao from '../../components/CampoSelecao.jsx'
+import NomeDoMunicipio from '../../components/NomeDoMunicipio.jsx'
 import SelectBusca from '../../components/SelectBusca.jsx'
+import SeletorMunicipio from '../../components/SeletorMunicipio.jsx'
 import { useAuth } from '../../contexts/AuthContext.jsx'
 import { useFormularioSujo } from '../../hooks/useFormularioSujo.js'
 import { errosPorCampo, mensagemErro } from '../../utils/erros.js'
@@ -37,6 +39,8 @@ const VAZIO = {
   // IBS/CBS do modelo: só ajustes de exceção; vazio = herda do serviço (cIndOp) ou da empresa (indDest).
   ibs_indicador: '',
   ibs_destinatario: '',
+  // Município da prestação (código IBGE): vazio = herda o padrão, o município do emissor de quando o rascunho é gerado.
+  municipio_prestacao: '',
 }
 
 const listaDe = (dados) => (Array.isArray(dados) ? dados : (dados?.results ?? []))
@@ -81,6 +85,7 @@ function formularioDe(m) {
       m.ibs_cbs_indicador_destinatario === null || m.ibs_cbs_indicador_destinatario === undefined
         ? ''
         : String(m.ibs_cbs_indicador_destinatario),
+    municipio_prestacao: m.codigo_municipio_prestacao ?? '',
   }
 }
 
@@ -110,6 +115,7 @@ function corpoDe(f) {
     email_copias_fixas: f.copias_proprias ? comoLista(f.email_copias) : null,
     ibs_cbs_indicador_operacao: f.ibs_indicador,
     ibs_cbs_indicador_destinatario: f.ibs_destinatario === '' ? null : Number(f.ibs_destinatario),
+    codigo_municipio_prestacao: f.municipio_prestacao,
   }
 }
 
@@ -127,6 +133,12 @@ function Previa({ previa }) {
       <dl>
         <p className="flex justify-between gap-4"><dt>Tomador</dt><dd>{previa.tomador}</dd></p>
         <p className="flex justify-between gap-4"><dt>Competência</dt><dd>{formatarData(previa.competencia)}</dd></p>
+        {previa.local_prestacao?.codigo && (
+          <p className="flex justify-between gap-4">
+            <dt>Município da prestação</dt>
+            <dd><NomeDoMunicipio codigo={previa.local_prestacao.codigo} /> ({previa.local_prestacao.origem === 'modelo' ? 'do modelo' : 'padrão: município do emissor'})</dd>
+          </p>
+        )}
         <p className="flex justify-between gap-4"><dt>Valor do serviço</dt><dd>{dinheiro(previa.totais.valor_servico)}</dd></p>
         <p className="flex justify-between gap-4"><dt>ISS</dt><dd>{dinheiro(previa.totais.valor_iss)}</dd></p>
         <p className="flex justify-between gap-4"><dt>Valor líquido</dt><dd><strong>{dinheiro(previa.totais.valor_liquido)}</strong></dd></p>
@@ -162,6 +174,7 @@ export default function ModeloForm() {
   const [servicos, setServicos] = useState([])
   const [variaveis, setVariaveis] = useState({})
   const [empresaIbs, setEmpresaIbs] = useState(null) // o padrão de IBS/CBS da empresa de agora
+  const [municipioPadrao, setMunicipioPadrao] = useState(null) // município do emissor, de agora
   const [carregando, setCarregando] = useState(Boolean(id))
   const [falha, setFalha] = useState('')
   const [erros, setErros] = useState({})
@@ -179,6 +192,7 @@ export default function ModeloForm() {
       if (!ativo || !r.ok) return
       setVariaveis(r.dados.variaveis_do_texto)
       setEmpresaIbs(r.dados.ibs_cbs_empresa ?? null)
+      setMunicipioPadrao(r.dados.municipio_prestacao_padrao ?? null)
     })
     if (id) {
       api.obter(id).then((r) => {
@@ -361,6 +375,18 @@ export default function ModeloForm() {
             </ul>
           </div>
           <Campo rotulo="Percentual total de tributos do Simples (%) — opcional" inputMode="decimal" value={f.percentual_simples} onChange={mudar('percentual_simples')} erro={erros.percentual_total_tributos_simples} />
+
+          <section aria-label="Município da prestação do modelo" className="space-y-2 text-sm">
+            <SeletorMunicipio
+              rotulo="Município da prestação"
+              valor={f.municipio_prestacao}
+              aoMudar={(codigo) => setF((atual) => ({ ...atual, municipio_prestacao: codigo }))}
+              erro={erros.codigo_municipio_prestacao}
+              padrao={municipioPadrao}
+              textoDoPadrao="Em branco, vale o município do emissor"
+              dica="Onde o serviço é prestado nas notas deste modelo. Só muda a alíquota do ISS nos serviços cujo ISSQN é devido no local da prestação; cada rascunho ainda pode ajustar."
+            />
+          </section>
 
           <section aria-label="IBS e CBS do modelo" className="space-y-2 text-sm">
             <h3 className="text-base text-gray-900 dark:text-gray-100">IBS e CBS</h3>

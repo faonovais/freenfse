@@ -37,6 +37,7 @@ const OPCOES = {
   responsaveis: [{ id: 7, email: 'ana@example.com', nome: 'Ana' }],
   tolerancia_horas: 12,
   ibs_cbs_empresa: { indicador_destinatario: 0 },
+  municipio_prestacao_padrao: '2101400',
 }
 const MODELO = {
   id: 1, nome: 'Mensalidade', ativo: true, tomador: 4, tomador_nome: 'TOMADOR FICTICIO LTDA', servico: 3,
@@ -45,6 +46,7 @@ const MODELO = {
   email_envio_automatico: null, email_avisar_cancelamento: null, email_anexar_pdf: null, email_anexar_xml: null,
   email_assunto_modelo: '', email_corpo_modelo: '', email_copias_fixas: null, agendamentos_em_uso: 2, problemas: {},
   ibs_cbs_indicador_operacao: '', ibs_cbs_indicador_destinatario: null,
+  codigo_municipio_prestacao: '', local_prestacao_efetivo: { codigo: '2101400', origem: 'emissor' },
   atualizado_em: '2026-11-01T12:00:00Z',
 } // prettier-ignore
 const MODELO_COM_IBS_PROPRIO = {
@@ -436,6 +438,92 @@ describe('Formulário do modelo', () => {
 
       expect(await screen.findByLabelText('Ajustar o indicador da operação (cIndOp)')).toBeDisabled()
       expect(screen.queryByRole('button', { name: 'Voltar a herdar do serviço e da empresa' })).not.toBeInTheDocument()
+    })
+  })
+
+  describe('município da prestação do modelo: vazio herda o município do emissor', () => {
+    const BALSAS = { codigo: '2101400', nome: 'Balsas', uf: 'MA' }
+    const PALMAS = { codigo: '1721000', nome: 'Palmas', uf: 'TO' }
+    const MUNICIPIOS = {
+      'GET /api/cadastros/municipios/': (chamada) => ({
+        status: 200,
+        dados: chamada.url.includes('codigo=1721000') || chamada.url.includes('busca=pal') ? [PALMAS] : [BALSAS],
+      }),
+    }
+    const abrirModelo = (modelo = MODELO, extras = {}) =>
+      abrir('/agendamentos/modelos/1', {
+        [`GET ${B}/modelos/1/`]: { status: 200, dados: modelo },
+        [`PATCH ${B}/modelos/1/`]: { status: 200, dados: modelo },
+        [`GET ${B}/modelos/`]: { status: 200, dados: [] },
+        ...MUNICIPIOS,
+        ...extras,
+      })
+    const salvar = async (chamadas) => {
+      fireEvent.click(screen.getByRole('button', { name: 'Salvar modelo' }))
+      await waitFor(() => expect(corpoDe(chamadas, 'PATCH', `${B}/modelos/1/`)).toBeDefined())
+      return corpoDe(chamadas, 'PATCH', `${B}/modelos/1/`)
+    }
+
+    it('mostra o padrão e não envia município nenhum se nada for mudado', async () => {
+      const { chamadas } = abrirModelo()
+      await screen.findByLabelText('Nome do modelo')
+
+      expect(await screen.findByText(/Em branco, vale o município do emissor/)).toBeInTheDocument()
+      expect(await screen.findByText('Balsas/MA')).toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: 'Voltar ao padrão' })).not.toBeInTheDocument()
+
+      expect(await salvar(chamadas)).toMatchObject({ codigo_municipio_prestacao: '' })
+    })
+
+    it('sobrescreve com outro município e envia o código', async () => {
+      const { chamadas } = abrirModelo()
+      await screen.findByLabelText('Nome do modelo')
+
+      fireEvent.change(screen.getByRole('combobox', { name: 'Município da prestação' }), { target: { value: 'pal' } })
+      fireEvent.mouseDown(await screen.findByRole('option', { name: /Palmas\/TO/ }))
+
+      expect(await salvar(chamadas)).toMatchObject({ codigo_municipio_prestacao: '1721000' })
+    })
+
+    it('o modelo com município próprio reabre preenchido e dá para voltar ao padrão', async () => {
+      const { chamadas } = abrirModelo({
+        ...MODELO, codigo_municipio_prestacao: '1721000', local_prestacao_efetivo: { codigo: '1721000', origem: 'modelo' },
+      }) // prettier-ignore
+      expect(await screen.findByText(/Selecionado:/)).toHaveTextContent('Palmas/TO')
+
+      fireEvent.click(screen.getByRole('button', { name: 'Voltar ao padrão' }))
+
+      expect(await salvar(chamadas)).toMatchObject({ codigo_municipio_prestacao: '' })
+    })
+
+    it('mostra o erro do município ao lado do campo', async () => {
+      const { chamadas } = abrirModelo(MODELO, {
+        [`PATCH ${B}/modelos/1/`]: { status: 400, dados: { codigo_municipio_prestacao: 'Município com o código IBGE 9999999 não encontrado.' } },
+      }) // prettier-ignore
+      await screen.findByLabelText('Nome do modelo')
+
+      fireEvent.click(screen.getByRole('button', { name: 'Salvar modelo' }))
+
+      expect(await screen.findByText('Município com o código IBGE 9999999 não encontrado.')).toBeInTheDocument()
+      expect(chamadas.some((c) => c.metodo === 'PATCH')).toBe(true)
+    })
+
+    it('a conferência mostra o município da prestação e de onde ele veio', async () => {
+      abrirModelo(MODELO, {
+        [`POST ${B}/modelos/1/previa/`]: {
+          status: 200,
+          dados: {
+            ok: true, competencia: '2026-11-01', tomador: 'TOMADOR FICTICIO LTDA',
+            totais: { valor_servico: '1500.00', valor_iss: '30.00', valor_liquido: '1470.00' }, avisos: [],
+            informacoes_complementares: '', ibs_cbs: null, local_prestacao: { codigo: '1721000', origem: 'modelo' },
+          },
+        },
+      }) // prettier-ignore
+
+      fireEvent.click(await screen.findByRole('button', { name: 'Conferir como ficaria hoje' }))
+
+      const previa = await screen.findByRole('region', { name: 'Como ficaria o rascunho' })
+      await waitFor(() => expect(within(previa).getByText('Município da prestação').closest('p')).toHaveTextContent('Palmas/TO (do modelo)'))
     })
   })
 

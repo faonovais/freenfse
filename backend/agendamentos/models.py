@@ -63,6 +63,10 @@ class ModeloNfse(models.Model):
     ibs_cbs_indicador_operacao = models.CharField(max_length=6, blank=True)
     ibs_cbs_indicador_destinatario = models.PositiveSmallIntegerField(null=True, blank=True)
 
+    # Município da prestação (issue #29, ADR 0010): código IBGE. Vazio = herda o padrão, que é o
+    # município do emissor **de quando o rascunho é gerado** (nada é copiado para cá).
+    codigo_municipio_prestacao = models.CharField(max_length=7, blank=True)
+
     # Sobreposição da configuração de e-mail da empresa (D21). Vazio/nulo = herdar da empresa.
     email_envio_automatico = models.BooleanField(null=True, blank=True)
     email_avisar_cancelamento = models.BooleanField(null=True, blank=True)

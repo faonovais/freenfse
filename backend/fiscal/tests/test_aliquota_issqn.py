@@ -260,12 +260,15 @@ def test_convenio_ativo_na_data_de_competencia(aderente, ativacao, competencia, 
 
 # -- município de incidência (Anexo VI) -----------------------------------------------------------
 
-EMISSOR, TOMADOR = "2101400", "3550308"
+EMISSOR, TOMADOR, PRESTACAO = "2101400", "3550308", "4106902"
 
 
-def _incidencia(codigo, tomador=TOMADOR):
+def _incidencia(codigo, tomador=TOMADOR, prestacao=PRESTACAO):
     return regra.municipio_de_incidencia(
-        codigo_tributacao_nacional=codigo, municipio_emissor=EMISSOR, municipio_tomador=tomador
+        codigo_tributacao_nacional=codigo,
+        municipio_emissor=EMISSOR,
+        municipio_tomador=tomador,
+        municipio_prestacao=prestacao,
     )
 
 
@@ -273,11 +276,27 @@ def test_regra_geral_o_servico_incide_no_municipio_do_prestador():
     assert _incidencia("010101") == (EMISSOR, "EP", None)
 
 
-def test_excecao_local_da_prestacao_usa_o_municipio_do_emissor_e_avisa():
-    municipio, regra_, aviso = _incidencia("030401")
+def test_local_da_prestacao_incide_no_municipio_da_prestacao_da_nota():
+    assert _incidencia("030401") == (PRESTACAO, "LP", None)
 
-    assert (municipio, regra_) == (EMISSOR, "LP")
-    assert "local da prestação" in aviso and "emissor oficial" in aviso
+
+def test_local_da_prestacao_com_a_prestacao_no_proprio_emissor_incide_no_emissor():
+    assert _incidencia("030401", prestacao=EMISSOR) == (EMISSOR, "LP", None)
+
+
+def test_local_da_prestacao_sem_municipio_da_prestacao_nao_inventa_um():
+    # Nunca cai no emissor às escondidas: quem chama bloqueia a nota.
+    assert _incidencia("030401", prestacao=None) == (None, "LP", None)
+    assert _incidencia("030401", prestacao="") == (None, "LP", None)
+
+
+def test_o_municipio_da_prestacao_nao_muda_a_incidencia_de_quem_nao_e_do_local_da_prestacao():
+    assert _incidencia("010101") == (EMISSOR, "EP", None)  # estabelecimento do prestador
+    assert _incidencia("170501") == (TOMADOR, "ET", None)  # estabelecimento do tomador
+    municipio, regra_, _ = _incidencia("990101")  # sem incidência: regra geral
+    assert (municipio, regra_) == (EMISSOR, "EP")
+    municipio, regra_, _ = _incidencia("999999")  # fora do anexo: regra geral
+    assert (municipio, regra_) == (EMISSOR, "EP")
 
 
 def test_fornecimento_de_mao_de_obra_incide_no_municipio_do_tomador():
@@ -318,7 +337,16 @@ def _parametros(**campos):
     return SimpleNamespace(**{**base, **campos})
 
 
-def _avaliar(parametros, convenio, *, servico="010101", aliquota="2.00", retido=False):
+def _avaliar(
+    parametros,
+    convenio,
+    *,
+    servico="010101",
+    aliquota="2.00",
+    retido=False,
+    prestacao=EMISSOR,
+    origem="emissor",
+):
     consultados = []
 
     def convenio_do_municipio(codigo):
@@ -331,6 +359,8 @@ def _avaliar(parametros, convenio, *, servico="010101", aliquota="2.00", retido=
         competencia=dt.date(2026, 11, 1),
         iss_retido=retido,
         municipio_tomador=TOMADOR,
+        municipio_prestacao=prestacao,
+        origem_prestacao=origem,
         convenio_do_municipio=convenio_do_municipio,
     )
     return resultado, consultados
@@ -379,3 +409,60 @@ def test_avaliacao_simples_com_retencao_abaixo_do_minimo_bloqueia():
 
     assert resultado.envia is False
     assert "E0621" in resultado.bloqueio and "1.8%" in resultado.bloqueio
+
+
+def test_avaliacao_local_da_prestacao_consulta_o_convenio_do_municipio_da_prestacao():
+    resultado, consultados = _avaliar(
+        _parametros(),
+        {"aderente": True, "data_ativacao": "2024-05-02"},
+        servico="030401",
+        prestacao=PRESTACAO,
+        origem="nota",
+    )
+
+    assert consultados == [PRESTACAO]
+    dados = resultado.para_dict()
+    assert dados["municipio_incidencia"] == PRESTACAO and dados["regra_incidencia"] == "LP"
+    assert dados["origem_prestacao"] == "nota"
+    assert dados["codigo_regra"] == "E0617" and resultado.envia is False
+
+
+def test_avaliacao_local_da_prestacao_usa_a_data_de_ativacao_do_municipio_da_prestacao():
+    # O convênio do município da prestação só vale a partir de 2026-12-01; a competência é de
+    # novembro: para esse município o convênio ainda não estava ativo e a alíquota é obrigatória.
+    resultado, _ = _avaliar(
+        _parametros(),
+        {"aderente": True, "data_ativacao": "2026-12-01"},
+        servico="030401",
+        prestacao=PRESTACAO,
+        origem="modelo",
+    )
+
+    assert resultado.para_dict()["codigo_regra"] == "E0619" and resultado.envia is True
+
+
+def test_avaliacao_de_servico_que_nao_e_do_local_da_prestacao_ignora_o_municipio_da_prestacao():
+    resultado, consultados = _avaliar(
+        _parametros(), {"aderente": True, "data_ativacao": None}, prestacao=PRESTACAO, origem="nota"
+    )
+
+    assert consultados == [EMISSOR]
+    dados = resultado.para_dict()
+    assert dados["municipio_incidencia"] == EMISSOR and dados["regra_incidencia"] == "EP"
+    assert dados["origem_prestacao"] is None  # só conta nos serviços do local da prestação
+
+
+def test_avaliacao_local_da_prestacao_sem_municipio_da_prestacao_bloqueia_sem_consultar():
+    resultado, consultados = _avaliar(
+        _parametros(),
+        {"aderente": True, "data_ativacao": None},
+        servico="030401",
+        prestacao=None,
+        origem=None,
+    )
+
+    assert consultados == []
+    assert resultado.envia is False
+    assert resultado.decisao.situacao is Situacao.INDETERMINADA
+    assert resultado.municipio_incidencia is None
+    assert "município da prestação" in resultado.bloqueio

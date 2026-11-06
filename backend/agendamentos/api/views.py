@@ -22,7 +22,7 @@ from core.api.permissions import PermissaoPorOperacao
 from core.models import LogAuditoria, VinculoUsuarioEmpresa
 from core.services import auditoria
 from fiscal import tasks as tarefas_fiscais
-from fiscal.models import Nfse
+from fiscal.models import Nfse, ParametrosFiscais
 from fiscal.services import nfse as servico_nfse
 from fiscal.services.nfse import ErroDeNota
 
@@ -128,6 +128,8 @@ class ModeloViewSet(viewsets.GenericViewSet):
                 "informacoes_complementares": preparo.complementos["informacoes_complementares"],
                 # O IBS/CBS como iria na DPS, com a origem de cada campo (nota, modelo ou empresa).
                 "ibs_cbs": preparo.ibs_cbs_dps,
+                # O município da prestação (cLocPrestacao) e de onde ele veio.
+                "local_prestacao": preparo.complementos["local_prestacao"],
             }
         )
 
@@ -366,6 +368,8 @@ class OpcoesView(APIView):
                 "variaveis_do_texto": s.variaveis_do_texto(),
                 # Padrão de IBS/CBS da empresa de agora: é o que um modelo vazio herda.
                 "ibs_cbs_empresa": s.ibs_cbs_da_empresa(),
+                # Padrão do município da prestação: o do emissor, de agora.
+                "municipio_prestacao_padrao": ParametrosFiscais.obter().codigo_municipio_emissor,
                 "modelos": [
                     {"id": m.pk, "nome": m.nome} for m in ModeloNfse.objects.filter(ativo=True)
                 ],

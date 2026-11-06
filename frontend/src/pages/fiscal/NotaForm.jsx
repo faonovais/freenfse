@@ -6,7 +6,9 @@ import Aviso from '../../components/Aviso.jsx'
 import BotaoAjuda from '../../components/BotaoAjuda.jsx'
 import Campo from '../../components/Campo.jsx'
 import CampoSelecao from '../../components/CampoSelecao.jsx'
+import NomeDoMunicipio from '../../components/NomeDoMunicipio.jsx'
 import SelectBusca from '../../components/SelectBusca.jsx'
+import SeletorMunicipio from '../../components/SeletorMunicipio.jsx'
 import { useConfirmacao } from '../../contexts/ConfirmacaoContext.jsx'
 import { useFormularioSujo } from '../../hooks/useFormularioSujo.js'
 import { errosPorCampo, mensagemErro } from '../../utils/erros.js'
@@ -29,6 +31,7 @@ const vazio = () => ({
   percentual_simples: '',
   indicador_operacao: '',
   indicador_destinatario: '', // vazio = herda do modelo (se a nota veio de um) ou da empresa
+  municipio_prestacao: '', // vazio = herda do modelo (se a nota veio de um) ou o município do emissor
 })
 
 function formularioDe(nota) {
@@ -49,6 +52,8 @@ function formularioDe(nota) {
     indicador_operacao: complementos.ibs_cbs_nota?.codigo_indicador_operacao ?? '',
     indicador_destinatario:
       complementos.ibs_cbs_nota?.indicador_destinatario == null ? '' : String(complementos.ibs_cbs_nota.indicador_destinatario),
+    // Idem: só o município que a PRÓPRIA nota informou volta preenchido.
+    municipio_prestacao: complementos.municipio_prestacao_nota ?? '',
   }
 }
 
@@ -77,6 +82,7 @@ function corpoDe(f) {
     informacoes_complementares: f.informacoes,
     percentual_total_tributos_simples: numero(f.percentual_simples),
     ibs_cbs: ibsCbsDe(f),
+    codigo_municipio_prestacao: f.municipio_prestacao,
   }
 }
 
@@ -90,6 +96,7 @@ function Linha({ rotulo, children }) {
 }
 
 const ROTULO_DA_ORIGEM = { nota: 'ajuste desta nota', modelo: 'do modelo', servico: 'do serviço', empresa: 'padrão da empresa' }
+const ROTULO_DA_PRESTACAO = { nota: 'informado nesta nota', modelo: 'do modelo', emissor: 'padrão: município do emissor' }
 
 /** O grupo de IBS/CBS como vai na DPS: cada valor com a sua origem (nota, modelo ou empresa) ou por que não vai. */
 function IbsCbsNaDps({ ibs, servico }) {
@@ -124,7 +131,8 @@ function AliquotaNaDps({ decisao }) {
       {decisao.envia ? 'Vai na nota' : 'Não vai na nota'}
       {regra}. {decisao.explicacao}{' '}
       <span className="text-xs text-gray-600 dark:text-gray-400">
-        ({onde}, município {decisao.municipio_incidencia})
+        ({onde}, município <NomeDoMunicipio codigo={decisao.municipio_incidencia} />
+        {decisao.origem_prestacao ? `, ${ROTULO_DA_PRESTACAO[decisao.origem_prestacao] ?? ''}` : ''})
       </span>
     </Linha>
   )
@@ -145,6 +153,14 @@ function Previa({ previa, ambiente, leiauteDescricao }) {
         </Linha>
         <Linha rotulo="Descrição na nota">{previa.servico.descricao}</Linha>
         <Linha rotulo="Competência">{formatarData(previa.competencia)}</Linha>
+        {previa.complementos?.local_prestacao?.codigo && (
+          <Linha rotulo="Município da prestação">
+            <NomeDoMunicipio codigo={previa.complementos.local_prestacao.codigo} />{' '}
+            <span className="text-xs text-gray-600 dark:text-gray-400">
+              ({ROTULO_DA_PRESTACAO[previa.complementos.local_prestacao.origem] ?? ''})
+            </span>
+          </Linha>
+        )}
         <Linha rotulo="Valor do serviço">{dinheiro(t.valor_servico)}</Linha>
         {Number(t.desconto_incondicionado) > 0 && <Linha rotulo="Desconto incondicionado">{dinheiro(t.desconto_incondicionado)}</Linha>}
         {Number(t.deducao) > 0 && <Linha rotulo="Dedução">{dinheiro(t.deducao)}</Linha>}
@@ -180,6 +196,7 @@ export default function NotaForm() {
   const [servicos, setServicos] = useState([])
   const [prontidao, setProntidao] = useState(null)
   const [padroesDoModelo, setPadroesDoModelo] = useState(null) // o que o modelo do rascunho definia
+  const [municipioDoModelo, setMunicipioDoModelo] = useState('') // município da prestação que o modelo definia
   const [previa, setPrevia] = useState(null)
   const [erros, setErros] = useState({})
   const [erroGeral, setErroGeral] = useState('')
@@ -214,6 +231,7 @@ export default function NotaForm() {
       if (r.ok) {
         const preenchido = formularioDe(r.dados)
         setPadroesDoModelo(r.dados.complementos?.ibs_cbs_modelo ?? null)
+        setMunicipioDoModelo(r.dados.complementos?.municipio_prestacao_modelo ?? '')
         setF(preenchido)
         setInicial(preenchido)
       } else {
@@ -378,6 +396,15 @@ export default function NotaForm() {
               {erros.servico && <p className="mt-1 text-xs text-estado-erro">{erros.servico}</p>}
             </div>
           </div>
+          <SeletorMunicipio
+            rotulo="Município da prestação"
+            valor={f.municipio_prestacao}
+            aoMudar={escolher('municipio_prestacao')}
+            erro={erros.codigo_municipio_prestacao}
+            padrao={municipioDoModelo || prontidao?.municipio_prestacao_padrao || null}
+            textoDoPadrao={municipioDoModelo ? 'Em branco, vale o do modelo' : 'Em branco, vale o município do emissor'}
+            dica="Onde o serviço foi prestado. Só muda a alíquota do ISS nos serviços cujo ISSQN é devido no local da prestação."
+          />
         </fieldset>
 
         <fieldset className="space-y-3">

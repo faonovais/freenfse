@@ -228,12 +228,18 @@ def aplicar_ao_valor(decisao, aliquota):
 # -- município de incidência e convênio ----------------------------------------------------------
 
 
-def municipio_de_incidencia(*, codigo_tributacao_nacional, municipio_emissor, municipio_tomador):
+def municipio_de_incidencia(
+    *, codigo_tributacao_nacional, municipio_emissor, municipio_tomador, municipio_prestacao
+):
     """`(município, regra, aviso)`: onde incide o ISSQN, pela aba oficial do Anexo VI.
 
-    O local da prestação é o do emissor (o sistema informa `cLocPrestacao` assim); serviço que o
-    anexo não traz, ou caso que não dá para resolver, usa a **regra geral** (município do
-    prestador) e devolve um aviso para a prévia.
+    - estabelecimento do prestador → município do emissor;
+    - **local da prestação** → o município da prestação informado na nota (o emissor, se ninguém
+      informou outro). Sem município da prestação, devolve `None` e o chamador bloqueia;
+    - estabelecimento do tomador → município do tomador.
+
+    Serviço que o anexo não traz, ou caso que não dá para resolver, usa a **regra geral**
+    (município do prestador) e devolve um aviso para a prévia.
     """
     regra = incidencia.regra_de_incidencia(codigo_tributacao_nacional)
     if regra is None:
@@ -246,13 +252,7 @@ def municipio_de_incidencia(*, codigo_tributacao_nacional, municipio_emissor, mu
     if regra == incidencia.EP:
         return municipio_emissor, regra, None
     if regra == incidencia.LP:
-        return (
-            municipio_emissor,
-            regra,
-            "Para este serviço o ISSQN é devido no local da prestação. O sistema informa como "
-            "local da prestação o município do emissor; se o serviço foi prestado em outro "
-            "município, emita esta nota pelo emissor oficial.",
-        )
+        return municipio_prestacao or None, regra, None
     if regra == incidencia.ET:
         if municipio_tomador:
             return municipio_tomador, regra, None
@@ -292,10 +292,11 @@ class Avaliacao:
     envia: bool
     decisao: Decisao
     bloqueio: str | None
-    municipio_incidencia: str
+    municipio_incidencia: str | None
     regra_incidencia: str
     convenio_ativo: bool | None
     avisos: list = field(default_factory=list)
+    origem_prestacao: str | None = None
 
     def para_dict(self):
         """Forma gravada na nota e mostrada na prévia."""
@@ -310,6 +311,10 @@ class Avaliacao:
             "regra_incidencia": self.regra_incidencia,
             "regra_incidencia_descricao": incidencia.DESCRICAO.get(self.regra_incidencia, ""),
             "convenio_ativo": self.convenio_ativo,
+            # Só conta quando o ISSQN é devido no local da prestação: de onde veio esse município.
+            "origem_prestacao": self.origem_prestacao
+            if self.regra_incidencia == incidencia.LP
+            else None,
             "avisos": list(self.avisos),
         }
 
@@ -321,21 +326,42 @@ def avaliar(
     competencia,
     iss_retido,
     municipio_tomador,
+    municipio_prestacao,
+    origem_prestacao,
     convenio_do_municipio,
 ):
     """Aplica as regras do Anexo VI a uma nota.
 
     `parametros` são os `ParametrosFiscais` da empresa; `servico`, o snapshot do serviço;
-    `convenio_do_municipio(codigo)` devolve `{"aderente", "data_ativacao"}` do município (ou
-    levanta/devolve `None` quando não dá para saber). Não acessa a rede por conta própria.
+    `municipio_prestacao`, o município da prestação da nota (e `origem_prestacao`, de onde ele
+    veio); `convenio_do_municipio(codigo)` devolve `{"aderente", "data_ativacao"}` do município
+    (ou levanta/devolve `None` quando não dá para saber). Não acessa a rede por conta própria.
     """
     emissor = parametros.codigo_municipio_emissor
     municipio, regra, aviso = municipio_de_incidencia(
         codigo_tributacao_nacional=servico["codigo_tributacao_nacional"],
         municipio_emissor=emissor,
         municipio_tomador=municipio_tomador,
+        municipio_prestacao=municipio_prestacao,
     )
     avisos = [aviso] if aviso else []
+    if not municipio:  # serviço de incidência no local da prestação, sem município da prestação
+        decisao = _decisao(
+            Situacao.INDETERMINADA,
+            None,
+            "O ISSQN deste serviço é devido no local da prestação, mas a nota não tem o município "
+            "da prestação.",
+        )
+        return Avaliacao(
+            False,
+            decisao,
+            decisao.explicacao + " Informe o município da prestação na nota.",
+            None,
+            regra,
+            None,
+            avisos,
+            origem_prestacao,
+        )
     convenio = convenio_do_municipio(municipio)
     ativo = None
     if convenio is not None:
@@ -353,4 +379,4 @@ def avaliar(
         iss_retido=iss_retido,
     )
     envia, bloqueio = aplicar_ao_valor(decisao, servico.get("aliquota_iss"))
-    return Avaliacao(envia, decisao, bloqueio, municipio, regra, ativo, avisos)
+    return Avaliacao(envia, decisao, bloqueio, municipio, regra, ativo, avisos, origem_prestacao)

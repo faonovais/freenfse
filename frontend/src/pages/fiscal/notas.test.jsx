@@ -415,7 +415,7 @@ describe('Emissão guiada', () => {
         const linha = within(conferencia).getByText('Alíquota do ISS na DPS').closest('div')
         expect(linha).toHaveTextContent('Não vai na nota (regra E0617)')
         expect(linha).toHaveTextContent('a alíquota não pode ser informada')
-        expect(linha).toHaveTextContent('ISSQN devido no estabelecimento do prestador, município 2903201')
+        expect(linha).toHaveTextContent('ISSQN devido no estabelecimento do prestador, município IBGE 2903201')
       })
 
       it('quando a alíquota é obrigatória, diz que vai na nota', async () => {
@@ -439,6 +439,84 @@ describe('Emissão guiada', () => {
         const linha = within(conferencia).getByText('Alíquota do ISS na DPS').closest('div')
         expect(linha).toHaveTextContent('Bloqueia o envio (regra E0621)')
         expect(linha).toHaveTextContent('menor que o mínimo de 1.8%')
+      })
+    })
+
+    describe('município da prestação (cLocPrestacao)', () => {
+      const BALSAS = { codigo: '2101400', nome: 'Balsas', uf: 'MA' }
+      const PALMAS = { codigo: '1721000', nome: 'Palmas', uf: 'TO' }
+      const PRONTA_COM_EMISSOR = { status: 200, dados: { ...PRONTA.dados, municipio_prestacao_padrao: '2101400' } }
+      const municipios = {
+        'GET /api/cadastros/municipios/': (chamada) => {
+          if (chamada.url.includes('codigo=2101400')) return { status: 200, dados: [BALSAS] }
+          if (chamada.url.includes('codigo=1721000') || chamada.url.includes('busca=pal')) return { status: 200, dados: [PALMAS] }
+          return { status: 200, dados: [] }
+        },
+      }
+      const abrirComMunicipio = (extras = {}, rota = '/fiscal/notas/nova') =>
+        abrirComServico({ [`GET ${NOTAS}prontidao/`]: PRONTA_COM_EMISSOR, ...municipios, ...extras }, rota)
+      const corpoDaPrevia = (chamadas) => chamadas.find((c) => c.caminho === `${NOTAS}previa/`).corpo
+
+      it('em branco, diz que vale o município do emissor e o envia vazio (herda)', async () => {
+        const { chamadas } = abrirComMunicipio()
+
+        expect(await screen.findByText(/Em branco, vale o município do emissor/)).toBeInTheDocument()
+        expect(await screen.findByText('Balsas/MA')).toBeInTheDocument()
+        await conferir()
+
+        expect(corpoDaPrevia(chamadas).codigo_municipio_prestacao).toBe('')
+      })
+
+      it('escolhendo outro município, ele vai no corpo e "Voltar ao padrão" o devolve em branco', async () => {
+        const { chamadas } = abrirComMunicipio()
+        const campo = await screen.findByRole('combobox', { name: 'Município da prestação' })
+        fireEvent.change(campo, { target: { value: 'pal' } })
+        fireEvent.mouseDown(await screen.findByRole('option', { name: /Palmas\/TO/ }))
+
+        await conferir()
+        expect(corpoDaPrevia(chamadas).codigo_municipio_prestacao).toBe('1721000')
+
+        fireEvent.click(screen.getByRole('button', { name: 'Voltar ao padrão' }))
+        fireEvent.click(screen.getByRole('button', { name: 'Conferir a nota' }))
+        await waitFor(() => expect(chamadas.filter((c) => c.caminho === `${NOTAS}previa/`)).toHaveLength(2))
+        expect(chamadas.filter((c) => c.caminho === `${NOTAS}previa/`)[1].corpo.codigo_municipio_prestacao).toBe('')
+      })
+
+      it('a conferência mostra o município da prestação e de onde ele veio', async () => {
+        const local = { codigo: '1721000', origem: 'nota' }
+        const resposta = previaCom(DO_SERVICO)
+        resposta.dados.complementos.local_prestacao = local
+        abrirComMunicipio({ [`POST ${NOTAS}previa/`]: resposta })
+
+        const conferencia = await conferir()
+
+        const linha = within(conferencia).getByText('Município da prestação').closest('div')
+        await waitFor(() => expect(linha).toHaveTextContent('Palmas/TO'))
+        expect(linha).toHaveTextContent('informado nesta nota')
+      })
+
+      it('no serviço do local da prestação, a regra da alíquota mostra o município e a origem', async () => {
+        const lp = {
+          envia: true, situacao: 'obrigatoria', codigo_regra: 'E0619', explicacao: 'Convênio não ativo na competência: a alíquota é obrigatória.',
+          minimo: null, bloqueio: null, municipio_incidencia: '1721000', regra_incidencia: 'LP',
+          regra_incidencia_descricao: 'local da prestação', origem_prestacao: 'modelo', convenio_ativo: false, avisos: [],
+        }  // fmt: skip
+        abrirComMunicipio({ [`POST ${NOTAS}previa/`]: previaCom(DO_SERVICO, lp) })
+
+        const conferencia = await conferir()
+
+        const linha = within(conferencia).getByText('Alíquota do ISS na DPS').closest('div')
+        await waitFor(() => expect(linha).toHaveTextContent('ISSQN devido no local da prestação, município Palmas/TO, do modelo'))
+      })
+
+      it('mostra junto do campo o erro de um município que não existe', async () => {
+        abrirComMunicipio({
+          [`POST ${NOTAS}previa/`]: { status: 400, dados: { codigo_municipio_prestacao: 'Município com o código IBGE 9999999 não encontrado.' } },
+        })
+
+        await conferir().catch(() => null)
+
+        expect(await screen.findByText('Município com o código IBGE 9999999 não encontrado.')).toBeInTheDocument()
       })
     })
 
@@ -484,6 +562,30 @@ describe('Emissão guiada', () => {
 
         expect(campo).toHaveValue('')
         expect(screen.queryByLabelText('Não informar o IBS/CBS nesta nota')).not.toBeInTheDocument()
+      })
+
+      it('o município da prestação da PRÓPRIA nota volta preenchido; o do modelo só aparece como padrão', async () => {
+        const municipios = {
+          'GET /api/cadastros/municipios/': (chamada) => ({
+            status: 200,
+            dados: chamada.url.includes('codigo=1721000')
+              ? [{ codigo: '1721000', nome: 'Palmas', uf: 'TO' }]
+              : [{ codigo: '2101400', nome: 'Balsas', uf: 'MA' }],
+          }),
+        }
+        abrirRascunho(
+          { ibs_cbs: null, ibs_cbs_nota: null, ibs_cbs_modelo: null, municipio_prestacao_nota: null, municipio_prestacao_modelo: '2101400' },
+          municipios,
+        )
+        expect(await screen.findByText(/Em branco, vale o do modelo/)).toBeInTheDocument()
+        expect(await screen.findByText('Balsas/MA')).toBeInTheDocument()
+        cleanup()
+
+        abrirRascunho(
+          { ibs_cbs: null, ibs_cbs_nota: null, ibs_cbs_modelo: null, municipio_prestacao_nota: '1721000', municipio_prestacao_modelo: '2101400' },
+          municipios,
+        )
+        expect(await screen.findByText(/Selecionado:/)).toHaveTextContent('Palmas/TO')
       })
 
       it('a conferência do rascunho informa qual é o rascunho (vale o que o modelo dele definia)', async () => {
