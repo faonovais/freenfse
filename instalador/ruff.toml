@@ -1,0 +1,6 @@
+# O instalador roda com o Python do SERVIDOR (uma VPS comum tem 3.10, 3.12...), não com o do backend.
+# Por isso o alvo é o mínimo declarado em `freenfse_instalador/versao.py`: o `ruff format` com alvo
+# mais novo reescreveria, por exemplo, `except (A, B):` na forma sem parênteses da PEP 758, que só
+# existe no Python 3.14 e quebrou o instalador (issue #30). As demais regras são as do backend.
+extend = "../backend/ruff.toml"
+target-version = "py310"

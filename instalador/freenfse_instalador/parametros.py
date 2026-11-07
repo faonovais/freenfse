@@ -108,7 +108,7 @@ def validar_porta(valor, nome):
     """Porta TCP entre 1 e 65535."""
     try:
         porta = int(valor)
-    except TypeError, ValueError:
+    except (TypeError, ValueError):
         raise ErroDeParametro(f"A porta {nome} precisa ser um número.") from None
     if not 1 <= porta <= 65535:
         raise ErroDeParametro(f"A porta {nome} precisa estar entre 1 e 65535.")
