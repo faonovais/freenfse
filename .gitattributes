@@ -1,0 +1,37 @@
+# Quebras de linha (issue #30).
+#
+# O Git guarda os arquivos de texto com LF. Os tipos abaixo ficam com LF TAMBÉM na pasta de trabalho, em
+# qualquer sistema: quem clona no Windows (core.autocrlf=true) não pode receber CRLF no que roda em Linux.
+# Um "\r" no fim do shebang ("bash\r") ou do entrypoint faz o contêiner nem subir, e um "\r" no fim de
+# uma linha do .env vira parte do valor da variável.
+* text=auto
+
+# Shell, entrypoints e Dockerfiles
+*.sh              text eol=lf
+entrypoint*       text eol=lf
+Dockerfile*       text eol=lf
+*.dockerfile      text eol=lf
+
+# Nginx (inclui o modelo de TLS que o instalador preenche)
+*.conf            text eol=lf
+*.modelo          text eol=lf
+
+# Unidades do systemd
+*.service         text eol=lf
+*.timer           text eol=lf
+*.socket          text eol=lf
+
+# Scripts em Python (têm shebang) e variáveis de ambiente
+*.py              text eol=lf
+.env*             text eol=lf
+
+# Binários: nunca converter
+*.woff2           binary
+*.png             binary
+*.jpg             binary
+*.jpeg            binary
+*.gif             binary
+*.ico             binary
+*.pdf             binary
+*.zip             binary
+*.xlsx            binary

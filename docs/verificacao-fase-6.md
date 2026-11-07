@@ -73,8 +73,8 @@ Anote o que divergiu (mensagens, tempos, qualquer segredo que apareceu na tela �
 
 ## Parte 2 — Instalação nativa (opcional)
 
-Mesma ideia, com `python3 instalador/instalar.py nativo …` numa VPS com Python 3.14, PostgreSQL 18, Redis, Nginx, git, age e
-Node. Confira: `systemctl status freenfse-web freenfse-worker freenfse-beat`, `journalctl -u freenfse-web -n 20` (logs em JSON),
+Mesma ideia, com `python3 instalador/instalar.py nativo …` numa VPS com Python 3.10+ para o instalador e 3.14 para o sistema
+(`--python`), PostgreSQL 18, Redis, Nginx, git, age e Node. Confira: `systemctl status freenfse-web freenfse-worker freenfse-beat`, `journalctl -u freenfse-web -n 20` (logs em JSON),
 `freenfse-manage verificar_cifragem` e o mesmo roteiro das partes 1.4 a 1.7. **Este caminho tem menos cobertura automatizada**
 (o instalador é testado com executor simulado e `nginx -t` real, mas systemd e PostgreSQL nativos só se provam aqui).
 

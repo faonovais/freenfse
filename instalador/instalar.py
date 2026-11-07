@@ -1,13 +1,21 @@
 #!/usr/bin/env python3
 """Instalador do freenfse. Uso: python3 instalador/instalar.py {compose|nativo} [opções].
 
-Só usa a biblioteca padrão do Python. Veja `--help` e docs/instalacao.md.
+Só usa a biblioteca padrão do Python (3.10 ou mais novo). Veja `--help` e docs/instalacao.md.
 """
 
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+# A versão do Python é conferida ANTES de importar o resto: num Python antigo, um módulo com sintaxe
+# nova morreria com SyntaxError, sem dizer o que fazer (issue #30).
+from freenfse_instalador import versao  # noqa: E402
+
+if not versao.python_suficiente():
+    print(versao.mensagem_de_python_antigo(), file=sys.stderr)
+    raise SystemExit(2)
 
 from freenfse_instalador import parametros  # noqa: E402
 from freenfse_instalador.compose import InstalacaoCompose  # noqa: E402

@@ -5,8 +5,8 @@ nenhum serviço específico de nuvem. Há dois caminhos, ambos pelo mesmo instal
 
 | Caminho | Quando usar | O que precisa no servidor |
 |---|---|---|
-| **Docker Compose** (recomendado) | Quase sempre: menos peças para cuidar, atualização simples | Linux com Docker e o plugin Compose |
-| **Nativo** (systemd + Nginx + Gunicorn) | Servidor onde não se pode usar Docker | Python 3.14, PostgreSQL 18, Redis, Nginx, git, age, Node 22 |
+| **Docker Compose** (recomendado) | Quase sempre: menos peças para cuidar, atualização simples | Linux com Docker e o plugin Compose, e **Python 3.10 ou mais novo** para rodar o instalador |
+| **Nativo** (systemd + Nginx + Gunicorn) | Servidor onde não se pode usar Docker | **Python 3.10+** para o instalador e **Python 3.14** para o sistema, PostgreSQL 18, Redis, Nginx, git, age, Node 22 |
 
 > **Antes de começar, leia [`docs/chaves-e-backup.md`](chaves-e-backup.md).** Duas chaves precisam ficar **fora do
 > servidor**; sem elas, perder o servidor significa perder certificados, credenciais, XMLs e a possibilidade de
@@ -14,6 +14,11 @@ nenhum serviço específico de nuvem. Há dois caminhos, ambos pelo mesmo instal
 
 ## 1. O que você precisa ter
 
+* **Python 3.10 ou mais novo para rodar o instalador** (`python3 instalador/instalar.py`). Ele usa só a biblioteca padrão e
+  roda com o Python que o servidor já tem: o Ubuntu 22.04 traz o 3.10, o Debian 12 o 3.11 e o Ubuntu 24.04 o 3.12; nenhum
+  precisa de instalação extra. Com um Python mais antigo, o instalador **não começa** e diz isso em uma linha, com o
+  código de saída 2. Confira com `python3 --version`. (O sistema em si usa o Python 3.14 no modo nativo, indicado em
+  `--python`; no Compose ele roda dentro dos contêineres.)
 * Um servidor Linux (2 vCPU e 4 GB de RAM atendem a operação de uma empresa pequena; os tetos de memória do Compose
   são ajustáveis no `.env`).
 * **Saída HTTPS** para a Sefin/ADN e para os serviços de Google (Drive/Gmail), se usados. A entrada pública (porta 80/443)
@@ -28,6 +33,11 @@ nenhum serviço específico de nuvem. Há dois caminhos, ambos pelo mesmo instal
 git clone https://github.com/faonovais/freenfse.git
 cd freenfse
 ```
+
+> **Clonando no Windows?** O repositório fixa as quebras de linha (`.gitattributes`): scripts shell, `entrypoint`, Dockerfiles,
+> configurações do Nginx, unidades do systemd, scripts Python e arquivos `.env` ficam sempre com **LF**, mesmo com
+> `core.autocrlf=true`, porque um CRLF neles impede o contêiner de subir. Se você copiou os arquivos por outro meio (zip, editor
+> que converte), confira com `git ls-files --eol` e normalize com `git add --renormalize .`.
 
 Instalação **com HTTPS pelo Let's Encrypt**, chave de backup gerada, primeiro Master e usuário de BI:
 
