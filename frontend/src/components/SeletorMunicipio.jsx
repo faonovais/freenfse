@@ -1,13 +1,26 @@
 import { useEffect, useId, useState } from 'react'
 import { municipios } from '../api/cadastros.js'
+import NomeDoMunicipio from './NomeDoMunicipio.jsx'
 
 const ESPERA_DA_BUSCA_MS = 250
 
 /**
  * Escolha de município pelo nome (o usuário não digita o código IBGE). Mostra "Nome/UF" do
  * município escolhido e busca no servidor enquanto digita, a partir de 2 letras.
+ *
+ * Com `padrao` (código IBGE), o campo em branco significa "vale o padrão": mostra qual é (`textoDoPadrao`) e,
+ * com um município escolhido, oferece "Voltar ao padrão", que devolve o valor vazio.
  */
-export default function SeletorMunicipio({ rotulo, valor, aoMudar, erro, dica, obrigatorio = false }) {
+export default function SeletorMunicipio({
+  rotulo,
+  valor,
+  aoMudar,
+  erro,
+  dica,
+  obrigatorio = false,
+  padrao = null,
+  textoDoPadrao = 'Padrão',
+}) {
   const id = useId()
   const idMensagem = `${id}-mensagem`
   const [escolhido, setEscolhido] = useState(null)
@@ -78,6 +91,16 @@ export default function SeletorMunicipio({ rotulo, valor, aoMudar, erro, dica, o
         <p className="mt-1 text-xs">
           Selecionado: <strong>{escolhido.nome}/{escolhido.uf}</strong> (IBGE {escolhido.codigo})
         </p>
+      )}
+      {padrao && !valor && !busca && (
+        <p className="mt-1 text-xs">
+          {textoDoPadrao}: <strong><NomeDoMunicipio codigo={padrao} /></strong>
+        </p>
+      )}
+      {padrao && valor && (
+        <button type="button" className="botao-leve mt-1 text-xs" onClick={() => aoMudar('')}>
+          Voltar ao padrão
+        </button>
       )}
       {aberto && busca.trim().length >= 2 && (
         <ul

@@ -6,6 +6,7 @@ from agendamentos.models import Agendamento, ExecucaoAgendamento, ModeloNfse
 from agendamentos.services import modelos
 from cadastros.models import Pessoa, Servico
 from fiscal.models import ParametrosFiscais
+from fiscal.services import local_prestacao
 from fiscal.services import nfse as servico_nfse
 from fiscal.services.nfse import CAMPOS_DE_VALORES
 
@@ -21,7 +22,6 @@ CAMPOS_DE_EMAIL = (
 
 
 CAMPOS_DE_IBS_CBS = (
-    "ibs_cbs_informar",
     "ibs_cbs_indicador_operacao",
     "ibs_cbs_indicador_destinatario",
 )
@@ -42,13 +42,17 @@ class ModeloEntrada(serializers.Serializer):
     competencia_padrao = serializers.ChoiceField(
         choices=ModeloNfse.Competencia.choices, required=False
     )
-    # IBS/CBS do modelo: vazio ou nulo = herda da empresa ("voltar a herdar"); ADR 0007.
-    ibs_cbs_informar = serializers.BooleanField(required=False, allow_null=True)
+    # IBS/CBS do modelo: ajuste de exceção do cIndOp e do indDest; vazio ou nulo = herda do
+    # serviço / da empresa ("voltar a herdar"); ADR 0010.
     ibs_cbs_indicador_operacao = serializers.CharField(
         max_length=12, required=False, allow_blank=True
     )
     ibs_cbs_indicador_destinatario = serializers.ChoiceField(
         choices=[0, 1], required=False, allow_null=True
+    )
+    # Município da prestação (código IBGE): vazio = herda o padrão (o município do emissor).
+    codigo_municipio_prestacao = serializers.CharField(
+        max_length=9, required=False, allow_blank=True, allow_null=True
     )
     email_envio_automatico = serializers.BooleanField(required=False, allow_null=True)
     email_avisar_cancelamento = serializers.BooleanField(required=False, allow_null=True)
@@ -70,6 +74,10 @@ def aplicar_modelo(modelo, dados):
             if campo == "ibs_cbs_indicador_operacao":  # só os dígitos; vazio = herda
                 valor = "".join(c for c in valor if c.isdigit())
             setattr(modelo, campo, valor.strip() if campo == "nome" else valor)
+    if "codigo_municipio_prestacao" in dados:  # só os dígitos; vazio = herda o padrão
+        modelo.codigo_municipio_prestacao = (
+            local_prestacao.normalizar(dados["codigo_municipio_prestacao"]) or ""
+        )
     for campo, classe, rotulo in (
         ("tomador", Pessoa, "Tomador"),
         ("servico", Servico, "Serviço"),
@@ -96,31 +104,42 @@ def aplicar_modelo(modelo, dados):
 
 
 def ibs_cbs_da_empresa():
-    """O padrão de IBS/CBS da empresa **de agora** (o que um modelo vazio herda)."""
+    """O padrão de IBS/CBS da empresa **de agora**: só o destinatário (o cIndOp é do serviço)."""
     parametros = ParametrosFiscais.obter()
-    return {
-        "informar": parametros.ibs_cbs_informar,
-        "codigo_indicador_operacao": parametros.ibs_cbs_indicador_operacao,
-        "indicador_destinatario": parametros.ibs_cbs_indicador_destinatario,
-    }
+    return {"indicador_destinatario": parametros.ibs_cbs_indicador_destinatario}
 
 
 def ibs_cbs_saida(modelo):
-    """IBS/CBS do modelo para a tela: o que o modelo define, o que a empresa tem hoje e o efetivo.
+    """IBS/CBS do modelo para a tela: o que o modelo ajusta, o que ele herda hoje e o efetivo.
 
-    `ibs_cbs_herdado` é o valor da empresa **de agora** (nunca uma cópia guardada no modelo);
-    `ibs_cbs_efetivo` é o que valeria ao gerar um rascunho agora, com a origem de cada campo.
+    `ibs_cbs_herdado` é o cIndOp **do serviço** do modelo e o destinatário da empresa, de agora
+    (nunca uma cópia guardada no modelo); `ibs_cbs_efetivo` é o que valeria ao gerar um rascunho
+    agora, com a origem de cada campo.
     """
     parametros = ParametrosFiscais.obter()
+    do_servico = {
+        "codigo_indicador_operacao": modelo.servico.codigo_indicador_operacao
+        if modelo.servico_id
+        else ""
+    }
     efetivo, origens, _erro = servico_nfse.resolver_ibs_cbs(
-        None, modelo.padroes_de_ibs_cbs(), parametros
+        None, modelo.padroes_de_ibs_cbs(), do_servico, parametros
     )
     return {
-        "ibs_cbs_informar": modelo.ibs_cbs_informar,
         "ibs_cbs_indicador_operacao": modelo.ibs_cbs_indicador_operacao,
         "ibs_cbs_indicador_destinatario": modelo.ibs_cbs_indicador_destinatario,
-        "ibs_cbs_herdado": ibs_cbs_da_empresa(),
+        "ibs_cbs_herdado": {**ibs_cbs_da_empresa(), **do_servico},
         "ibs_cbs_efetivo": {**(efetivo or {}), "origens": origens},
+    }
+
+
+def local_prestacao_saida(modelo):
+    """Município da prestação do modelo para a tela: o que ele define e o que valeria hoje."""
+    parametros = ParametrosFiscais.obter()
+    codigo, origem = local_prestacao.resolver(None, modelo.codigo_municipio_prestacao, parametros)
+    return {
+        "codigo_municipio_prestacao": modelo.codigo_municipio_prestacao,
+        "local_prestacao_efetivo": {"codigo": codigo, "origem": origem},
     }
 
 
@@ -140,6 +159,7 @@ def modelo_saida(modelo, *, problemas=None, em_uso=0):
         "percentual_total_tributos_simples": complementos.get("percentual_total_tributos_simples"),
         "competencia_padrao": modelo.competencia_padrao,
         **ibs_cbs_saida(modelo),
+        **local_prestacao_saida(modelo),
         "email_envio_automatico": modelo.email_envio_automatico,
         "email_avisar_cancelamento": modelo.email_avisar_cancelamento,
         "email_anexar_pdf": modelo.email_anexar_pdf,

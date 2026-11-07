@@ -7,6 +7,8 @@ no roteiro manual abaixo.
 > **Cuidado:** use **sempre a produção restrita** (exceto no passo de troca para produção, que deve ser feito numa empresa de
 > teste) e dados fictícios. Nunca cole certificado, chave de acesso, XML ou e-mail reais em issues, PRs, mensagens ou logs.
 
+> **As seções 1 e 1b (IBS/CBS por empresa e no modelo) foram substituídas pela issue #29** — veja [`verificacao-issue-29.md`](verificacao-issue-29.md). As demais (Emissor, troca para produção, municípios) seguem valendo.
+
 ## Roteiro manual
 
 ### 1. IBS/CBS por empresa

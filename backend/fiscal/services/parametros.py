@@ -18,8 +18,6 @@ CAMPOS_EDITAVEIS = (
     "serie_dps",
     "ambiente",
     "codigo_municipio_emissor",
-    "ibs_cbs_informar",
-    "ibs_cbs_indicador_operacao",
     "ibs_cbs_indicador_destinatario",
 )
 # O que a verificação do convênio grava (a gravação toca só estes campos, nunca a linha inteira).

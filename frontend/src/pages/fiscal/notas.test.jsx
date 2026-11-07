@@ -247,25 +247,30 @@ describe('Emissão guiada', () => {
     expect(ordem).toEqual([`${NOTAS}previa/`, NOTAS, `${NOTAS}9/emitir/`])
   })
 
-  describe('IBS/CBS: nota > modelo > empresa', () => {
+  describe('IBS/CBS: o serviço decide; nota > modelo > serviço (cIndOp)', () => {
     const COM_CLASSIFICACAO = {
       status: 200,
-      dados: [{ ...SERVICOS.dados[0], cst_ibs_cbs: '000', c_class_trib: '000001', nbs: '113011000' }],
-    }
-    const EMPRESA_INFORMA = { informar: true, codigo_indicador_operacao: '010101', indicador_destinatario: 0 }
-    const PRONTA_COM_PADRAO = { status: 200, dados: { ...PRONTA.dados, ibs_cbs: EMPRESA_INFORMA } }
-    const PRONTA_SEM_PADRAO = {
+      dados: [
+        {
+          ...SERVICOS.dados[0], cst_ibs_cbs: '000', c_class_trib: '000001', nbs: '115021000',
+          codigo_indicador_operacao: '100301',
+        },
+      ],
+    } // prettier-ignore
+    const PRONTA_COM_PADRAO = { status: 200, dados: { ...PRONTA.dados, ibs_cbs: { indicador_destinatario: 0 } } }
+    const previaCom = (ibs, aliquota) => ({
       status: 200,
-      dados: { ...PRONTA.dados, ibs_cbs: { informar: false, codigo_indicador_operacao: '', indicador_destinatario: 0 } },
-    }
-    const previaCom = (ibs) => ({
-      status: 200,
-      dados: { ...PREVIA.dados, servico: { ...PREVIA.dados.servico, cst_ibs_cbs: '000' }, ibs_cbs: ibs },
+      dados: {
+        ...PREVIA.dados,
+        servico: { ...PREVIA.dados.servico, cst_ibs_cbs: '000' },
+        ibs_cbs: ibs,
+        complementos: { ...(PREVIA.dados.complementos ?? {}), aliquota_issqn: aliquota },
+      },
     })
-    const TUDO_DA_EMPRESA = { informar: 'empresa', codigo_indicador_operacao: 'empresa', indicador_destinatario: 'empresa' }
-    const DA_EMPRESA = {
-      na_dps: true, motivo: null, codigo_indicador_operacao: '010101', indicador_destinatario: 0,
-      origens: TUDO_DA_EMPRESA, nbs: '113011000', cst: '000', c_class_trib: '000001',
+    const ORIGENS_DO_SERVICO = { codigo_indicador_operacao: 'servico', indicador_destinatario: 'empresa' }
+    const DO_SERVICO = {
+      na_dps: true, motivo: null, codigo_indicador_operacao: '100301', indicador_destinatario: 0,
+      origens: ORIGENS_DO_SERVICO, nbs: '115021000', cst: '000', c_class_trib: '000001',
     }  // fmt: skip
     const abrirComServico = (extras = {}, rota = '/fiscal/notas/nova') =>
       abrir(
@@ -273,7 +278,7 @@ describe('Emissão guiada', () => {
         rotas({
           'GET /api/cadastros/servicos/': COM_CLASSIFICACAO,
           [`GET ${NOTAS}prontidao/`]: PRONTA_COM_PADRAO,
-          [`POST ${NOTAS}previa/`]: previaCom(DA_EMPRESA),
+          [`POST ${NOTAS}previa/`]: previaCom(DO_SERVICO),
           ...extras,
         }),
       )
@@ -289,47 +294,55 @@ describe('Emissão guiada', () => {
       const conferencia = await conferir()
 
       expect(chamadas.find((c) => c.caminho === `${NOTAS}previa/`).corpo.ibs_cbs).toBeNull()
-      expect(screen.getByText(/Em branco: vale o padrão da empresa \(010101\)/)).toBeInTheDocument()
+      expect(screen.getByText(/Em branco: vale o do serviço \(100301\)/)).toBeInTheDocument()
       const linha = within(conferencia).getByText('IBS/CBS na DPS').closest('div')
-      expect(linha).toHaveTextContent('Indicador da operação 010101 (padrão da empresa)')
+      expect(linha).toHaveTextContent('Indicador da operação 100301 (do serviço)')
       expect(linha).toHaveTextContent('destinatário é o próprio tomador (padrão da empresa)')
-      expect(linha).toHaveTextContent('NBS 113011000 · CST 000 · cClassTrib 000001')
+      expect(linha).toHaveTextContent('NBS 115021000 · CST 000 · cClassTrib 000001')
     })
 
-    it('a conferência mostra o modelo como origem do que o modelo definiu', async () => {
-      const doModelo = { ...DA_EMPRESA, codigo_indicador_operacao: '020202', origens: { ...TUDO_DA_EMPRESA, informar: 'modelo', codigo_indicador_operacao: 'modelo' } }
+    it('a conferência mostra o modelo como origem do que o modelo ajustou', async () => {
+      const doModelo = { ...DO_SERVICO, codigo_indicador_operacao: '050101', origens: { ...ORIGENS_DO_SERVICO, codigo_indicador_operacao: 'modelo' } }
       abrirComServico({ [`POST ${NOTAS}previa/`]: previaCom(doModelo) })
 
       const conferencia = await conferir()
 
       const linha = within(conferencia).getByText('IBS/CBS na DPS').closest('div')
-      expect(linha).toHaveTextContent('Indicador da operação 020202 (do modelo)')
-      expect(linha).toHaveTextContent('destinatário é o próprio tomador (padrão da empresa)')
+      expect(linha).toHaveTextContent('Indicador da operação 050101 (do modelo)')
     })
 
-    it('empresa sem padrão: a tela avisa e só informa se o usuário preencher', async () => {
-      abrirComServico({ [`GET ${NOTAS}prontidao/`]: PRONTA_SEM_PADRAO })
+    it('não existe mais a opção "não informar nesta nota": a classificação do serviço decide', async () => {
+      abrirComServico()
       await preencher()
 
-      expect(await screen.findByText(/A empresa não informa IBS\/CBS por padrão/)).toBeInTheDocument()
+      expect(screen.queryByLabelText('Não informar o IBS/CBS nesta nota')).not.toBeInTheDocument()
+    })
+
+    it('serviço sem indicador da operação: a tela manda completar o cadastro do serviço', async () => {
+      abrirComServico({
+        'GET /api/cadastros/servicos/': { status: 200, dados: [{ ...COM_CLASSIFICACAO.dados[0], codigo_indicador_operacao: '' }] },
+      })
+      await preencher()
+
+      expect(await screen.findByText(/O serviço não tem indicador da operação\. Complete o cadastro do serviço/)).toBeInTheDocument()
     })
 
     it('ajuste pontual: o indicador e o destinatário digitados vão na nota e a origem é a nota', async () => {
-      const daNota = { ...DA_EMPRESA, codigo_indicador_operacao: '020202', indicador_destinatario: 1, origens: { informar: 'nota', codigo_indicador_operacao: 'nota', indicador_destinatario: 'nota' } }
+      const daNota = { ...DO_SERVICO, codigo_indicador_operacao: '050101', indicador_destinatario: 1, origens: { codigo_indicador_operacao: 'nota', indicador_destinatario: 'nota' } }
       const { chamadas } = abrirComServico({ [`POST ${NOTAS}previa/`]: previaCom(daNota) })
       await preencher()
-      fireEvent.change(screen.getByLabelText('Indicador da operação (IBS/CBS)'), { target: { value: '020202' } })
+      fireEvent.change(screen.getByLabelText('Ajustar o indicador da operação (IBS/CBS)'), { target: { value: '050101' } })
       fireEvent.change(screen.getByLabelText('O destinatário é o próprio tomador?'), { target: { value: '1' } })
 
       fireEvent.click(screen.getByRole('button', { name: 'Conferir a nota' }))
 
       const conferencia = await screen.findByRole('region', { name: 'Conferência da nota' })
       expect(chamadas.find((c) => c.caminho === `${NOTAS}previa/`).corpo.ibs_cbs).toEqual({
-        codigo_indicador_operacao: '020202',
+        codigo_indicador_operacao: '050101',
         indicador_destinatario: 1,
       })
       const linha = within(conferencia).getByText('IBS/CBS na DPS').closest('div')
-      expect(linha).toHaveTextContent('Indicador da operação 020202 (ajuste desta nota)')
+      expect(linha).toHaveTextContent('Indicador da operação 050101 (ajuste desta nota)')
       expect(linha).toHaveTextContent('destinatário é outra pessoa (ajuste desta nota)')
     })
 
@@ -347,26 +360,23 @@ describe('Emissão guiada', () => {
       expect(chamadas.find((c) => c.caminho === `${NOTAS}previa/`).corpo.ibs_cbs).toEqual({ indicador_destinatario: 0 })
     })
 
-    it('"Não informar nesta nota" envia informar:false, trava os campos e a prévia explica', async () => {
-      const semGrupo = { na_dps: false, motivo: 'Você escolheu não informar o IBS/CBS nesta nota.', origens: { ...TUDO_DA_EMPRESA, informar: 'nota' }, nbs: '113011000', cst: '000', c_class_trib: '000001' }
-      const { chamadas } = abrirComServico({ [`POST ${NOTAS}previa/`]: previaCom(semGrupo) })
-      await preencher()
+    it('a conferência diz por que o grupo não vai quando a classificação não tem tributação de IBS/CBS', async () => {
+      const semGrupo = {
+        na_dps: false, motivo: 'A classificação 410009 não tem tributação de IBS/CBS (ind_gIBSCBS = 0).',
+        origens: ORIGENS_DO_SERVICO, nbs: '115021000', cst: '410', c_class_trib: '410009',
+      }  // fmt: skip
+      abrirComServico({ [`POST ${NOTAS}previa/`]: previaCom(semGrupo) })
 
-      fireEvent.click(screen.getByLabelText('Não informar o IBS/CBS nesta nota'))
-      expect(screen.getByLabelText('Indicador da operação (IBS/CBS)')).toBeDisabled()
-      expect(screen.getByLabelText('O destinatário é o próprio tomador?')).toBeDisabled()
-      fireEvent.click(screen.getByRole('button', { name: 'Conferir a nota' }))
+      const conferencia = await conferir()
 
-      const conferencia = await screen.findByRole('region', { name: 'Conferência da nota' })
-      expect(chamadas.find((c) => c.caminho === `${NOTAS}previa/`).corpo.ibs_cbs).toEqual({ informar: false })
-      expect(within(conferencia).getByText(/Não vai na nota\. Você escolheu não informar/)).toBeInTheDocument()
+      expect(within(conferencia).getByText(/Não vai na nota\. A classificação 410009 não tem tributação de IBS\/CBS/)).toBeInTheDocument()
     })
 
     it('mudar o ajuste depois de conferir invalida a conferência', async () => {
       abrirComServico()
       await conferir()
 
-      fireEvent.click(screen.getByLabelText('Não informar o IBS/CBS nesta nota'))
+      fireEvent.change(screen.getByLabelText('Ajustar o indicador da operação (IBS/CBS)'), { target: { value: '050101' } })
 
       expect(screen.queryByRole('region', { name: 'Conferência da nota' })).not.toBeInTheDocument()
     })
@@ -375,8 +385,7 @@ describe('Emissão guiada', () => {
       abrir('/fiscal/notas/nova', rotas({ [`GET ${NOTAS}prontidao/`]: PRONTA_COM_PADRAO }))
       await preencher()
 
-      expect(screen.queryByLabelText('Indicador da operação (IBS/CBS)')).not.toBeInTheDocument()
-      expect(screen.queryByLabelText('Não informar o IBS/CBS nesta nota')).not.toBeInTheDocument()
+      expect(screen.queryByLabelText('Ajustar o indicador da operação (IBS/CBS)')).not.toBeInTheDocument()
     })
 
     it('mostra o erro do indicador junto do campo', async () => {
@@ -384,11 +393,131 @@ describe('Emissão guiada', () => {
         [`POST ${NOTAS}previa/`]: { status: 400, dados: { ibs_cbs: 'O código do indicador da operação tem 6 dígitos.' } },
       })
       await preencher()
-      fireEvent.change(screen.getByLabelText('Indicador da operação (IBS/CBS)'), { target: { value: '12' } })
+      fireEvent.change(screen.getByLabelText('Ajustar o indicador da operação (IBS/CBS)'), { target: { value: '12' } })
 
       fireEvent.click(screen.getByRole('button', { name: 'Conferir a nota' }))
 
       expect(await screen.findByText('O código do indicador da operação tem 6 dígitos.')).toBeInTheDocument()
+    })
+
+    describe('alíquota do ISS na DPS (pAliq, regras E0600 a E0640)', () => {
+      const decisao = (extra) => ({
+        envia: false, situacao: 'proibida', codigo_regra: 'E0617', explicacao: 'Prestador não optante e município com convênio ativo: a alíquota não pode ser informada.',
+        minimo: null, bloqueio: null, municipio_incidencia: '2903201', regra_incidencia: 'EP',
+        regra_incidencia_descricao: 'estabelecimento do prestador', convenio_ativo: true, avisos: [], ...extra,
+      })  // fmt: skip
+
+      it('mostra se a alíquota vai, a regra aplicada e onde incide o ISSQN', async () => {
+        abrirComServico({ [`POST ${NOTAS}previa/`]: previaCom(DO_SERVICO, decisao()) })
+
+        const conferencia = await conferir()
+
+        const linha = within(conferencia).getByText('Alíquota do ISS na DPS').closest('div')
+        expect(linha).toHaveTextContent('Não vai na nota (regra E0617)')
+        expect(linha).toHaveTextContent('a alíquota não pode ser informada')
+        expect(linha).toHaveTextContent('ISSQN devido no estabelecimento do prestador, município IBGE 2903201')
+      })
+
+      it('quando a alíquota é obrigatória, diz que vai na nota', async () => {
+        const vai = decisao({ envia: true, situacao: 'obrigatoria', codigo_regra: 'E0619', explicacao: 'Convênio não ativo na competência: a alíquota é obrigatória.' })
+        abrirComServico({ [`POST ${NOTAS}previa/`]: previaCom(DO_SERVICO, vai) })
+
+        const conferencia = await conferir()
+
+        expect(within(conferencia).getByText('Alíquota do ISS na DPS').closest('div')).toHaveTextContent('Vai na nota (regra E0619)')
+      })
+
+      it('bloqueio da regra aparece na conferência com o código e a orientação', async () => {
+        const bloqueada = decisao({
+          situacao: 'obrigatoria', codigo_regra: 'E0621', minimo: '1.8',
+          bloqueio: 'A alíquota do serviço (1.50%) é menor que o mínimo de 1.8% exigido para este caso (regra E0621). Corrija o cadastro do serviço.',
+        })
+        abrirComServico({ [`POST ${NOTAS}previa/`]: previaCom(DO_SERVICO, bloqueada) })
+
+        const conferencia = await conferir()
+
+        const linha = within(conferencia).getByText('Alíquota do ISS na DPS').closest('div')
+        expect(linha).toHaveTextContent('Bloqueia o envio (regra E0621)')
+        expect(linha).toHaveTextContent('menor que o mínimo de 1.8%')
+      })
+    })
+
+    describe('município da prestação (cLocPrestacao)', () => {
+      const BALSAS = { codigo: '2101400', nome: 'Balsas', uf: 'MA' }
+      const PALMAS = { codigo: '1721000', nome: 'Palmas', uf: 'TO' }
+      const PRONTA_COM_EMISSOR = { status: 200, dados: { ...PRONTA.dados, municipio_prestacao_padrao: '2101400' } }
+      const municipios = {
+        'GET /api/cadastros/municipios/': (chamada) => {
+          if (chamada.url.includes('codigo=2101400')) return { status: 200, dados: [BALSAS] }
+          if (chamada.url.includes('codigo=1721000') || chamada.url.includes('busca=pal')) return { status: 200, dados: [PALMAS] }
+          return { status: 200, dados: [] }
+        },
+      }
+      const abrirComMunicipio = (extras = {}, rota = '/fiscal/notas/nova') =>
+        abrirComServico({ [`GET ${NOTAS}prontidao/`]: PRONTA_COM_EMISSOR, ...municipios, ...extras }, rota)
+      const corpoDaPrevia = (chamadas) => chamadas.find((c) => c.caminho === `${NOTAS}previa/`).corpo
+
+      it('em branco, diz que vale o município do emissor e o envia vazio (herda)', async () => {
+        const { chamadas } = abrirComMunicipio()
+
+        expect(await screen.findByText(/Em branco, vale o município do emissor/)).toBeInTheDocument()
+        expect(await screen.findByText('Balsas/MA')).toBeInTheDocument()
+        await conferir()
+
+        expect(corpoDaPrevia(chamadas).codigo_municipio_prestacao).toBe('')
+      })
+
+      it('escolhendo outro município, ele vai no corpo e "Voltar ao padrão" o devolve em branco', async () => {
+        const { chamadas } = abrirComMunicipio()
+        const campo = await screen.findByRole('combobox', { name: 'Município da prestação' })
+        fireEvent.change(campo, { target: { value: 'pal' } })
+        fireEvent.mouseDown(await screen.findByRole('option', { name: /Palmas\/TO/ }))
+
+        await conferir()
+        expect(corpoDaPrevia(chamadas).codigo_municipio_prestacao).toBe('1721000')
+
+        fireEvent.click(screen.getByRole('button', { name: 'Voltar ao padrão' }))
+        fireEvent.click(screen.getByRole('button', { name: 'Conferir a nota' }))
+        await waitFor(() => expect(chamadas.filter((c) => c.caminho === `${NOTAS}previa/`)).toHaveLength(2))
+        expect(chamadas.filter((c) => c.caminho === `${NOTAS}previa/`)[1].corpo.codigo_municipio_prestacao).toBe('')
+      })
+
+      it('a conferência mostra o município da prestação e de onde ele veio', async () => {
+        const local = { codigo: '1721000', origem: 'nota' }
+        const resposta = previaCom(DO_SERVICO)
+        resposta.dados.complementos.local_prestacao = local
+        abrirComMunicipio({ [`POST ${NOTAS}previa/`]: resposta })
+
+        const conferencia = await conferir()
+
+        const linha = within(conferencia).getByText('Município da prestação').closest('div')
+        await waitFor(() => expect(linha).toHaveTextContent('Palmas/TO'))
+        expect(linha).toHaveTextContent('informado nesta nota')
+      })
+
+      it('no serviço do local da prestação, a regra da alíquota mostra o município e a origem', async () => {
+        const lp = {
+          envia: true, situacao: 'obrigatoria', codigo_regra: 'E0619', explicacao: 'Convênio não ativo na competência: a alíquota é obrigatória.',
+          minimo: null, bloqueio: null, municipio_incidencia: '1721000', regra_incidencia: 'LP',
+          regra_incidencia_descricao: 'local da prestação', origem_prestacao: 'modelo', convenio_ativo: false, avisos: [],
+        }  // fmt: skip
+        abrirComMunicipio({ [`POST ${NOTAS}previa/`]: previaCom(DO_SERVICO, lp) })
+
+        const conferencia = await conferir()
+
+        const linha = within(conferencia).getByText('Alíquota do ISS na DPS').closest('div')
+        await waitFor(() => expect(linha).toHaveTextContent('ISSQN devido no local da prestação, município Palmas/TO, do modelo'))
+      })
+
+      it('mostra junto do campo o erro de um município que não existe', async () => {
+        abrirComMunicipio({
+          [`POST ${NOTAS}previa/`]: { status: 400, dados: { codigo_municipio_prestacao: 'Município com o código IBGE 9999999 não encontrado.' } },
+        })
+
+        await conferir().catch(() => null)
+
+        expect(await screen.findByText('Município com o código IBGE 9999999 não encontrado.')).toBeInTheDocument()
+      })
     })
 
     describe('ao corrigir um rascunho', () => {
@@ -397,47 +526,71 @@ describe('Emissão guiada', () => {
       const abrirRascunho = (complementos, extras = {}) =>
         abrirComServico({ [`GET ${NOTAS}9/`]: rascunho(complementos), ...extras }, '/fiscal/notas/9/editar')
 
-      it('só o que a PRÓPRIA nota ajustou volta preenchido; o que veio do modelo ou da empresa volta em branco', async () => {
+      it('só o que a PRÓPRIA nota ajustou volta preenchido; o que veio do modelo ou do serviço volta em branco', async () => {
         abrirRascunho({
-          ibs_cbs: { codigo_indicador_operacao: '020202', indicador_destinatario: 1, origens: { informar: 'modelo', codigo_indicador_operacao: 'modelo', indicador_destinatario: 'modelo' } },
-          ibs_cbs_modelo: { informar: null, codigo_indicador_operacao: '020202', indicador_destinatario: 1 },
+          ibs_cbs: { codigo_indicador_operacao: '050101', indicador_destinatario: 1, origens: { codigo_indicador_operacao: 'modelo', indicador_destinatario: 'modelo' } },
+          ibs_cbs_modelo: { codigo_indicador_operacao: '050101', indicador_destinatario: 1 },
           ibs_cbs_nota: null,
         })
 
-        const campo = await screen.findByLabelText('Indicador da operação (IBS/CBS)')
+        const campo = await screen.findByLabelText('Ajustar o indicador da operação (IBS/CBS)')
 
         await waitFor(() => expect(screen.getByLabelText('O destinatário é o próprio tomador?')).toHaveValue(''))
         expect(campo).toHaveValue('')
         // As dicas dizem de onde vem o valor herdado: do modelo do rascunho.
-        expect(screen.getByText(/Em branco: vale o do modelo \(020202\)/)).toBeInTheDocument()
+        expect(screen.getByText(/Em branco: vale o do modelo \(050101\)/)).toBeInTheDocument()
         expect(screen.getByRole('option', { name: 'Herdar (do modelo: não)' })).toBeInTheDocument()
-      })
-
-      it('o ajuste guardado na nota (inclusive "não informar") volta como estava', async () => {
-        abrirRascunho({ ibs_cbs: null, ibs_cbs_nota: { informar: false }, ibs_cbs_modelo: null })
-
-        await screen.findByLabelText('Indicador da operação (IBS/CBS)')
-
-        await waitFor(() => expect(screen.getByLabelText('Não informar o IBS/CBS nesta nota')).toBeChecked())
-        expect(screen.getByLabelText('Indicador da operação (IBS/CBS)')).toBeDisabled()
       })
 
       it('o ajuste de indicador e de destinatário da nota volta preenchido', async () => {
         abrirRascunho({
-          ibs_cbs: { codigo_indicador_operacao: '030303', indicador_destinatario: 0, origens: { informar: 'nota', codigo_indicador_operacao: 'nota', indicador_destinatario: 'nota' } },
-          ibs_cbs_nota: { codigo_indicador_operacao: '030303', indicador_destinatario: 0 },
+          ibs_cbs: { codigo_indicador_operacao: '050102', indicador_destinatario: 0, origens: { codigo_indicador_operacao: 'nota', indicador_destinatario: 'nota' } },
+          ibs_cbs_nota: { codigo_indicador_operacao: '050102', indicador_destinatario: 0 },
           ibs_cbs_modelo: null,
         })
 
-        const campo = await screen.findByLabelText('Indicador da operação (IBS/CBS)')
+        const campo = await screen.findByLabelText('Ajustar o indicador da operação (IBS/CBS)')
 
-        await waitFor(() => expect(campo).toHaveValue('030303'))
+        await waitFor(() => expect(campo).toHaveValue('050102'))
         expect(screen.getByLabelText('O destinatário é o próprio tomador?')).toHaveValue('0')
+      })
+
+      it('um ajuste antigo com "informar" é ignorado: não há mais o que desmarcar', async () => {
+        abrirRascunho({ ibs_cbs: null, ibs_cbs_nota: { informar: false }, ibs_cbs_modelo: null })
+
+        const campo = await screen.findByLabelText('Ajustar o indicador da operação (IBS/CBS)')
+
+        expect(campo).toHaveValue('')
+        expect(screen.queryByLabelText('Não informar o IBS/CBS nesta nota')).not.toBeInTheDocument()
+      })
+
+      it('o município da prestação da PRÓPRIA nota volta preenchido; o do modelo só aparece como padrão', async () => {
+        const municipios = {
+          'GET /api/cadastros/municipios/': (chamada) => ({
+            status: 200,
+            dados: chamada.url.includes('codigo=1721000')
+              ? [{ codigo: '1721000', nome: 'Palmas', uf: 'TO' }]
+              : [{ codigo: '2101400', nome: 'Balsas', uf: 'MA' }],
+          }),
+        }
+        abrirRascunho(
+          { ibs_cbs: null, ibs_cbs_nota: null, ibs_cbs_modelo: null, municipio_prestacao_nota: null, municipio_prestacao_modelo: '2101400' },
+          municipios,
+        )
+        expect(await screen.findByText(/Em branco, vale o do modelo/)).toBeInTheDocument()
+        expect(await screen.findByText('Balsas/MA')).toBeInTheDocument()
+        cleanup()
+
+        abrirRascunho(
+          { ibs_cbs: null, ibs_cbs_nota: null, ibs_cbs_modelo: null, municipio_prestacao_nota: '1721000', municipio_prestacao_modelo: '2101400' },
+          municipios,
+        )
+        expect(await screen.findByText(/Selecionado:/)).toHaveTextContent('Palmas/TO')
       })
 
       it('a conferência do rascunho informa qual é o rascunho (vale o que o modelo dele definia)', async () => {
         const { chamadas } = abrirRascunho({ ibs_cbs: null, ibs_cbs_nota: null, ibs_cbs_modelo: null })
-        await screen.findByLabelText('Indicador da operação (IBS/CBS)')
+        await screen.findByLabelText('Ajustar o indicador da operação (IBS/CBS)')
 
         fireEvent.click(await screen.findByRole('button', { name: 'Conferir a nota' }))
         await screen.findByRole('region', { name: 'Conferência da nota' })

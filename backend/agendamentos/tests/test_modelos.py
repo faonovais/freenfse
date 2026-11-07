@@ -173,7 +173,7 @@ def test_tomador_inativo_removido_ou_modelo_inativo_nao_geram(empresa_pronta, re
 def test_dado_antigo_de_ibs_cbs_dentro_dos_complementos_do_modelo_e_ignorado(
     empresa_pronta, responsavel
 ):
-    """O IBS/CBS do modelo vive em campos próprios (ADR 0007); o JSON antigo não vale mais."""
+    """O IBS/CBS do modelo vive em campos próprios (ADR 0010); o JSON antigo não vale mais."""
     modelo = criar_modelo(
         complementos={
             "informacoes_complementares": "x",
@@ -186,39 +186,43 @@ def test_dado_antigo_de_ibs_cbs_dentro_dos_complementos_do_modelo_e_ignorado(
 
     assert "ibs_cbs" not in dados  # o ajuste da NOTA nunca vem do modelo
     assert dados["ibs_cbs_modelo"] == {
-        "informar": None,
         "codigo_indicador_operacao": "",
         "indicador_destinatario": None,
     }
     assert nota.complementos["ibs_cbs"] is None
 
 
-def test_rascunho_do_modelo_herda_o_padrao_de_ibs_cbs_da_empresa(empresa_pronta, responsavel):
-    """O modelo não tem IBS/CBS; o rascunho herda o padrão da empresa (issue #20, ADR 0007)."""
+def test_rascunho_do_modelo_herda_o_cindop_do_servico_e_o_destinatario_da_empresa(
+    empresa_pronta, responsavel
+):
+    """O modelo não tem IBS/CBS próprio; o rascunho herda do serviço e da empresa (ADR 0010)."""
     from fiscal.models import ParametrosFiscais
 
     modelo = criar_modelo()
     Servico.objects.filter(pk=modelo.servico_id).update(
-        nbs="113011000", cst_ibs_cbs="000", c_class_trib="000001"
+        nbs="113011000",
+        cst_ibs_cbs="000",
+        c_class_trib="000001",
+        codigo_indicador_operacao="100301",
     )
-    ParametrosFiscais.objects.update(ibs_cbs_informar=True, ibs_cbs_indicador_operacao="010101")
 
     nota = modelos.gerar_rascunho(modelo, usuario=responsavel, data_execucao=EXECUCAO)
 
     assert nota.complementos["ibs_cbs"] == {
-        "codigo_indicador_operacao": "010101",
+        "codigo_indicador_operacao": "100301",
         "indicador_destinatario": 0,
         "origens": {
-            "informar": "empresa",
-            "codigo_indicador_operacao": "empresa",
+            "codigo_indicador_operacao": "servico",
             "indicador_destinatario": "empresa",
         },
     }
     assert nota.servico["cst_ibs_cbs"] == "000" and nota.servico["c_class_trib"] == "000001"
-    # Mudar o padrão depois não mexe no rascunho já criado (é uma cópia, como o resto).
-    ParametrosFiscais.objects.update(ibs_cbs_indicador_operacao="020202")
+    # Mudar o serviço depois não mexe no rascunho já criado (é uma cópia, como o resto).
+    Servico.objects.filter(pk=modelo.servico_id).update(codigo_indicador_operacao="050101")
+    ParametrosFiscais.objects.update(ibs_cbs_indicador_destinatario=1)
     nota.refresh_from_db()
-    assert nota.complementos["ibs_cbs"]["codigo_indicador_operacao"] == "010101"
+    assert nota.complementos["ibs_cbs"]["codigo_indicador_operacao"] == "100301"
+    assert nota.complementos["ibs_cbs"]["indicador_destinatario"] == 0
 
 
 # -- validação do modelo -------------------------------------------------------------------

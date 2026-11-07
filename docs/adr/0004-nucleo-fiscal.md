@@ -70,8 +70,8 @@ A biblioteca escolhe pela data de **recebimento** (Brasília): produção usa a 
 
 - `Decimal` com arredondamento "meio para cima"; ISS sobre a base (valor − desconto incondicionado − dedução); retenções de IR, CSLL e INSS sobre a mesma base; ISS retido reduz o líquido. A regra de arredondamento de cada prefeitura pode divergir; se divergir, a Sefin devolve a rejeição e a regra muda num lugar só (`calculo.py`).
 - **Retenção de PIS/COFINS no serviço bloqueia a emissão** com explicação: a semântica de `tpRetPisCofins`/CST não está confirmada, e enviar valores incorretos seria pior que não emitir.
-- **IBS/CBS:** o `Servico` não tem o indicador da operação (`cIndOp`), obrigatório no grupo. O grupo só é enviado se o usuário informar o indicador na emissão; caso contrário a prévia avisa que a nota segue sem ele. **Resolvida pela issue #20** ([ADR 0007](0007-ajustes-da-issue-20.md) §1): a opção e o `cIndOp` são da empresa (`ParametrosFiscais`), a nota herda o padrão e pode ajustá-lo; a classificação continua no serviço.
-- `pAliq` é informado só para não optante, ou ME/EPP com ISSQN fora do Simples; MEI nunca. **Hipótese a confirmar** em produção restrita.
+- **IBS/CBS:** o `Servico` não tinha o indicador da operação (`cIndOp`), obrigatório no grupo. ~~A opção e o `cIndOp` são da empresa~~ (issue #20, [ADR 0007](0007-ajustes-da-issue-20.md) §1) — **revogado pela issue #29**: o grupo vai ou não pela classificação tributária do serviço e o `cIndOp` é do **serviço**, com ajuste da nota e do modelo ([ADR 0010](0010-paliq-e-ibs-cbs-pela-regra-oficial.md) §3).
+- ~~`pAliq` é informado só para não optante, ou ME/EPP com ISSQN fora do Simples; MEI nunca. **Hipótese a confirmar** em produção restrita.~~ **A hipótese estava errada e foi substituída pela regra oficial (issue #29, [ADR 0010](0010-paliq-e-ibs-cbs-pela-regra-oficial.md) §2):** `pAliq` depende do convênio do município de incidência na data de competência, da retenção do ISSQN e do regime (Anexo VI, E0600 a E0640). O defeito mais grave era enviar a alíquota de um não optante num município conveniado (E0617: todas as notas rejeitadas).
 - `totTrib`: "não informado" por padrão; ME/EPP pode informar o percentual do Simples.
 
 ### 8. Mensagens
@@ -90,7 +90,7 @@ A `freedfe` só é importada em `fiscal/gateway.py`, `fiscal/persistencia/` (que
 
 1. ~~**`cIndOp` no cadastro de serviço** (IBS/CBS)~~ — **decidido na issue #20**: `cIndOp` por empresa, com ajuste pontual na nota ([ADR 0007](0007-ajustes-da-issue-20.md) §1). Segue aberto confirmar os valores válidos da tabela de operações e se uma empresa precisa de indicador por serviço.
 2. **Retenção de PIS/COFINS** na DPS: confirmar a semântica antes de liberar.
-3. **`pAliq`** por regime: confirmar na produção restrita (roteiro manual).
+3. ~~**`pAliq`** por regime: confirmar na produção restrita~~ — **resolvido pela issue #29** ([ADR 0010](0010-paliq-e-ibs-cbs-pela-regra-oficial.md) §2); resta confirmar o convênio na produção restrita.
 4. **Pedido de análise fiscal para cancelamento** (evento próprio): fora da API pública da biblioteca; hoje é orientação.
 5. **Criptografia em repouso dos XMLs**: tratar na implantação (banco/backups).
 6. Rotina de **retenção** (quanto tempo guardar XML e evidências) pertence à fase de conformidade.

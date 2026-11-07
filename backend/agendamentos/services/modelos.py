@@ -14,6 +14,7 @@ from django.db import transaction
 from agendamentos.models import ModeloNfse, OrigemNfse
 from cadastros.models import Servico
 from documentos.services import envio_email, modelos_texto
+from fiscal.services import local_prestacao
 from fiscal.services import nfse as servico_nfse
 from fiscal.services.nfse import ErroDeNota
 
@@ -92,6 +93,8 @@ def dados_do_rascunho(modelo, *, data_execucao):
         # IBS/CBS: o que ESTE modelo define (vazio = herda da empresa na hora de gerar; ADR 0007).
         # Não vai em `ibs_cbs` (que é o ajuste da nota): o rascunho guarda de onde cada valor veio.
         "ibs_cbs_modelo": modelo.padroes_de_ibs_cbs(),
+        # Município da prestação: o que ESTE modelo define (vazio = o do emissor, o padrão).
+        "codigo_municipio_prestacao_modelo": modelo.codigo_municipio_prestacao,
     }
 
 
@@ -123,6 +126,9 @@ def validar_modelo(modelo, *, hoje, com_geracao=True):
         erros["ibs_cbs_indicador_destinatario"] = (
             "Informe se o destinatário é o próprio tomador (0) ou outra pessoa (1)."
         )
+    if modelo.codigo_municipio_prestacao:
+        if erro := local_prestacao.erro_do_codigo(modelo.codigo_municipio_prestacao):
+            erros["codigo_municipio_prestacao"] = erro
     for email in modelo.email_copias_fixas or []:
         try:
             validate_email(str(email))

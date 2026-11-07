@@ -115,7 +115,8 @@ class PessoaSerializer(serializers.ModelSerializer):
 
 CAMPOS_DO_SERVICO = (
     "nome", "descricao", "codigo_tributacao_nacional", "codigo_tributacao_municipal", "nbs",
-    "cst_ibs_cbs", "c_class_trib", "aliquota_iss", "iss_retido", "retencao_irrf",
+    "cst_ibs_cbs", "c_class_trib", "codigo_indicador_operacao", "aliquota_iss", "iss_retido",
+    "retencao_irrf",
     "retencao_csll", "retencao_pis", "retencao_cofins", "retencao_inss", "vigencia_inicio",
     "vigencia_fim", "ativo",
 )  # fmt: skip
@@ -139,6 +140,7 @@ class ServicoSerializer(serializers.ModelSerializer):
             "nbs": {"max_length": 15, "required": False, "allow_blank": True},
             "cst_ibs_cbs": {"max_length": 5, "required": False, "allow_blank": True},
             "c_class_trib": {"max_length": 8, "required": False, "allow_blank": True},
+            "codigo_indicador_operacao": {"max_length": 12, "required": False, "allow_blank": True},
         }
 
     def validate(self, atributos):

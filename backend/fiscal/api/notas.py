@@ -180,6 +180,11 @@ class EntradaDeNota(serializers.Serializer):
     # `codigo_indicador_operacao` e `indicador_destinatario`. Campo ausente ou vazio herda do
     # modelo de NFS-e (se a nota veio de um) e, depois, da empresa.
     ibs_cbs = serializers.DictField(required=False, allow_null=True)
+    # Município da prestação (código IBGE): vazio ou ausente herda do modelo (se a nota veio de
+    # um) e, depois, do município do emissor. Vai na DPS como `cLocPrestacao`.
+    codigo_municipio_prestacao = serializers.CharField(
+        required=False, allow_blank=True, allow_null=True, max_length=9
+    )
     # Só na prévia: o rascunho que está sendo corrigido (para valer o que o modelo dele definia).
     rascunho = serializers.IntegerField(required=False, allow_null=True)
 
@@ -286,12 +291,10 @@ class NotaViewSet(viewsets.GenericViewSet):
                 "pronta": not pendencias,
                 "bloqueios": [b.para_dict() for b in pendencias],
                 "ambiente": parametros.ambiente,
-                # Padrão da empresa para o IBS/CBS: a nota herda e pode ajustar pontualmente.
-                "ibs_cbs": {
-                    "informar": parametros.ibs_cbs_informar,
-                    "codigo_indicador_operacao": parametros.ibs_cbs_indicador_operacao,
-                    "indicador_destinatario": parametros.ibs_cbs_indicador_destinatario,
-                },
+                # Padrão da empresa para o destinatário do IBS/CBS (o cIndOp é do serviço).
+                "ibs_cbs": {"indicador_destinatario": parametros.ibs_cbs_indicador_destinatario},
+                # Padrão do município da prestação: o do emissor (a nota pode informar outro).
+                "municipio_prestacao_padrao": parametros.codigo_municipio_emissor,
                 "leiaute": gateway.leiaute_em_vigor(ambiente_producao),
                 "leiaute_descricao": gateway.descricao_do_leiaute(
                     gateway.leiaute_em_vigor(ambiente_producao)
@@ -323,7 +326,11 @@ class NotaViewSet(viewsets.GenericViewSet):
         rascunho = self.get_queryset().filter(pk=dados.pop("rascunho", None)).first()
         if rascunho is not None:
             # Corrigindo um rascunho: vale também o que o modelo dele definia quando ele nasceu.
-            dados["ibs_cbs_modelo"] = (rascunho.complementos or {}).get("ibs_cbs_modelo")
+            complementos = rascunho.complementos or {}
+            dados["ibs_cbs_modelo"] = complementos.get("ibs_cbs_modelo")
+            dados["codigo_municipio_prestacao_modelo"] = complementos.get(
+                "municipio_prestacao_modelo"
+            )
         try:
             preparo = servico_nfse.preparar(dados)
         except servico_nfse.ErroDeNota as erro:

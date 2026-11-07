@@ -1,8 +1,10 @@
 # ADR 0007 — Ajustes da issue #20: IBS/CBS por empresa, Emissor, troca para produção e municípios
 
-- **Status:** aceita
+- **Status:** aceita; **seção 1 (IBS/CBS) revogada pela issue #29** (ver o aviso abaixo)
 - **Data:** 2026-10-31
 - **Decisões relacionadas:** issues #14, #16, #18 e #20, [ADR 0003](0003-cadastros-e-configuracao-fiscal.md), [ADR 0004](0004-nucleo-fiscal.md), [ADR 0005](0005-documentos.md), [ADR 0006](0006-modelos-e-agendamentos.md)
+
+> **Seção 1 (IBS/CBS) revogada pela issue #29** — [ADR 0010](0010-paliq-e-ibs-cbs-pela-regra-oficial.md) §3. A opção "informar o IBS/CBS" e o `cIndOp` padrão **deixam de ser da empresa**: o grupo vai ou não pela classificação tributária do serviço (`ind_gIBSCBS`, regras E0859/E0860) e o `cIndOp` é do **serviço** (sugerido pelo Anexo VIII), com ajuste da nota e do modelo (nota > modelo > serviço). Da empresa fica só o `indDest` padrão. O texto desta seção é mantido como registro da decisão de 31/10/2026. As seções 2 (Emissor), 3 (troca para produção) e 4 (municípios) seguem valendo.
 
 ## Contexto
 

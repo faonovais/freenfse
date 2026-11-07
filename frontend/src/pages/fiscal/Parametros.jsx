@@ -22,8 +22,6 @@ function formularioDe(dados) {
     serie_dps: String(dados.serie_dps),
     ambiente: dados.ambiente,
     codigo_municipio_emissor: dados.codigo_municipio_emissor,
-    ibs_cbs_informar: Boolean(dados.ibs_cbs_informar),
-    ibs_cbs_indicador_operacao: dados.ibs_cbs_indicador_operacao ?? '',
     ibs_cbs_indicador_destinatario: String(dados.ibs_cbs_indicador_destinatario ?? 0),
   }
 }
@@ -122,8 +120,6 @@ export default function Parametros() {
       serie_dps: Number(f.serie_dps),
       ambiente: f.ambiente,
       codigo_municipio_emissor: f.codigo_municipio_emissor,
-      ibs_cbs_informar: f.ibs_cbs_informar,
-      ibs_cbs_indicador_operacao: f.ibs_cbs_indicador_operacao,
       ibs_cbs_indicador_destinatario: Number(f.ibs_cbs_indicador_destinatario),
     }
     const indoParaProducao = f.ambiente === 'producao' && dados.ambiente !== 'producao'
@@ -241,28 +237,12 @@ export default function Parametros() {
             <h2 className="text-base text-gray-900 dark:text-gray-100">
               IBS e CBS{' '}
               <BotaoAjuda rotulo="IBS e CBS">
-                A opção, o indicador da operação e o destinatário valem para a empresa toda. Cada modelo de NFS-e e cada
-                nota herdam este padrão e podem mudá-lo (vale o da nota, depois o do modelo, depois o da empresa). A
-                classificação (NBS, CST e cClassTrib) continua no cadastro de cada serviço.
+                Se a nota leva o grupo de IBS/CBS é decidido sozinho pela classificação tributária do serviço (na data da
+                competência), e o indicador da operação (cIndOp) é do serviço: veja o cadastro de cada serviço. Aqui fica só
+                o destinatário padrão, que cada modelo de NFS-e e cada nota podem mudar (vale o da nota, depois o do
+                modelo, depois o da empresa).
               </BotaoAjuda>
             </h2>
-            <label className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={f.ibs_cbs_informar}
-                onChange={(evento) => setF((atual) => ({ ...atual, ibs_cbs_informar: evento.target.checked }))}
-              />
-              Informar o IBS/CBS nas notas desta empresa
-            </label>
-            <Campo
-              rotulo="Indicador da operação padrão (cIndOp)"
-              inputMode="numeric"
-              maxLength={6}
-              value={f.ibs_cbs_indicador_operacao}
-              onChange={mudar('ibs_cbs_indicador_operacao')}
-              erro={erros.ibs_cbs_indicador_operacao}
-              dica="6 dígitos. Só vai na nota de serviço que tem NBS, CST e cClassTrib no cadastro."
-            />
             <CampoSelecao
               rotulo="Destinatário padrão (indDest)"
               opcoes={[

@@ -40,8 +40,8 @@ configuração) é da empresa escolhida. Cada aba do navegador pode ficar com um
 No menu **Configuração fiscal**:
 
 1. **Parâmetros fiscais** — regime tributário, **série** da DPS, **município emissor** e o **ambiente** (comece em *Produção
-   restrita*). Clique em **Verificar convênio**: o sistema confere se o município aderiu à NFS-e Nacional. Se a empresa
-   informa IBS/CBS, preencha também o indicador da operação (quem cuida da contabilidade informa o código de 6 dígitos).
+   restrita*). Clique em **Verificar convênio**: o sistema confere se o município aderiu à NFS-e Nacional. Sobre o
+   IBS/CBS, a empresa só define aqui o destinatário padrão; o resto é do **serviço** (veja o item 5).
 2. **Certificado A1** — envie o arquivo `.pfx` e a senha. O CNPJ do certificado precisa ser o da empresa. O sistema avisa
    por e-mail quando faltarem 30, 15 e 7 dias para vencer. **A senha e o arquivo nunca ficam visíveis depois de enviados.**
 3. **Logo da empresa** — a imagem que aparece no DANFSe.
@@ -50,13 +50,25 @@ Em **Cadastros**:
 
 4. **Pessoas** — os tomadores (seus clientes): documento (CPF/CNPJ), nome, endereço com município e e-mail para envio.
 5. **Serviços** — o serviço que você presta: código de tributação nacional, descrição, alíquota do ISS e o período de
-   vigência.
+   vigência. Para o IBS/CBS, informe a NBS, o CST e a **classificação tributária** e clique em **Ver sugestão do indicador e
+   situação da classificação**: a tela diz se a classificação **exige** o grupo de IBS/CBS na nota e sugere o **indicador da
+   operação** (`cIndOp`) pelo Anexo VIII. Se o anexo indicar mais de uma opção, escolha a que corresponde à operação. Quando a
+   classificação exige o grupo e o serviço não tem o indicador, a nota não é emitida e a mensagem pede para completar o cadastro.
+
+   > **Alíquota do ISS na nota.** Em muitos casos a Sefin **não aceita** a alíquota na nota (ela aplica a do município). A tela de
+   > conferência diz se a alíquota vai ou não, o motivo e o código da regra; você não precisa decidir isso.
 
 ## 4. Emitir uma nota
 
 1. **Notas fiscais › NFS-e emitidas › Nova nota**.
 2. Escolha o **tomador**, a **competência** (mês de referência), o **serviço** e o **valor**. Se houver retenções ou
    desconto, preencha-os.
+
+   > **Município da prestação.** Por padrão é o município do emissor (a tela mostra qual). Se o serviço foi prestado em outro
+   > município, escolha-o em **Município da prestação**; **Voltar ao padrão** devolve o campo ao padrão. Ele vai na nota
+   > (`cLocPrestacao`) e, **só nos serviços cujo ISS é devido no local da prestação**, define de qual município a conferência
+   > olha o convênio para decidir se a alíquota vai. Nos demais serviços, o campo só consta da nota (a conferência avisa
+   > quando ele difere do emissor).
 3. Clique em **Conferir a nota**. A tela mostra tudo já calculado (ISS, retenções, valor líquido), o ambiente e eventuais
    avisos. **Leia com atenção** — depois de autorizada, a nota não se corrige: só se cancela ou se substitui.
 4. Clique em **Emitir nota** e confirme. Em produção, a confirmação lembra que a nota tem valor fiscal.
@@ -91,7 +103,8 @@ Abra a nota na lista **NFS-e emitidas**:
 Para cobranças mensais, por exemplo:
 
 1. **Agendamentos › Modelos de NFS-e** — crie um modelo com tomador, serviço, valor e texto. Use **Conferir como ficaria
-   hoje** para ver o resultado e **Gerar rascunho agora** para testar.
+   hoje** para ver o resultado e **Gerar rascunho agora** para testar. O **município da prestação** do modelo é opcional:
+   em branco, vale o município do emissor de quando o rascunho é gerado; cada rascunho ainda pode ajustar.
 2. **Agendamentos › Agendamentos** — escolha o modelo, a frequência (mensal, a cada N semanas, anual…), o dia, a hora e o
    responsável. A tela mostra as **próximas datas**.
 3. Na data, o sistema cria um **rascunho** (nunca emite sozinho). Vá em **Agendamentos › Rascunhos**, revise e

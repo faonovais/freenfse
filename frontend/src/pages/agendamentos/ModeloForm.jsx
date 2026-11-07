@@ -6,7 +6,9 @@ import Aviso from '../../components/Aviso.jsx'
 import BotaoAjuda from '../../components/BotaoAjuda.jsx'
 import Campo from '../../components/Campo.jsx'
 import CampoSelecao from '../../components/CampoSelecao.jsx'
+import NomeDoMunicipio from '../../components/NomeDoMunicipio.jsx'
 import SelectBusca from '../../components/SelectBusca.jsx'
+import SeletorMunicipio from '../../components/SeletorMunicipio.jsx'
 import { useAuth } from '../../contexts/AuthContext.jsx'
 import { useFormularioSujo } from '../../hooks/useFormularioSujo.js'
 import { errosPorCampo, mensagemErro } from '../../utils/erros.js'
@@ -34,10 +36,11 @@ const VAZIO = {
   email_corpo: '',
   copias_proprias: false,
   email_copias: '',
-  // IBS/CBS do modelo: vazio = herda da empresa (nada é copiado para o modelo).
-  ibs_informar: '',
+  // IBS/CBS do modelo: só ajustes de exceção; vazio = herda do serviço (cIndOp) ou da empresa (indDest).
   ibs_indicador: '',
   ibs_destinatario: '',
+  // Município da prestação (código IBGE): vazio = herda o padrão, o município do emissor de quando o rascunho é gerado.
+  municipio_prestacao: '',
 }
 
 const listaDe = (dados) => (Array.isArray(dados) ? dados : (dados?.results ?? []))
@@ -48,7 +51,7 @@ const comoLista = (texto) =>
     .split(/[,;\n]/)
     .map((item) => item.trim())
     .filter(Boolean)
-const ORIGEM = { nota: 'ajuste da nota', modelo: 'do modelo', empresa: 'da empresa' }
+const ORIGEM = { nota: 'ajuste da nota', modelo: 'do modelo', servico: 'do serviço', empresa: 'da empresa' }
 const OPCOES_TRI = [
   { valor: 'sim', rotulo: 'Sim' },
   { valor: 'nao', rotulo: 'Não' },
@@ -77,12 +80,12 @@ function formularioDe(m) {
     email_corpo: m.email_corpo_modelo ?? '',
     copias_proprias: m.email_copias_fixas !== null && m.email_copias_fixas !== undefined,
     email_copias: (m.email_copias_fixas ?? []).join(', '),
-    ibs_informar: tristate(m.ibs_cbs_informar),
     ibs_indicador: m.ibs_cbs_indicador_operacao ?? '',
     ibs_destinatario:
       m.ibs_cbs_indicador_destinatario === null || m.ibs_cbs_indicador_destinatario === undefined
         ? ''
         : String(m.ibs_cbs_indicador_destinatario),
+    municipio_prestacao: m.codigo_municipio_prestacao ?? '',
   }
 }
 
@@ -110,9 +113,9 @@ function corpoDe(f) {
     email_assunto_modelo: f.email_assunto,
     email_corpo_modelo: f.email_corpo,
     email_copias_fixas: f.copias_proprias ? comoLista(f.email_copias) : null,
-    ibs_cbs_informar: deTristate(f.ibs_informar),
     ibs_cbs_indicador_operacao: f.ibs_indicador,
     ibs_cbs_indicador_destinatario: f.ibs_destinatario === '' ? null : Number(f.ibs_destinatario),
+    codigo_municipio_prestacao: f.municipio_prestacao,
   }
 }
 
@@ -130,6 +133,12 @@ function Previa({ previa }) {
       <dl>
         <p className="flex justify-between gap-4"><dt>Tomador</dt><dd>{previa.tomador}</dd></p>
         <p className="flex justify-between gap-4"><dt>Competência</dt><dd>{formatarData(previa.competencia)}</dd></p>
+        {previa.local_prestacao?.codigo && (
+          <p className="flex justify-between gap-4">
+            <dt>Município da prestação</dt>
+            <dd><NomeDoMunicipio codigo={previa.local_prestacao.codigo} /> ({previa.local_prestacao.origem === 'modelo' ? 'do modelo' : 'padrão: município do emissor'})</dd>
+          </p>
+        )}
         <p className="flex justify-between gap-4"><dt>Valor do serviço</dt><dd>{dinheiro(previa.totais.valor_servico)}</dd></p>
         <p className="flex justify-between gap-4"><dt>ISS</dt><dd>{dinheiro(previa.totais.valor_iss)}</dd></p>
         <p className="flex justify-between gap-4"><dt>Valor líquido</dt><dd><strong>{dinheiro(previa.totais.valor_liquido)}</strong></dd></p>
@@ -165,6 +174,7 @@ export default function ModeloForm() {
   const [servicos, setServicos] = useState([])
   const [variaveis, setVariaveis] = useState({})
   const [empresaIbs, setEmpresaIbs] = useState(null) // o padrão de IBS/CBS da empresa de agora
+  const [municipioPadrao, setMunicipioPadrao] = useState(null) // município do emissor, de agora
   const [carregando, setCarregando] = useState(Boolean(id))
   const [falha, setFalha] = useState('')
   const [erros, setErros] = useState({})
@@ -182,6 +192,7 @@ export default function ModeloForm() {
       if (!ativo || !r.ok) return
       setVariaveis(r.dados.variaveis_do_texto)
       setEmpresaIbs(r.dados.ibs_cbs_empresa ?? null)
+      setMunicipioPadrao(r.dados.municipio_prestacao_padrao ?? null)
     })
     if (id) {
       api.obter(id).then((r) => {
@@ -365,36 +376,34 @@ export default function ModeloForm() {
           </div>
           <Campo rotulo="Percentual total de tributos do Simples (%) — opcional" inputMode="decimal" value={f.percentual_simples} onChange={mudar('percentual_simples')} erro={erros.percentual_total_tributos_simples} />
 
+          <section aria-label="Município da prestação do modelo" className="space-y-2 text-sm">
+            <SeletorMunicipio
+              rotulo="Município da prestação"
+              valor={f.municipio_prestacao}
+              aoMudar={(codigo) => setF((atual) => ({ ...atual, municipio_prestacao: codigo }))}
+              erro={erros.codigo_municipio_prestacao}
+              padrao={municipioPadrao}
+              textoDoPadrao="Em branco, vale o município do emissor"
+              dica="Onde o serviço é prestado nas notas deste modelo. Só muda a alíquota do ISS nos serviços cujo ISSQN é devido no local da prestação; cada rascunho ainda pode ajustar."
+            />
+          </section>
+
           <section aria-label="IBS e CBS do modelo" className="space-y-2 text-sm">
             <h3 className="text-base text-gray-900 dark:text-gray-100">IBS e CBS</h3>
             <p className="text-xs text-gray-600 dark:text-gray-400">
-              O modelo herda da empresa (parâmetros fiscais) a opção, o indicador da operação e o destinatário. Preencha só o
-              que for diferente para as notas deste modelo; cada rascunho ainda pode ajustar. A classificação (NBS, CST e
-              cClassTrib) fica no cadastro do serviço.
+              Se a nota leva o grupo de IBS/CBS é decidido pela classificação do serviço. O indicador da operação (cIndOp) é
+              do serviço e o destinatário padrão é o da empresa. Preencha aqui só o que for uma exceção para as notas deste
+              modelo; cada rascunho ainda pode ajustar.
             </p>
-            <div className="grid gap-3 sm:grid-cols-3">
-              <CampoSelecao
-                rotulo="Informar o IBS/CBS"
-                vazio={`Herdar da empresa (hoje: ${empresaIbs?.informar ? 'informa' : 'não informa'})`}
-                opcoes={[
-                  { valor: 'sim', rotulo: 'Informar' },
-                  { valor: 'nao', rotulo: 'Não informar' },
-                ]}
-                value={f.ibs_informar}
-                onChange={mudar('ibs_informar')}
-              />
+            <div className="grid gap-3 sm:grid-cols-2">
               <Campo
-                rotulo="Indicador da operação (cIndOp)"
+                rotulo="Ajustar o indicador da operação (cIndOp)"
                 inputMode="numeric"
                 maxLength={6}
                 value={f.ibs_indicador}
                 onChange={mudar('ibs_indicador')}
                 erro={erros.ibs_cbs_indicador_operacao}
-                dica={
-                  empresaIbs?.codigo_indicador_operacao
-                    ? `Vazio: herda o da empresa (${empresaIbs.codigo_indicador_operacao}).`
-                    : 'Vazio: herda o da empresa (nenhum definido ainda).'
-                }
+                dica="Vazio: herda o do serviço."
               />
               <CampoSelecao
                 rotulo="O destinatário é o próprio tomador?"
@@ -408,13 +417,13 @@ export default function ModeloForm() {
                 erro={erros.ibs_cbs_indicador_destinatario}
               />
             </div>
-            {podeEditar && (f.ibs_informar || f.ibs_indicador || f.ibs_destinatario) && (
+            {podeEditar && (f.ibs_indicador || f.ibs_destinatario) && (
               <button
                 type="button"
                 className="botao-leve"
-                onClick={() => setF((atual) => ({ ...atual, ibs_informar: '', ibs_indicador: '', ibs_destinatario: '' }))}
+                onClick={() => setF((atual) => ({ ...atual, ibs_indicador: '', ibs_destinatario: '' }))}
               >
-                Voltar a herdar tudo da empresa
+                Voltar a herdar do serviço e da empresa
               </button>
             )}
           </section>

@@ -10,6 +10,7 @@ from django.db.models import Q
 
 from core.services import municipios
 from core.validators import cnpj_valido, cpf_valido, normalizar_cnpj, normalizar_cpf
+from fiscal.referencias import indop
 
 MAXIMO_EMAILS_DE_ENVIO = 10
 
@@ -293,6 +294,12 @@ class Servico(models.Model):
     c_class_trib = models.CharField(
         "classificação tributária (cClassTrib)", max_length=6, blank=True
     )
+    codigo_indicador_operacao = models.CharField(
+        "indicador da operação (cIndOp)",
+        max_length=6,
+        blank=True,
+        help_text="6 dígitos. É do serviço (Anexo VIII); a tela sugere pelo item e pela NBS.",
+    )
 
     aliquota_iss = models.DecimalField(
         "alíquota do ISS (%)",
@@ -379,6 +386,17 @@ class Servico(models.Model):
             erros["c_class_trib"] = "A classificação tributária (cClassTrib) tem 6 dígitos."
         if bool(self.cst_ibs_cbs) != bool(self.c_class_trib):
             erros["c_class_trib"] = "Informe o CST e a classificação tributária do IBS/CBS juntos."
+        elif self.cst_ibs_cbs and not self.c_class_trib.startswith(self.cst_ibs_cbs):
+            erros["c_class_trib"] = (
+                "Os 3 primeiros dígitos da classificação tributária devem ser iguais ao CST "
+                "(regra E0959 da Sefin)."
+            )
+        self.codigo_indicador_operacao = _apenas_digitos(self.codigo_indicador_operacao)
+        if self.codigo_indicador_operacao:
+            for _regra, mensagem in indop.violacoes_do_indicador(
+                self.codigo_tributacao_nacional, self.codigo_indicador_operacao
+            ):
+                erros["codigo_indicador_operacao"] = mensagem
         if (self.cst_ibs_cbs or self.c_class_trib) and not self.nbs:
             erros["nbs"] = "A NBS é obrigatória quando há IBS/CBS."
 
