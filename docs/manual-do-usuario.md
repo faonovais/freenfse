@@ -69,6 +69,16 @@ Em **Cadastros**:
    > (`cLocPrestacao`) e, **só nos serviços cujo ISS é devido no local da prestação**, define de qual município a conferência
    > olha o convênio para decidir se a alíquota vai. Nos demais serviços, o campo só consta da nota (a conferência avisa
    > quando ele difere do emissor).
+
+   > **Destinatário e endereços (IBS/CBS).** Quando o serviço leva o grupo de IBS/CBS, em **4. Informações opcionais** a pergunta
+   > *O destinatário é o próprio tomador?* decide quem recebe o serviço. Se a resposta for **Não**, aparece **Destinatário**:
+   > escolha a pessoa no cadastro (é obrigatório; o modelo também pode definir um). Alguns indicadores da operação (`cIndOp`)
+   > mandam a Sefin olhar o **endereço do tomador** ou o **do destinatário**; nesses casos essa pessoa precisa ser **pessoa
+   > física ou jurídica do Brasil, com CPF/CNPJ e endereço completo** (logradouro, número, bairro, CEP e município). Estrangeiro,
+   > ou pessoa sem endereço completo, é barrado antes do envio com o código da regra (**E0239**, **E0243** ou **E0919**) e o
+   > que corrigir: ajuste o cadastro em *Cadastros › Pessoas*, escolha outra pessoa ou troque o indicador. Sem o grupo de
+   > IBS/CBS na nota, nada disso se aplica. No indicador **130201** (transporte dutoviário de gás natural) a conferência só
+   > **avisa** quando o tomador não tem CPF/CNPJ e endereço nacional; confirme com o contador.
 3. Clique em **Conferir a nota**. A tela mostra tudo já calculado (ISS, retenções, valor líquido), o ambiente e eventuais
    avisos. **Leia com atenção** — depois de autorizada, a nota não se corrige: só se cancela ou se substitui.
 4. Clique em **Emitir nota** e confirme. Em produção, a confirmação lembra que a nota tem valor fiscal.
@@ -104,7 +114,8 @@ Para cobranças mensais, por exemplo:
 
 1. **Agendamentos › Modelos de NFS-e** — crie um modelo com tomador, serviço, valor e texto. Use **Conferir como ficaria
    hoje** para ver o resultado e **Gerar rascunho agora** para testar. O **município da prestação** do modelo é opcional:
-   em branco, vale o município do emissor de quando o rascunho é gerado; cada rascunho ainda pode ajustar.
+   em branco, vale o município do emissor de quando o rascunho é gerado; cada rascunho ainda pode ajustar. O **destinatário**
+   do modelo também é opcional e só vale nas notas em que o destinatário é outra pessoa: em branco, cada nota escolhe o seu.
 2. **Agendamentos › Agendamentos** — escolha o modelo, a frequência (mensal, a cada N semanas, anual…), o dia, a hora e o
    responsável. A tela mostra as **próximas datas**.
 3. Na data, o sistema cria um **rascunho** (nunca emite sozinho). Vá em **Agendamentos › Rascunhos**, revise e
@@ -140,6 +151,9 @@ Na nota, **Envios da nota** mostra cada e-mail e cada cópia (enviado, na fila, 
 | Nota **Rejeitada** | leia o motivo, corrija o dado indicado e emita de novo |
 | Aviso de **certificado a vencer** | peça o novo certificado e envie em **Certificado A1** antes do vencimento |
 | "Envios com falha" por e-mail | confira a senha de aplicativo e o endereço do cliente em **E-mail da empresa** |
+| "Regra E0239/E0243 da Sefin… o tomador precisa ter CPF ou CNPJ e endereço no Brasil completo" | o indicador da operação manda olhar o endereço do tomador: complete o cadastro dele, escolha outro tomador ou troque o indicador |
+| "Regra E0919 da Sefin… o destinatário…" | escolha um destinatário do Brasil, com CPF/CNPJ e endereço completo, ou troque o indicador |
+| "Regra E0901 da Sefin… indicador da operação… não consta da tabela" | corrija o indicador no serviço, na nota ou no modelo (6 dígitos da tabela oficial) |
 
 ## 10. Antes de emitir notas de verdade
 

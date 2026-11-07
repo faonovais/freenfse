@@ -360,6 +360,106 @@ describe('Emissão guiada', () => {
       expect(chamadas.find((c) => c.caminho === `${NOTAS}previa/`).corpo.ibs_cbs).toEqual({ indicador_destinatario: 0 })
     })
 
+    describe('destinatário (issue #33): obrigatório quando é outra pessoa', () => {
+      const DOIS = {
+        'GET /api/cadastros/pessoas/': {
+          status: 200,
+          dados: {
+            count: 2,
+            results: [
+              { id: 4, nome: 'TOMADOR FICTICIO LTDA', documento_formatado: '11.222.333/0002-81' },
+              { id: 5, nome: 'DESTINATARIO FICTICIO LTDA', documento_formatado: '05.423.960/0001-70' },
+            ],
+          },
+        },
+      }
+      const COM_DESTINATARIO = {
+        ...DO_SERVICO,
+        indicador_destinatario: 1,
+        origens: { codigo_indicador_operacao: 'servico', indicador_destinatario: 'nota' },
+      }
+      const escolherOutraPessoa = () =>
+        fireEvent.change(screen.getByLabelText('O destinatário é o próprio tomador?'), { target: { value: '1' } })
+
+      it('com o destinatário sendo o próprio tomador, a escolha do destinatário não aparece', async () => {
+        abrirComServico(DOIS)
+        await preencher()
+
+        expect(screen.queryByRole('combobox', { name: 'Destinatário' })).not.toBeInTheDocument()
+      })
+
+      it('"Não" mostra o seletor, que é obrigatório, e o envio leva a pessoa escolhida', async () => {
+        const previa = previaCom(COM_DESTINATARIO)
+        previa.dados.complementos.destinatario = {
+          pessoa: 5, origem: 'nota', dados: { nome: 'DESTINATARIO FICTICIO LTDA', documento: '05423960000170' },
+        } // prettier-ignore
+        const { chamadas } = abrirComServico({ ...DOIS, [`POST ${NOTAS}previa/`]: previa })
+        await preencher()
+        escolherOutraPessoa()
+
+        fireEvent.click(await screen.findByRole('combobox', { name: 'Destinatário' }))
+        fireEvent.mouseDown(await screen.findByRole('option', { name: /DESTINATARIO FICTICIO LTDA/ }))
+        fireEvent.click(screen.getByRole('button', { name: 'Conferir a nota' }))
+
+        const conferencia = await screen.findByRole('region', { name: 'Conferência da nota' })
+        const corpo = chamadas.find((c) => c.caminho === `${NOTAS}previa/`).corpo
+        expect(corpo.destinatario).toBe(5)
+        expect(corpo.ibs_cbs).toEqual({ indicador_destinatario: 1 })
+        const linha = within(conferencia).getByText('Destinatário').closest('div')
+        expect(linha).toHaveTextContent('DESTINATARIO FICTICIO LTDA (05423960000170)')
+        expect(linha).toHaveTextContent('escolhido nesta nota')
+      })
+
+      it('mostra junto do seletor a regra E0919 quando o destinatário não serve', async () => {
+        const mensagem = 'Regra E0919 da Sefin: o destinatário precisa ter CPF ou CNPJ e endereço no Brasil completo.'
+        abrirComServico({ ...DOIS, [`POST ${NOTAS}previa/`]: { status: 400, dados: { destinatario: mensagem } } })
+        await preencher()
+        escolherOutraPessoa()
+
+        fireEvent.click(screen.getByRole('button', { name: 'Conferir a nota' }))
+
+        expect(await screen.findByText(mensagem)).toBeInTheDocument()
+        expect(screen.queryByRole('region', { name: 'Conferência da nota' })).not.toBeInTheDocument()
+      })
+
+      it('voltar para "o próprio tomador" esconde o seletor', async () => {
+        abrirComServico(DOIS)
+        await preencher()
+        escolherOutraPessoa()
+        expect(await screen.findByRole('combobox', { name: 'Destinatário' })).toBeInTheDocument()
+
+        fireEvent.change(screen.getByLabelText('O destinatário é o próprio tomador?'), { target: { value: '0' } })
+
+        expect(screen.queryByRole('combobox', { name: 'Destinatário' })).not.toBeInTheDocument()
+      })
+    })
+
+    describe('endereço do tomador pelo cIndOp (E0239, E0243)', () => {
+      it('mostra junto do tomador a regra E0239 devolvida pela conferência', async () => {
+        const mensagem = 'Regra E0239 da Sefin: o tomador precisa ter CPF ou CNPJ e endereço no Brasil completo.'
+        abrirComServico({ [`POST ${NOTAS}previa/`]: { status: 400, dados: { tomador: mensagem } } })
+        await preencher()
+
+        fireEvent.click(screen.getByRole('button', { name: 'Conferir a nota' }))
+
+        expect(await screen.findByText(mensagem)).toBeInTheDocument()
+        expect(screen.queryByRole('region', { name: 'Conferência da nota' })).not.toBeInTheDocument()
+      })
+
+      it('mostra o aviso do indicador 130201 na conferência sem bloquear o envio', async () => {
+        const aviso =
+          'O texto do Anexo VII indica o endereço do adquirente para este indicador; confira se o tomador tem CPF/CNPJ e endereço nacional, para evitar a rejeição E0239.'
+        const previa = previaCom({ ...DO_SERVICO, codigo_indicador_operacao: '130201' })
+        previa.dados.avisos = [aviso]
+        abrirComServico({ [`POST ${NOTAS}previa/`]: previa })
+
+        await conferir()
+
+        expect(screen.getByText(aviso)).toBeInTheDocument()
+        expect(screen.getByRole('button', { name: 'Emitir nota' })).toBeEnabled()
+      })
+    })
+
     it('a conferência diz por que o grupo não vai quando a classificação não tem tributação de IBS/CBS', async () => {
       const semGrupo = {
         na_dps: false, motivo: 'A classificação 410009 não tem tributação de IBS/CBS (ind_gIBSCBS = 0).',

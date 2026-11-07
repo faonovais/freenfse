@@ -194,6 +194,30 @@ def criar_cadastros_de_teste():
     return tomador, servico
 
 
+def criar_destinatario_de_teste(**ajustes):
+    """Uma segunda pessoa (PJ nacional, endereço completo) para ser o destinatário da nota.
+
+    `ajustes` troca qualquer campo (ex.: `tipo="estrangeiro"`, `logradouro=""`).
+    """
+    from cadastros.models import Pessoa
+    from conftest import cnpj_de_teste
+
+    campos = {
+        "tipo": Pessoa.Tipo.PESSOA_JURIDICA,
+        "documento": cnpj_de_teste("054239600001"),
+        "nome": "DESTINATARIO FICTICIO LTDA",
+        "logradouro": "Avenida do Destino",
+        "numero": "200",
+        "bairro": "Centro",
+        "codigo_municipio": "3550308",
+        "cep": "01310100",
+        "emails_envio": ["contas@destinatario.test"],
+        **ajustes,
+    }
+    pessoa, _ = Pessoa.objects.get_or_create(documento=campos["documento"], defaults=campos)
+    return pessoa
+
+
 def criar_rascunho_de_teste(*, valor="1000.00", competencia=None, usuario=None, **extra):
     """Cria (no schema ativo) um tomador, um serviço vigente e o rascunho da nota."""
     from fiscal.services import nfse as servico_nfse

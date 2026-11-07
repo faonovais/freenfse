@@ -22,7 +22,11 @@ from fiscal import gateway
 from fiscal.models import ParametrosFiscais
 from fiscal.services import emissao
 from fiscal.services import nfse as servico_nfse
-from fiscal.tests.apoio import criar_cadastros_de_teste, preparar_empresa_para_emitir
+from fiscal.tests.apoio import (
+    criar_cadastros_de_teste,
+    criar_destinatario_de_teste,
+    preparar_empresa_para_emitir,
+)
 
 pytestmark = pytest.mark.django_db
 HOJE = dt.date(2026, 10, 31)
@@ -433,6 +437,7 @@ def test_dps_assinada_leva_o_ajuste_da_nota_e_nao_o_do_servico(empresa_pronta, c
             cadastros.tomador,
             cadastros.exige,
             ibs_cbs={"codigo_indicador_operacao": AJUSTADO, "indicador_destinatario": 1},
+            destinatario=criar_destinatario_de_teste().pk,
         ),
         usuario=None,
         hoje=HOJE,

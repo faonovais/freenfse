@@ -13,7 +13,13 @@ from django.utils import timezone
 from cadastros.models import Pessoa, Servico
 from fiscal.models import Nfse, ParametrosFiscais
 from fiscal.referencias import classificacao, incidencia, indop
-from fiscal.services import aliquota_nota, calculo, local_prestacao
+from fiscal.services import (
+    aliquota_nota,
+    calculo,
+    destinatario,
+    local_prestacao,
+    regras_de_endereco,
+)
 
 MOTIVOS_DE_SUBSTITUICAO = {
     "01": "Desenquadramento do Simples Nacional",
@@ -346,6 +352,34 @@ def _ibs_cbs(
     return grupo, {"na_dps": True, "motivo": None, "regra": regra, **grupo, **do_servico}
 
 
+def _destinatario_da_dps(nota, modelo, na_dps, tomador_id, avisos):
+    """O destinatário que vai na DPS; `(info, erro)` (issue #33).
+
+    Só existe com o grupo de IBS/CBS **e** `indDest = 1` (o destinatário não é o próprio tomador).
+    Aí é obrigatório. Com `indDest = 0`, ou sem grupo, o que alguém tenha escolhido é descartado
+    (e a prévia avisa).
+    """
+    ind_dest = na_dps.get("indicador_destinatario") if na_dps and na_dps.get("na_dps") else None
+    if ind_dest != 1:
+        if destinatario.escolhido(nota, modelo)[0] is not None:
+            avisos.append(
+                "O destinatário escolhido não vai na nota: ele só vale quando a nota leva o grupo "
+                "de IBS/CBS e o destinatário é outra pessoa (não o próprio tomador)."
+            )
+        return None, None
+    info, erro = destinatario.resolver(nota, modelo, snapshot_tomador)
+    if erro:
+        return None, erro
+    if info is None:
+        return None, destinatario.MENSAGEM_DE_DESTINATARIO_FALTANDO
+    if info["pessoa"] == tomador_id:
+        avisos.append(
+            "O destinatário escolhido é o próprio tomador. Se é a mesma pessoa, use "
+            "“o destinatário é o próprio tomador”."
+        )
+    return info, None
+
+
 def avaliar_ibs_cbs_da_nota(nfse, parametros):
     """Refaz a decisão do grupo de IBS/CBS a partir do snapshot da nota.
 
@@ -364,7 +398,37 @@ def avaliar_ibs_cbs_da_nota(nfse, parametros):
         avisos,
         adquirente_no_exterior=(nfse.tomador or {}).get("tipo") == "estrangeiro",
     )
+    dados_do_destinatario = _dados_do_destinatario(complementos)
+    if grupo and grupo["indicador_destinatario"] == 1 and not dados_do_destinatario:
+        erros["destinatario"] = destinatario.MENSAGEM_DE_DESTINATARIO_FALTANDO
+    _aplicar_regras_de_endereco(grupo, nfse.tomador, dados_do_destinatario, erros, avisos)
     return grupo, na_dps, erros, avisos
+
+
+def _aplicar_regras_de_endereco(grupo, tomador, dados_do_destinatario, erros, avisos):
+    """Aplica E0901/E0239/E0243/E0919 (issue #33, ADR 0011); só vale com o grupo na DPS.
+
+    Os bloqueios entram em `erros` pelo campo da tela (`tomador`, `destinatario` ou `ibs_cbs`) com
+    o código da regra; o aviso do indicador 130201 entra em `avisos` e nunca bloqueia. Para o
+    destinatário ausente a mensagem com o código da regra substitui só a genérica de "faltando".
+    """
+    resultado = regras_de_endereco.avaliar(
+        exige_grupo=grupo is not None,
+        codigo_indicador=(grupo or {}).get("codigo_indicador_operacao"),
+        indicador_destinatario=(grupo or {}).get("indicador_destinatario"),
+        tomador=tomador,
+        destinatario=dados_do_destinatario,
+    )
+    for pendencia in resultado.pendencias:
+        atual = erros.get(pendencia.campo)
+        if atual is None or atual == destinatario.MENSAGEM_DE_DESTINATARIO_FALTANDO:
+            erros[pendencia.campo] = pendencia.mensagem
+    avisos.extend(resultado.avisos)
+
+
+def _dados_do_destinatario(complementos):
+    """Devolve a cópia dos dados do destinatário gravada na nota, ou `None`."""
+    return ((complementos or {}).get("destinatario") or {}).get("dados") or None
 
 
 def preparar(dados, *, hoje=None):
@@ -434,6 +498,22 @@ def preparar(dados, *, hoje=None):
         avisos,
         adquirente_no_exterior=pessoa.tipo == Pessoa.Tipo.ESTRANGEIRO,
     )
+    info_do_destinatario, erro_do_destinatario = _destinatario_da_dps(
+        dados.get("destinatario"),
+        dados.get("destinatario_modelo"),
+        ibs_na_dps,
+        pessoa.pk,
+        avisos,
+    )
+    if erro_do_destinatario:
+        complementos_erros["destinatario"] = erro_do_destinatario
+    _aplicar_regras_de_endereco(
+        ibs,
+        snapshot_tomador(pessoa),
+        (info_do_destinatario or {}).get("dados"),
+        complementos_erros,
+        avisos,
+    )
     # Município da prestação (nota > modelo > emissor): vai na DPS como `cLocPrestacao` e é o
     # município de incidência dos serviços cujo ISSQN é devido no local da prestação.
     codigo_prestacao, origem_prestacao = local_prestacao.resolver(
@@ -486,6 +566,13 @@ def preparar(dados, *, hoje=None):
             "local_prestacao": {"codigo": codigo_prestacao, "origem": origem_prestacao},
             "municipio_prestacao_nota": prestacao_nota,
             "municipio_prestacao_modelo": prestacao_modelo,
+            # Destinatário (indDest = 1): a cópia dos dados, o que a nota escolheu (só conta com
+            # indDest = 1) e o que o modelo definia ao gerar.
+            "destinatario": info_do_destinatario,
+            "destinatario_nota": (
+                destinatario.como_id(dados.get("destinatario")) if info_do_destinatario else None
+            ),
+            "destinatario_modelo": destinatario.como_id(dados.get("destinatario_modelo")),
             # O que a nota sobrescreveu e o que o modelo definia ao gerar: a tela reabre fiel e a
             # edição do rascunho resolve de novo sem consultar o app de agendamentos.
             "ibs_cbs_nota": ajuste_da_nota(dados.get("ibs_cbs")),
@@ -538,6 +625,7 @@ def atualizar_rascunho(nfse, dados):
         **dados,
         "ibs_cbs_modelo": complementos.get("ibs_cbs_modelo"),
         "codigo_municipio_prestacao_modelo": complementos.get("municipio_prestacao_modelo"),
+        "destinatario_modelo": complementos.get("destinatario_modelo"),
     }
     preparo = preparar(dados)
     for campo, valor in _campos_da_nota(preparo).items():
@@ -628,6 +716,12 @@ def dados_da_dps(
         "informacoes_complementares": complementos.get("informacoes_complementares", ""),
         "percentual_total_tributos_simples": complementos.get("percentual_total_tributos_simples"),
         "ibs_cbs": ibs_cbs,
+        # Grupo `dest` da DPS: só com o grupo de IBS/CBS e indDest = 1.
+        "destinatario": (
+            _dados_do_destinatario(complementos)
+            if ibs_cbs and ibs_cbs["indicador_destinatario"] == 1
+            else None
+        ),
         "aliquota_issqn": aliquota_issqn,
         "substituicao": (
             {

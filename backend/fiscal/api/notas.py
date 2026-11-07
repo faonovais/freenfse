@@ -185,6 +185,9 @@ class EntradaDeNota(serializers.Serializer):
     codigo_municipio_prestacao = serializers.CharField(
         required=False, allow_blank=True, allow_null=True, max_length=9
     )
+    # Destinatário (id de uma pessoa do cadastro): só vale com o grupo de IBS/CBS e "o destinatário
+    # é outra pessoa" (indDest = 1), e aí é obrigatório. Vazio herda do modelo (se houver um).
+    destinatario = serializers.IntegerField(required=False, allow_null=True)
     # Só na prévia: o rascunho que está sendo corrigido (para valer o que o modelo dele definia).
     rascunho = serializers.IntegerField(required=False, allow_null=True)
 
@@ -331,6 +334,7 @@ class NotaViewSet(viewsets.GenericViewSet):
             dados["codigo_municipio_prestacao_modelo"] = complementos.get(
                 "municipio_prestacao_modelo"
             )
+            dados["destinatario_modelo"] = complementos.get("destinatario_modelo")
         try:
             preparo = servico_nfse.preparar(dados)
         except servico_nfse.ErroDeNota as erro:

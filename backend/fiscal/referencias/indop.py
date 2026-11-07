@@ -28,6 +28,20 @@ def origem():
     return _tabela()["origem"]
 
 
+@lru_cache(maxsize=1)
+def indicadores_do_anexo_viii():
+    """Todo `cIndOp` que o Anexo VIII cita para algum serviço (incluindo os equivalentes)."""
+    tabela = _tabela()
+    achados = set()
+    for por_nbs in tabela["itens"].values():
+        for por_indop in por_nbs.values():
+            achados.update(por_indop)
+    for equivalentes in (tabela["exterior"], tabela["nao_onerosa"]):
+        achados.update(equivalentes)
+        achados.update(equivalentes.values())
+    return frozenset(achados)
+
+
 def _por_nbs(codigo_tributacao_nacional):
     itens = _tabela()["itens"]
     for chave in chaves_do_item(codigo_tributacao_nacional):

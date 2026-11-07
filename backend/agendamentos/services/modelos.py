@@ -95,6 +95,8 @@ def dados_do_rascunho(modelo, *, data_execucao):
         "ibs_cbs_modelo": modelo.padroes_de_ibs_cbs(),
         # Município da prestação: o que ESTE modelo define (vazio = o do emissor, o padrão).
         "codigo_municipio_prestacao_modelo": modelo.codigo_municipio_prestacao,
+        # Destinatário: a pessoa que ESTE modelo escolhe (vazio = ninguém; a nota ainda escolhe).
+        "destinatario_modelo": modelo.destinatario_id,
     }
 
 

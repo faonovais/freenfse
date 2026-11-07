@@ -32,6 +32,7 @@ const vazio = () => ({
   indicador_operacao: '',
   indicador_destinatario: '', // vazio = herda do modelo (se a nota veio de um) ou da empresa
   municipio_prestacao: '', // vazio = herda do modelo (se a nota veio de um) ou o município do emissor
+  destinatario: null, // pessoa do cadastro; só vale quando o destinatário é outra pessoa (indDest = 1)
 })
 
 function formularioDe(nota) {
@@ -54,6 +55,8 @@ function formularioDe(nota) {
       complementos.ibs_cbs_nota?.indicador_destinatario == null ? '' : String(complementos.ibs_cbs_nota.indicador_destinatario),
     // Idem: só o município que a PRÓPRIA nota informou volta preenchido.
     municipio_prestacao: complementos.municipio_prestacao_nota ?? '',
+    // Só o destinatário que a PRÓPRIA nota escolheu volta; o do modelo aparece como padrão.
+    destinatario: complementos.destinatario_nota ?? null,
   }
 }
 
@@ -83,6 +86,7 @@ function corpoDe(f) {
     percentual_total_tributos_simples: numero(f.percentual_simples),
     ibs_cbs: ibsCbsDe(f),
     codigo_municipio_prestacao: f.municipio_prestacao,
+    destinatario: f.destinatario,
   }
 }
 
@@ -97,6 +101,7 @@ function Linha({ rotulo, children }) {
 
 const ROTULO_DA_ORIGEM = { nota: 'ajuste desta nota', modelo: 'do modelo', servico: 'do serviço', empresa: 'padrão da empresa' }
 const ROTULO_DA_PRESTACAO = { nota: 'informado nesta nota', modelo: 'do modelo', emissor: 'padrão: município do emissor' }
+const ROTULO_DO_DESTINATARIO = { nota: 'escolhido nesta nota', modelo: 'do modelo' }
 
 /** O grupo de IBS/CBS como vai na DPS: cada valor com a sua origem (nota, modelo ou empresa) ou por que não vai. */
 function IbsCbsNaDps({ ibs, servico }) {
@@ -153,6 +158,15 @@ function Previa({ previa, ambiente, leiauteDescricao }) {
         </Linha>
         <Linha rotulo="Descrição na nota">{previa.servico.descricao}</Linha>
         <Linha rotulo="Competência">{formatarData(previa.competencia)}</Linha>
+        {previa.complementos?.destinatario?.dados && (
+          <Linha rotulo="Destinatário">
+            {previa.complementos.destinatario.dados.nome} (
+            {previa.complementos.destinatario.dados.documento || previa.complementos.destinatario.dados.nif || 'sem documento'}){' '}
+            <span className="text-xs text-gray-600 dark:text-gray-400">
+              ({ROTULO_DO_DESTINATARIO[previa.complementos.destinatario.origem] ?? ''})
+            </span>
+          </Linha>
+        )}
         {previa.complementos?.local_prestacao?.codigo && (
           <Linha rotulo="Município da prestação">
             <NomeDoMunicipio codigo={previa.complementos.local_prestacao.codigo} />{' '}
@@ -197,6 +211,7 @@ export default function NotaForm() {
   const [prontidao, setProntidao] = useState(null)
   const [padroesDoModelo, setPadroesDoModelo] = useState(null) // o que o modelo do rascunho definia
   const [municipioDoModelo, setMunicipioDoModelo] = useState('') // município da prestação que o modelo definia
+  const [destinatarioDoModelo, setDestinatarioDoModelo] = useState(null) // pessoa que o modelo escolhia
   const [previa, setPrevia] = useState(null)
   const [erros, setErros] = useState({})
   const [erroGeral, setErroGeral] = useState('')
@@ -232,6 +247,7 @@ export default function NotaForm() {
         const preenchido = formularioDe(r.dados)
         setPadroesDoModelo(r.dados.complementos?.ibs_cbs_modelo ?? null)
         setMunicipioDoModelo(r.dados.complementos?.municipio_prestacao_modelo ?? '')
+        setDestinatarioDoModelo(r.dados.complementos?.destinatario_modelo ?? null)
         setF(preenchido)
         setInicial(preenchido)
       } else {
@@ -263,6 +279,9 @@ export default function NotaForm() {
   const destinatarioHerdado = doModelo.indicador_destinatario ?? empresaIbs?.indicador_destinatario ?? 0
 
   const servicoEscolhido = useMemo(() => servicos.find((s) => s.id === f.servico), [servicos, f.servico])
+  // O destinatário só é pedido quando ele é outra pessoa: indDest = 1, escolhido aqui ou herdado.
+  const indDestEfetivo = f.indicador_destinatario !== '' ? Number(f.indicador_destinatario) : destinatarioHerdado
+  const destinatarioPadrao = pessoas.find((p) => p.id === destinatarioDoModelo)
   const indicadorHerdado = doModelo.codigo_indicador_operacao || servicoEscolhido?.codigo_indicador_operacao || ''
   const origemDoIndicador = doModelo.codigo_indicador_operacao ? 'do modelo' : 'do serviço'
   const mudar = (campo) => (evento) => {
@@ -502,6 +521,30 @@ export default function NotaForm() {
                 value={f.indicador_destinatario}
                 onChange={mudar('indicador_destinatario')}
               />
+              {indDestEfetivo === 1 && (
+                <div className="space-y-1 sm:col-span-2">
+                  <SelectBusca
+                    rotulo="Destinatário"
+                    opcoes={pessoas.map((p) => ({ valor: p.id, rotulo: p.nome, detalhe: p.documento_formatado }))}
+                    valor={f.destinatario}
+                    aoMudar={escolher('destinatario')}
+                    placeholder="Quem recebe o serviço (busque pelo nome ou documento)"
+                    vazio="Nenhuma pessoa encontrada. Cadastre em Cadastros › Pessoas."
+                  />
+                  {erros.destinatario && <p className="text-xs text-estado-erro">{erros.destinatario}</p>}
+                  <p className="text-xs text-gray-600 dark:text-gray-400">
+                    Obrigatório quando o destinatário é outra pessoa.
+                    {!f.destinatario && destinatarioDoModelo
+                      ? ` Em branco, vale o do modelo${destinatarioPadrao ? `: ${destinatarioPadrao.nome}` : ''}.`
+                      : ''}
+                  </p>
+                  {f.destinatario && (
+                    <button type="button" className="botao-leve text-xs" onClick={() => escolher('destinatario')(null)}>
+                      {destinatarioDoModelo ? 'Voltar ao destinatário do modelo' : 'Limpar o destinatário'}
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
           )}
         </fieldset>

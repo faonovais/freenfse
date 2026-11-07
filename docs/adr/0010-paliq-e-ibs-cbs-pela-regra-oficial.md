@@ -146,8 +146,10 @@ Primeiro o plano mandava usar o município do emissor como local da prestação,
 4. **Grupo de IBS/CBS sem classificação no serviço**: não há regra no anexo que o torne obrigatório; a nota sai sem o grupo, com a explicação.
 5. **Competência anterior a 2026-01-01**: a tabela da calculadora não informa vigência antes disso; a nota sai sem o grupo, com aviso.
 6. **Local da prestação** diferente do município do emissor: resolvido pela decisão 4 (a nota passou a ter o município da prestação).
-7. **Regras que ligam o `cIndOp` ao endereço do tomador e ao destinatário** (E0239, E0243, E0919): fora do escopo da issue; ficam como
-   pendência (podem rejeitar notas de serviços cujo `cIndOp` indica o município do adquirente quando o tomador não tem endereço completo).
+7. ~~**Regras que ligam o `cIndOp` ao endereço do tomador e ao destinatário** (E0239, E0243, E0919): fora do escopo da issue; ficam como
+   pendência.~~ **Resolvido pela issue #33 ([ADR 0011](0011-enderecos-do-tomador-e-do-destinatario-pelo-cindop.md)):** o local do fornecimento de
+   cada `cIndOp` vem do Anexo VII, o destinatário passou a ser informado na nota quando `indDest = 1`, e as três regras (mais a E0901) são aplicadas
+   na conferência, na solicitação e no envio.
 8. **Prestador com regime diferente na data de competência**: usa-se o regime dos parâmetros de agora.
 9. **`tribISSQN` diferente de "tributável"** (imunidade, exportação, não incidência; E0602) e **benefício municipal** (E0612, `tpBM`): o
    sistema só emite serviço tributável e não envia benefício, então essas regras não se aplicam; a condição de benefício das E0621/E0625 é sempre satisfeita.
@@ -165,7 +167,7 @@ Primeiro o plano mandava usar o município do emissor como local da prestação,
 
 1. Confirmar na produção restrita: o convênio de verdade (campos `aderenteAmbienteNacional`/`dataAtivacao`), a aceitação do `cIndOp` sugerido e
    a classificação do piloto (roteiro em `docs/verificacao-issue-29.md`).
-2. Regras E0239/E0243/E0919 (endereço do tomador e destinatário conforme o `cIndOp`).
+2. ~~Regras E0239/E0243/E0919 (endereço do tomador e destinatário conforme o `cIndOp`).~~ **Fechado pela issue #33** ([ADR 0011](0011-enderecos-do-tomador-e-do-destinatario-pelo-cindop.md)).
 3. `tribISSQN` não tributável (imunidade, exportação); benefício municipal.
 4. Retenção de PIS/COFINS continua **bloqueada** (sem regra na tabela).
 5. **Revalidar a classificação tributária antes da produção** (tabela do piloto), comparando com outra fonte oficial se a RFB publicar uma.

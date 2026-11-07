@@ -27,7 +27,7 @@ from fiscal.services import nfse as servico_nfse
 from fiscal.services.nfse import ErroDeNota
 
 CAMPOS_QUE_AFETAM_A_GERACAO = {
-    "ativo", "tomador", "servico", "valores", "competencia_padrao",
+    "ativo", "tomador", "servico", "destinatario", "valores", "competencia_padrao",
     "informacoes_complementares", "percentual_total_tributos_simples",
 }  # fmt: skip
 LIMITE_DAS_LISTAS = 200

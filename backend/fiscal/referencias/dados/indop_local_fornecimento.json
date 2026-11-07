@@ -1,0 +1,409 @@
+{
+ "indicadores": {
+  "010101": {
+   "caracteristica": "Presencial, com retirada no estabelecimento do fornecedor",
+   "classe": "outro",
+   "local_nfse": "Estabelecimento do Prestador/Fornecedor",
+   "local_texto": "Estabelecimento do fornecedor como o local da entrega ou disponibilização do bem ao destinatário",
+   "nfse": "S",
+   "texto_cita": [
+    "destinatario"
+   ],
+   "tipo": "Bem Móvel Material"
+  },
+  "010102": {
+   "caracteristica": "Presencial, com retirada fora do estabelecimento do fornecedor",
+   "classe": "outro",
+   "local_nfse": "Local da Prestação",
+   "local_texto": "Local da realização da operação e sua retirada",
+   "nfse": "S",
+   "texto_cita": [],
+   "tipo": "Bem Móvel Material"
+  },
+  "010103": {
+   "caracteristica": "Não presencial, com entrega ou disponibilização em endereço fornecido",
+   "classe": "destinatario",
+   "local_nfse": "Endereço do Destinatário",
+   "local_texto": "Endereço do destinatário fornecido para entrega ou disponibilização (assim considerado o destino final indicado pelo adquirente)",
+   "nfse": "S",
+   "texto_cita": [
+    "adquirente",
+    "destinatario"
+   ],
+   "tipo": "Bem Móvel Material"
+  },
+  "010104": {
+   "caracteristica": "Licitação promovida pelo poder público de bem apreendido ou abandonado ou leilão judicial",
+   "classe": "outro",
+   "local_nfse": "-",
+   "local_texto": "Local onde se encontra o bem móvel material",
+   "nfse": "",
+   "texto_cita": [],
+   "tipo": "Bem Móvel Material"
+  },
+  "010105": {
+   "caracteristica": "Constatação de irregularidade pela falta de documentação fiscal ou pelo acobertamento por documentação inidôneo",
+   "classe": "outro",
+   "local_nfse": "-",
+   "local_texto": "Local onde se encontra o bem móvel material (Local da retirada)",
+   "nfse": "",
+   "texto_cita": [],
+   "tipo": "Bem Móvel Material"
+  },
+  "010106": {
+   "caracteristica": "Locação de bem móvel material em aquisições realizadas de forma centralizada por contribuinte sujeito ao regime regular do IBS e da CBS que possui mais de um estabelecimento e que não estejam sujeitas a vedação à apropriação de créditos",
+   "classe": "adquirente",
+   "local_nfse": "Endereço do Tomador/Adquirente",
+   "local_texto": "Local do domicílio principal do adquirente (estabelecimento matriz)",
+   "nfse": "S",
+   "texto_cita": [
+    "adquirente"
+   ],
+   "tipo": "Bem Móvel Material"
+  },
+  "010201": {
+   "caracteristica": "Entrega ou disponibilização do bem",
+   "classe": "outro",
+   "local_nfse": "-",
+   "local_texto": "Domicílio principal do destinatário",
+   "nfse": "",
+   "texto_cita": [
+    "destinatario"
+   ],
+   "tipo": "Aquisição de veículo automotor terrestre, aquático ou aéreo"
+  },
+  "010202": {
+   "caracteristica": "Entrega ou disponibilização do bem",
+   "classe": "outro",
+   "local_nfse": "-",
+   "local_texto": "Domicílio principal do destinatário",
+   "nfse": "",
+   "texto_cita": [
+    "destinatario"
+   ],
+   "tipo": "Aquisição de veículo automotor em licitação promovida pelo poder público de bem apreendido ou abandonado ou leilão judicial"
+  },
+  "020101": {
+   "caracteristica": "Realização de operações com bem imóvel, bem imaterial, inclusive direito, relacionado a bem imóvel",
+   "classe": "outro",
+   "local_nfse": "Localidade do Imóvel",
+   "local_texto": "Localidade do imóvel",
+   "nfse": "S",
+   "texto_cita": [],
+   "tipo": "Operação com bem imóvel, bem móvel imaterial, inclusive direito, relacionada a bem imóvel"
+  },
+  "020102": {
+   "caracteristica": "Realização de operações com bem imóvel, bem imaterial, inclusive direito, relacionado a bem imóvel de Características Especiais (BICE)",
+   "classe": "outro",
+   "local_nfse": "Localidade do Imóvel",
+   "local_texto": "Localidade do imóvel (BICE)",
+   "nfse": "S",
+   "texto_cita": [],
+   "tipo": "Operação com bem imóvel, bem móvel imaterial, inclusive direito, relacionada a Bem Imóvel de Características Especiais (BICE)"
+  },
+  "020201": {
+   "caracteristica": "Execução de serviços diversos prestados fisicamente sobre bem imóvel",
+   "classe": "outro",
+   "local_nfse": "Localidade do Imóvel",
+   "local_texto": "Localidade do imóvel",
+   "nfse": "S",
+   "texto_cita": [],
+   "tipo": "Serviço prestado fisicamente sobre bem imóvel"
+  },
+  "020202": {
+   "caracteristica": "Execução de serviços sobre Bens Imóveis de Características Especiais (BICE)",
+   "classe": "outro",
+   "local_nfse": "Localidade do Imóvel",
+   "local_texto": "Localidade do imóvel (BICE)",
+   "nfse": "S",
+   "texto_cita": [],
+   "tipo": "Serviço prestado fisicamente sobre bem imóvel"
+  },
+  "020301": {
+   "caracteristica": "Execução dos serviços de administração e intermediação de bens imóveis",
+   "classe": "outro",
+   "local_nfse": "Localidade do Imóvel",
+   "local_texto": "Localidade do imóvel",
+   "nfse": "S",
+   "texto_cita": [],
+   "tipo": "Serviço de administração e intermediação de bem imóvel"
+  },
+  "020401": {
+   "caracteristica": "Execução de serviços sobre Bens Imóveis de Características Especiais (BICE)",
+   "classe": "outro",
+   "local_nfse": "Localidade do Imóvel",
+   "local_texto": "Localidade do imóvel (BICE)",
+   "nfse": "S",
+   "texto_cita": [],
+   "tipo": "Serviços de locação, sublocação, arrendamento, direito de passagem ou permissão de uso, compartilhado ou não, de ferrovia, rodovia, postes, cabos, dutos e condutos de qualquer natureza (quando caracterize operação tributável pelo ISSQN)"
+  },
+  "030101": {
+   "caracteristica": "Execução de serviços diversos exclusivamente prestados fisicamente sobre a pessoa ou integralmente fruídos presencialmente por pessoa física",
+   "classe": "outro",
+   "local_nfse": "Estabelecimento do Prestador/Fornecedor",
+   "local_texto": "Estabelecimento do fornecedor como local da prestação",
+   "nfse": "S",
+   "texto_cita": [],
+   "tipo": "Serviço prestado fisicamente sobre a pessoa ou fruído presencialmente por pessoa física"
+  },
+  "030102": {
+   "caracteristica": "Execução de serviços diversos exclusivamente prestados fisicamente sobre a pessoa ou integralmente fruídos presencialmente por pessoa física",
+   "classe": "outro",
+   "local_nfse": "Local da Prestação",
+   "local_texto": "Local da prestação do serviço diverso do estabelecimento do fornecedor",
+   "nfse": "S",
+   "texto_cita": [],
+   "tipo": "Serviço prestado fisicamente sobre a pessoa ou fruído presencialmente por pessoa física"
+  },
+  "040101": {
+   "caracteristica": "Execução de serviços de planejamento, organização e administração de feiras, exposições, congressos, espetáculos, exibições e congêneres",
+   "classe": "outro",
+   "local_nfse": "Local do Evento",
+   "local_texto": "Local do evento a que se refere o serviço",
+   "nfse": "S",
+   "texto_cita": [],
+   "tipo": "Serviço de planejamento, organização e administração de feiras, exposições, congressos, espetáculos, exibições e congêneres"
+  },
+  "050101": {
+   "caracteristica": "Execução de serviços diversos prestados fisicamente sobre bem móvel material",
+   "classe": "outro",
+   "local_nfse": "Estabelecimento do Prestador/Fornecedor",
+   "local_texto": "Estabelecimento do fornecedor como local da prestação",
+   "nfse": "S",
+   "texto_cita": [],
+   "tipo": "Serviço prestado fisicamente sobre bem móvel material"
+  },
+  "050102": {
+   "caracteristica": "Execução de serviços diversos prestados fisicamente sobre bem móvel material",
+   "classe": "outro",
+   "local_nfse": "Local da Prestação",
+   "local_texto": "Local da prestação do serviço diverso do estabelecimento do fornecedor",
+   "nfse": "S",
+   "texto_cita": [],
+   "tipo": "Serviço prestado fisicamente sobre bem móvel material"
+  },
+  "050201": {
+   "caracteristica": "Execução de serviços portuários",
+   "classe": "outro",
+   "local_nfse": "Local da Prestação",
+   "local_texto": "Local do porto como local da prestação",
+   "nfse": "S",
+   "texto_cita": [],
+   "tipo": "Serviços portuários"
+  },
+  "060101": {
+   "caracteristica": "Execução de serviços de transporte de passageiros",
+   "classe": "outro",
+   "local_nfse": "Local da Prestação (Início do Transporte)",
+   "local_texto": "Local de início do transporte",
+   "nfse": "S",
+   "texto_cita": [],
+   "tipo": "Serviço de transporte de passageiros"
+  },
+  "070101": {
+   "caracteristica": "Execução de serviço de transporte de carga",
+   "classe": "outro",
+   "local_nfse": "Local da Prestação",
+   "local_texto": "Endereço fornecido para entrega do bem",
+   "nfse": "S",
+   "texto_cita": [],
+   "tipo": "Serviço de transporte de carga"
+  },
+  "070102": {
+   "caracteristica": "Execução de serviço de transporte de carga",
+   "classe": "outro",
+   "local_nfse": "Local da Prestação (Local da Retirada)",
+   "local_texto": "Local da retirada do bem",
+   "nfse": "S",
+   "texto_cita": [],
+   "tipo": "Serviço de transporte de carga"
+  },
+  "080101": {
+   "caracteristica": "Execução de serviços de exploração de via",
+   "classe": "outro",
+   "local_nfse": "Localização do Trecho (NFS-e Via)",
+   "local_texto": "Local da prestação correspondente à extensão da via explorada, proporcionalmente ao território dos entes tributantes",
+   "nfse": "Via",
+   "texto_cita": [],
+   "tipo": "Serviço de exploração de via"
+  },
+  "090101": {
+   "caracteristica": "Execução de serviços de telefonia fixa e demais serviços de comunicação prestados por meio de cabos, fios, fibras e meios similares",
+   "classe": "outro",
+   "local_nfse": "-",
+   "local_texto": "Local de instalação do terminal",
+   "nfse": "",
+   "texto_cita": [],
+   "tipo": "Serviço de telefonia fixa e demais serviços de comunicação prestados por meio de cabos, fios, fibras e meios similares"
+  },
+  "090102": {
+   "caracteristica": "Execução de serviços de telefonia fixa e demais serviços de comunicação prestados por meio de cabos, fios, fibras e meios similares",
+   "classe": "outro",
+   "local_nfse": "-",
+   "local_texto": "Local do domicílio principal do adquirente (assim considerada a matriz), nas aquisições realizadas de forma centralizada por contribuinte sujeito ao regime regular do IBS e da CBS que possui mais de um estabelecimento e que não estejam sujeitas a vedação à apropriação de créditos",
+   "nfse": "",
+   "texto_cita": [
+    "adquirente"
+   ],
+   "tipo": "Serviço de telefonia fixa e demais serviços de comunicação prestados por meio de cabos, fios, fibras e meios similares"
+  },
+  "100101": {
+   "caracteristica": "Realização de operações de cessão de espaço para prestação de serviços publicitários",
+   "classe": "adquirente",
+   "local_nfse": "Endereço do Tomador/Adquirente",
+   "local_texto": "Local do domicílio principal do adquirente residente ou domiciliado no País. Nas aquisições indicadas no art. 11, §4º, II, considera-se domicílio principal do adquirente o estabelecimento matriz",
+   "nfse": "S",
+   "texto_cita": [
+    "adquirente"
+   ],
+   "tipo": "Cessão de espaço para prestação de serviços publicitários, em operações onerosas"
+  },
+  "100102": {
+   "caracteristica": "Realização de operações de cessão de espaço para prestação de serviços publicitários",
+   "classe": "destinatario",
+   "local_nfse": "Endereço do Destinatário",
+   "local_texto": "Local do domicílio principal do destinatário residente ou domiciliado no País, caso o adquirente não seja residente ou domiciliado no País",
+   "nfse": "S",
+   "texto_cita": [
+    "adquirente",
+    "destinatario"
+   ],
+   "tipo": "Cessão de espaço para prestação de serviços publicitários, em operações onerosas"
+  },
+  "100201": {
+   "caracteristica": "Realização de operações de cessão de espaço para prestação de serviços publicitários",
+   "classe": "destinatario",
+   "local_nfse": "Endereço do Destinatário",
+   "local_texto": "local do domicílio principal do destinatário residente ou domiciliado no País",
+   "nfse": "S",
+   "texto_cita": [
+    "destinatario"
+   ],
+   "tipo": "Cessão de espaço para prestação de serviços publicitários, em operações não onerosas"
+  },
+  "100301": {
+   "caracteristica": "Execução dos demais serviços em operações não especificadas em outros indicadores ou, nos serviços de que trata o inc. III do art. 11, esses sejam, ainda que parcialmente, prestados à distância",
+   "classe": "adquirente",
+   "local_nfse": "Endereço do Tomador/Adquirente",
+   "local_texto": "Local do domicílio principal do adquirente residente ou domiciliado no País. Nas aquisições indicadas no art. 11, §4º, II, considera-se domicílio principal do adquirente o estabelecimento matriz",
+   "nfse": "S",
+   "texto_cita": [
+    "adquirente"
+   ],
+   "tipo": "Demais serviços, em operações onerosas"
+  },
+  "100302": {
+   "caracteristica": "Execução dos demais serviços em operações não especificadas em outros indicadores ou, nos serviços de que trata o inc. III do art. 11, esses sejam, ainda que parcialmente, prestados à distância",
+   "classe": "destinatario",
+   "local_nfse": "Endereço do Destinatário",
+   "local_texto": "Local do domicílio principal do destinatário residente ou domiciliado no País, caso o adquirente não seja residente ou domiciliado no País",
+   "nfse": "S",
+   "texto_cita": [
+    "adquirente",
+    "destinatario"
+   ],
+   "tipo": "Demais serviços, em operações onerosas"
+  },
+  "100401": {
+   "caracteristica": "Execução dos demais serviços em operações não especificadas em outros indicadores ou, nos serviços de que tratam o inc. III, estes sejam, ainda que parcialmente, prestados à distância",
+   "classe": "destinatario",
+   "local_nfse": "Endereço do Destinatário",
+   "local_texto": "local do domicílio principal do destinatário residente ou domiciliado no País",
+   "nfse": "S",
+   "texto_cita": [
+    "destinatario"
+   ],
+   "tipo": "Demais serviços, em operações não onerosas"
+  },
+  "100501": {
+   "caracteristica": "Realização de demais operações com bens não especificadas em outros indicadores",
+   "classe": "adquirente",
+   "local_nfse": "Endereço do Tomador/Adquirente",
+   "local_texto": "Local do domicílio principal do adquirente residente ou domiciliado no País. Nas aquisições indicadas no art. 11, §4º, II, considera-se domicílio principal do adquirente o estabelecimento matriz",
+   "nfse": "S",
+   "texto_cita": [
+    "adquirente"
+   ],
+   "tipo": "Demais bens, em operações onerosas"
+  },
+  "100502": {
+   "caracteristica": "Realização de demais operações com bens não especificadas em outros indicadores",
+   "classe": "destinatario",
+   "local_nfse": "Endereço do Destinatário",
+   "local_texto": "Local do domicílio principal do destinatário residente ou domiciliado no País, caso o adquirente não seja residente ou domiciliado no País",
+   "nfse": "S",
+   "texto_cita": [
+    "adquirente",
+    "destinatario"
+   ],
+   "tipo": "Demais bens, em operações onerosas"
+  },
+  "100601": {
+   "caracteristica": "Realização de demais operações com bens não especificadas em outros indicadores",
+   "classe": "destinatario",
+   "local_nfse": "Endereço do Destinatário",
+   "local_texto": "local do domicílio principal do destinatário residente ou domiciliado no País",
+   "nfse": "S",
+   "texto_cita": [
+    "destinatario"
+   ],
+   "tipo": "Demais bens, em operações não onerosas"
+  },
+  "110101": {
+   "caracteristica": "Operações destinadas a consumo",
+   "classe": "outro",
+   "local_nfse": "-",
+   "local_texto": "Local da entrega ou disponibilização",
+   "nfse": "",
+   "texto_cita": [],
+   "tipo": "Operações com abastecimento de água, gás canalizado e energia elétrica"
+  },
+  "110201": {
+   "caracteristica": "Operações que não envolvam efetivo consumo: a) no fornecimento de serviços de transmissão de energia elétrica; e b) nas demais operações, inclusive nas hipóteses de geração, distribuição ou comercialização de energia elétrica.",
+   "classe": "outro",
+   "local_nfse": "-",
+   "local_texto": "Local do estabelecimento principal do adquirente (assim considerada a matriz), conforme §4º do art. 11",
+   "nfse": "",
+   "texto_cita": [
+    "adquirente"
+   ],
+   "tipo": "Operações com abastecimento de água, gás canalizado e energia elétrica"
+  },
+  "120101": {
+   "caracteristica": "Disponibilização de energia elétrica",
+   "classe": "outro",
+   "local_nfse": "-",
+   "local_texto": "Local do estabelecimento do agente ou de seus representados que figurem na posição devedora da liquidação financeira apurada pela Câmara de Comercialização de Energia Elétrica",
+   "nfse": "",
+   "texto_cita": [],
+   "tipo": "Nas aquisições de energia elétrica realizadas de forma multilateral"
+  },
+  "130101": {
+   "caracteristica": "Execução do transporte dutoviário de gás natural, na contratação de capacidade de entrada de gás natural do duto, nos termos da legislação aplicável",
+   "classe": "outro",
+   "local_nfse": "-",
+   "local_texto": "Local do estabelecimento principal do fornecedor",
+   "nfse": "",
+   "texto_cita": [],
+   "tipo": "Operações de transporte dutoviário de gás natural"
+  },
+  "130201": {
+   "caracteristica": "Execução do transporte dutoviário de gás natural, na contratação de capacidade de saída do gás natural do duto",
+   "classe": "outro",
+   "local_nfse": "-",
+   "local_texto": "Local do estabelecimento principal do adquirente",
+   "nfse": "",
+   "texto_cita": [
+    "adquirente"
+   ],
+   "tipo": "Operações de transporte dutoviário de gás natural"
+  }
+ },
+ "origem": {
+  "arquivo": "anexovii-indop_ibscbs_v1-03-00-nt009.xlsx",
+  "documento": "NT SE/CGNFS-e 009 — Anexo VII (indicadores da operação), aba cIndOp Public, coluna NFSeLocIncidIBS",
+  "obtido_em": "2026-11-07",
+  "sha256": "95f30a44ee94adeea57fb92f3a0337b1e62fdc106f393e73894087889be9e5aa",
+  "url": "https://www.gov.br/nfse/pt-br/biblioteca/documentacao-tecnica/rtc/anexovii-indop_ibscbs_v1-03-00-nt009.xlsx"
+ }
+}

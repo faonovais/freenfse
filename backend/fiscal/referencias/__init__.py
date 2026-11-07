@@ -3,4 +3,7 @@
 Nenhum módulo daqui faz consulta de rede nem acessa o banco: os dados vêm de `dados/*.json`, que
 os comandos `importar_anexos_rtc` e `atualizar_classificacao_tributaria` regravam a partir das
 fontes oficiais. A origem, a data e o SHA-256 de cada arquivo estão em `dados/LEIAME.md`.
+
+Módulos de leitura: `incidencia` (Anexo VI), `indop` (Anexo VIII), `local_fornecimento` (Anexo VII,
+local do fornecimento do `cIndOp`) e `classificacao` (calculadora do IBS/CBS).
 """
