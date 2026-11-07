@@ -30,6 +30,7 @@ Marque cada item **antes** de emitir a primeira nota com valor fiscal. Os itens 
       [`verificacao-fase-3.md`](verificacao-fase-3.md). Anote o resultado das hipóteses de `pAliq` e `totTrib`.
 - [ ] Fase 4 — e-mail, Google Drive e download em lote: [`verificacao-fase-4.md`](verificacao-fase-4.md).
 - [ ] Fase 5 — modelos, agendamentos e rascunhos: [`verificacao-fase-5.md`](verificacao-fase-5.md).
+- [ ] Endereço do tomador e do destinatário pelo `cIndOp` (issue #33): [`verificacao-issue-33.md`](verificacao-issue-33.md).
 - [ ] Ajustes da issue #20 (IBS/CBS, Emissor, troca para produção, municípios): [`verificacao-issue-20.md`](verificacao-issue-20.md).
       Anote se a Sefin aceitou o `cIndOp` informado.
 - [ ] Fase 6 — instalação limpa e restauração numa VPS de teste: [`verificacao-fase-6.md`](verificacao-fase-6.md).
@@ -43,6 +44,10 @@ Marque cada item **antes** de emitir a primeira nota com valor fiscal. Os itens 
 - [ ] Cada serviço com **classificação de IBS/CBS** (NBS, CST e `cClassTrib`) tem o **indicador da operação (`cIndOp`)** preenchido
       quando a classificação exige o grupo (a tela do serviço mostra a situação e sugere o indicador pelo Anexo VIII); o contador
       confirmou o indicador. Ver [`verificacao-issue-29.md`](verificacao-issue-29.md).
+- [ ] Serviços com **`cIndOp` de endereço** (100301, 100302 e semelhantes): os **tomadores** (e destinatários) desses serviços têm CPF/CNPJ e
+      endereço nacional completo; o sistema barra o contrário com E0239/E0243/E0919. **Confirmar com a Sefin o indicador 130201**
+      (transporte dutoviário de gás natural): hoje só **avisa** na conferência; anote se a Sefin aplicou a E0239. Ver
+      [`verificacao-issue-33.md`](verificacao-issue-33.md) e [ADR 0011](adr/0011-enderecos-do-tomador-e-do-destinatario-pelo-cindop.md).
 - [ ] 🔴 **Tabela de classificação tributária (`cClassTrib`) revalidada antes da produção.** Ela veio do ambiente **piloto** da calculadora do
       IBS/CBS (`piloto-cbs.tributos.gov.br`). Regrave com `atualizar_classificacao_tributaria`, compare com o que o contador usa e, se a RFB
       tiver publicado a tabela em outra fonte oficial (planilha), compare com ela também. Confirme o Anexo VIII vigente. Origem e SHA-256 em
