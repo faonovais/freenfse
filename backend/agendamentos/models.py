@@ -67,6 +67,13 @@ class ModeloNfse(models.Model):
     # município do emissor **de quando o rascunho é gerado** (nada é copiado para cá).
     codigo_municipio_prestacao = models.CharField(max_length=7, blank=True)
 
+    # Destinatário do serviço (issue #33, ADR 0011): a pessoa do cadastro que as notas deste modelo
+    # trazem no grupo `dest` quando o destinatário NÃO é o próprio tomador (indDest = 1). Vazio =
+    # o modelo não define; cada nota ainda escolhe. Só conta com o grupo de IBS/CBS e indDest = 1.
+    destinatario = models.ForeignKey(
+        "cadastros.Pessoa", null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
+
     # Sobreposição da configuração de e-mail da empresa (D21). Vazio/nulo = herdar da empresa.
     email_envio_automatico = models.BooleanField(null=True, blank=True)
     email_avisar_cancelamento = models.BooleanField(null=True, blank=True)

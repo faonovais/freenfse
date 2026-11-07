@@ -54,6 +54,9 @@ class ModeloEntrada(serializers.Serializer):
     codigo_municipio_prestacao = serializers.CharField(
         max_length=9, required=False, allow_blank=True, allow_null=True
     )
+    # Destinatário (id de uma pessoa): usado quando o destinatário é outra pessoa (indDest = 1);
+    # nulo = o modelo não define, e cada nota escolhe.
+    destinatario = serializers.IntegerField(required=False, allow_null=True)
     email_envio_automatico = serializers.BooleanField(required=False, allow_null=True)
     email_avisar_cancelamento = serializers.BooleanField(required=False, allow_null=True)
     email_anexar_pdf = serializers.BooleanField(required=False, allow_null=True)
@@ -81,6 +84,7 @@ def aplicar_modelo(modelo, dados):
     for campo, classe, rotulo in (
         ("tomador", Pessoa, "Tomador"),
         ("servico", Servico, "Serviço"),
+        ("destinatario", Pessoa, "Destinatário"),
     ):
         if campo in dados:
             objeto = classe.objects.filter(pk=dados[campo]).first() if dados[campo] else None
@@ -154,6 +158,8 @@ def modelo_saida(modelo, *, problemas=None, em_uso=0):
         "tomador_nome": modelo.tomador.nome if modelo.tomador_id else "",
         "servico": modelo.servico_id,
         "servico_nome": modelo.servico.nome if modelo.servico_id else "",
+        "destinatario": modelo.destinatario_id,
+        "destinatario_nome": modelo.destinatario.nome if modelo.destinatario_id else "",
         "valores": modelo.valores or {},
         "informacoes_complementares": complementos.get("informacoes_complementares", ""),
         "percentual_total_tributos_simples": complementos.get("percentual_total_tributos_simples"),

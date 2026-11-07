@@ -20,7 +20,7 @@ from cadastros.models import Servico
 from core.models import Empresa
 from core.permissoes import Perfil
 from fiscal.models import Nfse, ParametrosFiscais
-from fiscal.tests.apoio import criar_cadastros_de_teste
+from fiscal.tests.apoio import criar_cadastros_de_teste, criar_destinatario_de_teste
 
 pytestmark = pytest.mark.django_db
 MODELOS = "/api/agendamentos/modelos/"
@@ -100,7 +100,7 @@ def test_modelo_que_herda_leva_o_cindop_do_servico_e_o_destinatario_da_empresa(
     empresa_pronta, responsavel, servico_ibs
 ):
     empresa(destinatario=1)
-    modelo = criar_modelo(servico=servico_ibs)
+    modelo = criar_modelo(servico=servico_ibs, destinatario=criar_destinatario_de_teste())
 
     nota = gerar(modelo, responsavel)
 
@@ -131,7 +131,11 @@ def test_so_o_destinatario_no_modelo_mantem_o_cindop_do_servico(
     empresa_pronta, responsavel, servico_ibs
 ):
     empresa()
-    modelo = criar_modelo(servico=servico_ibs, ibs_cbs_indicador_destinatario=1)
+    modelo = criar_modelo(
+        servico=servico_ibs,
+        ibs_cbs_indicador_destinatario=1,
+        destinatario=criar_destinatario_de_teste(),
+    )
 
     nota = gerar(modelo, responsavel)
 
@@ -201,8 +205,14 @@ def test_campo_vazio_herda_o_valor_de_agora_e_nada_e_copiado_para_o_modelo(
 def test_mudar_a_empresa_altera_os_rascunhos_futuros_de_quem_herda_mas_nao_o_resto(
     empresa_pronta, responsavel, servico_ibs
 ):
-    herda = criar_modelo(nome="Herda", servico=servico_ibs)
-    proprio = criar_modelo(nome="Próprio", servico=servico_ibs, ibs_cbs_indicador_destinatario=1)
+    destinatario = criar_destinatario_de_teste()
+    herda = criar_modelo(nome="Herda", servico=servico_ibs, destinatario=destinatario)
+    proprio = criar_modelo(
+        nome="Próprio",
+        servico=servico_ibs,
+        ibs_cbs_indicador_destinatario=1,
+        destinatario=destinatario,
+    )
 
     empresa(destinatario=0)
     antes = gerar(herda, responsavel)
@@ -268,11 +278,14 @@ def test_rascunho_do_agendamento_pode_ser_ajustado_antes_da_aprovacao(
 ):
     modelo = criar_modelo(servico=servico_ibs, ibs_cbs_indicador_operacao=OUTRO)
     nota = gerar(modelo, responsavel)
+    destinatario = criar_destinatario_de_teste()
 
     ajustada = emissor.patch(
         f"{NOTAS}{nota.pk}/",
         corpo_da_nota(
-            nota, ibs_cbs={"codigo_indicador_operacao": TERCEIRO, "indicador_destinatario": 1}
+            nota,
+            ibs_cbs={"codigo_indicador_operacao": TERCEIRO, "indicador_destinatario": 1},
+            destinatario=destinatario.pk,
         ),
     )
 
@@ -304,7 +317,11 @@ def test_voltar_a_herdar_no_rascunho_restaura_o_modelo(
 def test_editar_o_rascunho_sem_mexer_no_ibs_cbs_mantem_o_que_o_modelo_definia(
     empresa_pronta, responsavel, servico_ibs, emissor
 ):
-    modelo = criar_modelo(servico=servico_ibs, ibs_cbs_indicador_destinatario=1)
+    modelo = criar_modelo(
+        servico=servico_ibs,
+        ibs_cbs_indicador_destinatario=1,
+        destinatario=criar_destinatario_de_teste(),
+    )
     nota = gerar(modelo, responsavel)
 
     emissor.patch(
@@ -468,7 +485,12 @@ def test_api_opcoes_traz_so_o_destinatario_da_empresa_de_agora(empresa_pronta, e
 def test_api_conferir_o_modelo_mostra_o_ibs_cbs_com_a_origem_de_cada_campo(
     empresa_pronta, emissor, modelo_api
 ):
-    emissor.patch(f"{MODELOS}{modelo_api['id']}/", {"ibs_cbs_indicador_destinatario": 1})
+    with no_esquema():
+        destinatario = criar_destinatario_de_teste()
+    emissor.patch(
+        f"{MODELOS}{modelo_api['id']}/",
+        {"ibs_cbs_indicador_destinatario": 1, "destinatario": destinatario.pk},
+    )
 
     conferencia = emissor.post(f"{MODELOS}{modelo_api['id']}/previa/").json()
 

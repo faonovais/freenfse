@@ -35,6 +35,7 @@ from freedfe.nfse.eventos import MotivoCancelamento
 from freedfe.nfse.fabrica import criar_servico_nfse
 from freedfe.nfse.leiaute import VersaoLeiaute
 from freedfe.nfse.modelo import (
+    Destinatario,
     Dps,
     Endereco,
     IbsCbs,
@@ -212,11 +213,12 @@ def _endereco(dados):
     return None
 
 
-def _tomador(dados):
+def _parte(classe, dados):
+    """Tomador ou destinatário (a mesma identificação e endereço) a partir da cópia da pessoa."""
     documento = dados.get("documento") or ""
     e_estrangeiro = dados.get("tipo") == "estrangeiro"
     emails = dados.get("emails_envio") or []
-    return Tomador(
+    return classe(
         nome=dados["nome"],
         cnpj=documento if dados.get("tipo") == "pj" else None,
         cpf=documento if dados.get("tipo") == "pf" else None,
@@ -227,6 +229,15 @@ def _tomador(dados):
         telefone=dados.get("telefone") or None,
         email=emails[0] if emails else None,
     )
+
+
+def _tomador(dados):
+    return _parte(Tomador, dados)
+
+
+def _destinatario(dados):
+    """Grupo `dest` da DPS (só quando a nota informa o destinatário), ou `None`."""
+    return _parte(Destinatario, dados) if dados else None
 
 
 def montar_dps(dados):
@@ -298,6 +309,7 @@ def montar_dps(dados):
                     indicador_destinatario=int(ibs["indicador_destinatario"]),
                     cst=servico["cst_ibs_cbs"],
                     codigo_classificacao=servico["c_class_trib"],
+                    destinatario=_destinatario(dados.get("destinatario")),
                 )
                 if ibs
                 else None

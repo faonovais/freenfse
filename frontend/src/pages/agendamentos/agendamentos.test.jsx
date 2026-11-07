@@ -223,6 +223,62 @@ describe('Formulário do modelo', () => {
     }) // prettier-ignore
   })
 
+  describe('destinatário do modelo (issue #33): vazio = cada nota escolhe o seu', () => {
+    const ROTULO = 'Destinatário (quando é outra pessoa)'
+    const PATCH = `PATCH ${B}/modelos/1/`
+    const abrirModelo = (modelo = MODELO) =>
+      abrir('/agendamentos/modelos/1', {
+        [`GET ${B}/modelos/1/`]: { status: 200, dados: modelo },
+        [PATCH]: { status: 200, dados: modelo },
+        [`GET ${B}/modelos/`]: { status: 200, dados: [] },
+      })
+    const salvar = async (chamadas) => {
+      fireEvent.click(screen.getByRole('button', { name: 'Salvar modelo' }))
+      await waitFor(() => expect(corpoDe(chamadas, 'PATCH', `${B}/modelos/1/`)).toBeDefined())
+      return corpoDe(chamadas, 'PATCH', `${B}/modelos/1/`)
+    }
+
+    it('sem escolher ninguém, envia destinatario nulo e explica que a nota escolhe', async () => {
+      const { chamadas } = abrirModelo()
+      await screen.findByLabelText('Nome do modelo')
+
+      expect(screen.getByText(/Em branco, cada nota escolhe o seu/)).toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: 'Limpar o destinatário' })).not.toBeInTheDocument()
+      expect(await salvar(chamadas)).toMatchObject({ destinatario: null })
+    })
+
+    it('escolher a pessoa envia o id dela', async () => {
+      const { chamadas } = abrirModelo()
+      await screen.findByLabelText('Nome do modelo')
+
+      await escolher(ROTULO, 'TOMADOR FICTICIO')
+
+      expect(await salvar(chamadas)).toMatchObject({ destinatario: 4 })
+    })
+
+    it('o modelo com destinatário reabre preenchido e dá para limpar', async () => {
+      const { chamadas } = abrirModelo({ ...MODELO, destinatario: 4, destinatario_nome: 'TOMADOR FICTICIO LTDA' })
+      await screen.findByLabelText('Nome do modelo')
+
+      fireEvent.click(await screen.findByRole('button', { name: 'Limpar o destinatário' }))
+
+      expect(await salvar(chamadas)).toMatchObject({ destinatario: null })
+    })
+
+    it('mostra o erro do destinatário ao lado do campo', async () => {
+      abrir('/agendamentos/modelos/1', {
+        [`GET ${B}/modelos/1/`]: { status: 200, dados: MODELO },
+        [PATCH]: { status: 400, dados: { destinatario: 'Escolha um destinatário ativo do cadastro de pessoas.' } },
+        [`GET ${B}/modelos/`]: { status: 200, dados: [] },
+      })
+      await screen.findByLabelText('Nome do modelo')
+
+      fireEvent.click(screen.getByRole('button', { name: 'Salvar modelo' }))
+
+      expect(await screen.findByText('Escolha um destinatário ativo do cadastro de pessoas.')).toBeInTheDocument()
+    })
+  })
+
   it('só envia o que o modelo muda no e-mail: o resto é herdado da empresa', async () => {
     const { chamadas } = abrir('/agendamentos/modelos/1', {
       [`GET ${B}/modelos/1/`]: { status: 200, dados: MODELO },

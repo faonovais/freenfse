@@ -41,6 +41,8 @@ const VAZIO = {
   ibs_destinatario: '',
   // Município da prestação (código IBGE): vazio = herda o padrão, o município do emissor de quando o rascunho é gerado.
   municipio_prestacao: '',
+  // Destinatário (pessoa do cadastro): usado quando o destinatário é outra pessoa (indDest = 1); vazio = a nota escolhe.
+  destinatario: null,
 }
 
 const listaDe = (dados) => (Array.isArray(dados) ? dados : (dados?.results ?? []))
@@ -86,6 +88,7 @@ function formularioDe(m) {
         ? ''
         : String(m.ibs_cbs_indicador_destinatario),
     municipio_prestacao: m.codigo_municipio_prestacao ?? '',
+    destinatario: m.destinatario ?? null,
   }
 }
 
@@ -116,6 +119,7 @@ function corpoDe(f) {
     ibs_cbs_indicador_operacao: f.ibs_indicador,
     ibs_cbs_indicador_destinatario: f.ibs_destinatario === '' ? null : Number(f.ibs_destinatario),
     codigo_municipio_prestacao: f.municipio_prestacao,
+    destinatario: f.destinatario,
   }
 }
 
@@ -375,6 +379,27 @@ export default function ModeloForm() {
             </ul>
           </div>
           <Campo rotulo="Percentual total de tributos do Simples (%) — opcional" inputMode="decimal" value={f.percentual_simples} onChange={mudar('percentual_simples')} erro={erros.percentual_total_tributos_simples} />
+
+          <section aria-label="Destinatário do modelo" className="space-y-2 text-sm">
+            <SelectBusca
+              rotulo="Destinatário (quando é outra pessoa)"
+              opcoes={opcoesPessoas}
+              valor={f.destinatario}
+              aoMudar={(valor) => setF((atual) => ({ ...atual, destinatario: valor }))}
+              placeholder="Opcional"
+              vazio="Nenhuma pessoa encontrada"
+            />
+            <p className="text-xs text-gray-600 dark:text-gray-400">
+              Só vale nas notas em que o destinatário do serviço é outra pessoa (não o próprio tomador) e a nota leva o grupo de
+              IBS/CBS. Em branco, cada nota escolhe o seu.
+            </p>
+            {erros.destinatario && <p className="text-xs text-estado-erro">{erros.destinatario}</p>}
+            {podeEditar && f.destinatario && (
+              <button type="button" className="botao-leve" onClick={() => setF((atual) => ({ ...atual, destinatario: null }))}>
+                Limpar o destinatário
+              </button>
+            )}
+          </section>
 
           <section aria-label="Município da prestação do modelo" className="space-y-2 text-sm">
             <SeletorMunicipio
