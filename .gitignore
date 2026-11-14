@@ -58,3 +58,6 @@ Thumbs.db
 
 # --- Docker ---------------------------------------------------------------------
 docker-compose.override.yml
+
+# --- Agentes (skills e handoff locais) -----------------------------------------
+.agents/

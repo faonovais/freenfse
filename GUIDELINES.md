@@ -403,5 +403,6 @@ Regras:
 
 - `VERSION` (raiz) é a **fonte única**, no formato `MAJOR.MINOR.PATCH`. O backend lê o arquivo (`settings.VERSAO`, exposto em `GET /api/versao/`); o frontend lê no build (`__VERSAO_APP__`). A `version` do `package.json` é ignorada de propósito (`0.0.0`). Alterar a versão = alterar só o `VERSION`.
 - Um branch e um PR por fase do plano, com CI verde e roteiro de verificação no PR. O PR referencia a issue da fase (`Closes #N`).
+- **Gestão de issues:** utilizar apenas as labels já existentes no repositório (`gh label list`); **não** criar novas tags (labels) automaticamente sem aprovação prévia.
 - Commits objetivos, em português, referenciando a issue (`Refs #N`) e sem dados sensíveis.
 - Não forçar versões de dependências que ainda não suportam a stack decidida: registrar em ADR (`docs/adr/`).
