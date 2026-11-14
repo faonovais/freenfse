@@ -5,11 +5,15 @@ import { limparEmpresaAtiva, obterEmpresaAtiva } from './api/empresaAtiva.js'
 import { EMPRESA_A, EMPRESA_B, IDENTIDADE_PADRAO, respostaEu } from './testes/apiFalsa.js'
 import { BASE, montarApp, rotasAnonimo, rotasAutenticado } from './testes/montarApp.jsx'
 
+const matchMediaOriginal = window.matchMedia
+
 afterEach(() => {
   cleanup()
   limparEmpresaAtiva()
   window.localStorage.clear()
   document.documentElement.classList.remove('dark')
+  if (matchMediaOriginal === undefined) delete window.matchMedia
+  else window.matchMedia = matchMediaOriginal
 })
 
 const trocarEmpresaPara = async (nome) => {
@@ -502,5 +506,43 @@ describe('layout e empresa ativa por aba', () => {
 
     expect(document.documentElement).toHaveClass('dark')
     expect(window.localStorage.getItem('freenfse-tema')).toBe('escuro')
+  })
+
+  it('o botão Alternar menu lateral recolhe e expande o menu principal', async () => {
+    montarApp({ rotasApi: rotasAutenticado() })
+    const botao = await screen.findByRole('button', { name: 'Alternar menu lateral' })
+    expect(botao).toHaveAttribute('aria-expanded', 'true')
+    expect(screen.getByRole('navigation', { name: 'Menu principal' })).toBeVisible()
+
+    fireEvent.click(botao)
+    expect(botao).toHaveAttribute('aria-expanded', 'false')
+    expect(screen.queryByRole('navigation', { name: 'Menu principal' })).not.toBeInTheDocument()
+
+    fireEvent.click(botao)
+    expect(botao).toHaveAttribute('aria-expanded', 'true')
+    expect(screen.getByRole('navigation', { name: 'Menu principal' })).toBeVisible()
+  })
+
+  it('em viewport estreito (< 768px) inicia colapsado e fecha após clicar em um link', async () => {
+    const ouvintes = []
+    window.matchMedia = () => ({
+      matches: false,
+      media: '(min-width: 768px)',
+      addEventListener: (_evento, fn) => ouvintes.push(fn),
+      removeEventListener: () => {},
+    })
+
+    montarApp({ rotasApi: rotasAutenticado() })
+    const botao = await screen.findByRole('button', { name: 'Alternar menu lateral' })
+    expect(botao).toHaveAttribute('aria-expanded', 'false')
+    expect(screen.queryByRole('navigation', { name: 'Menu principal' })).not.toBeInTheDocument()
+
+    fireEvent.click(botao)
+    expect(botao).toHaveAttribute('aria-expanded', 'true')
+    const menu = screen.getByRole('navigation', { name: 'Menu principal' })
+    fireEvent.click(within(menu).getByRole('link', { name: 'Segurança' }))
+
+    expect(botao).toHaveAttribute('aria-expanded', 'false')
+    expect(screen.queryByRole('navigation', { name: 'Menu principal' })).not.toBeInTheDocument()
   })
 })

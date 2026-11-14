@@ -11,6 +11,13 @@ import EmblemaAmbiente from './EmblemaAmbiente.jsx'
 import SelectBusca from './SelectBusca.jsx'
 import SeletorTema from './SeletorTema.jsx'
 
+const MEDIA_DESKTOP = '(min-width: 768px)'
+
+const ehViewportDesktop = () =>
+  typeof window === 'undefined' || typeof window.matchMedia !== 'function'
+    ? true
+    : window.matchMedia(MEDIA_DESKTOP).matches
+
 const classeLink = ({ isActive }) =>
   `block rounded px-3 py-2 text-sm hover:text-accent ${isActive ? 'text-accent' : ''}`
 
@@ -59,6 +66,23 @@ export default function Layout() {
   const tema = escuro ? 'escuro' : 'claro'
   const urlDoLogo = useLogoUrl(tema, identidade?.logo?.[tema] ?? identidade?.logo?.claro)
   const certificado = identidade?.certificado
+  const [emDesktop, setEmDesktop] = useState(ehViewportDesktop)
+  const [menuAberto, setMenuAberto] = useState(ehViewportDesktop)
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return undefined
+    const mql = window.matchMedia(MEDIA_DESKTOP)
+    const aoMudar = (evento) => {
+      setEmDesktop(evento.matches)
+      setMenuAberto(evento.matches)
+    }
+    if (typeof mql.addEventListener === 'function') {
+      mql.addEventListener('change', aoMudar)
+      return () => mql.removeEventListener('change', aoMudar)
+    }
+    mql.addListener(aoMudar)
+    return () => mql.removeListener(aoMudar)
+  }, [])
 
   async function aoTrocarEmpresa(id) {
     if (haFormularioSujo()) {
@@ -89,6 +113,22 @@ export default function Layout() {
       <header className="border-b border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900">
         <div className="flex flex-wrap items-center gap-4 px-4 py-3 md:flex-nowrap">
           <div className="flex shrink-0 items-center gap-3">
+            <button
+              type="button"
+              onClick={() => setMenuAberto((aberto) => !aberto)}
+              aria-expanded={menuAberto}
+              aria-controls="menu-principal"
+              aria-label="Alternar menu lateral"
+              className="botao-leve inline-flex items-center justify-center px-2 py-1 text-xs"
+            >
+              <svg aria-hidden="true" viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4">
+                <path
+                  fillRule="evenodd"
+                  d="M3 5a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 5a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 5a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z"
+                  clipRule="evenodd"
+                />
+              </svg>
+            </button>
             <span className="font-title text-xl leading-none text-gray-900 dark:text-gray-100">freenfse</span>
             {urlDoLogo && (
               <img
@@ -142,8 +182,13 @@ export default function Layout() {
 
       <div className="flex flex-1 flex-col md:flex-row">
         <nav
+          id="menu-principal"
           aria-label="Menu principal"
-          className="border-b border-gray-200 p-3 md:w-56 md:border-r md:border-b-0 dark:border-gray-800"
+          hidden={!menuAberto}
+          onClick={(evento) => {
+            if (!emDesktop && evento.target.closest('a')) setMenuAberto(false)
+          }}
+          className={menuAberto ? 'border-b border-gray-200 p-3 md:w-56 md:border-r md:border-b-0 dark:border-gray-800' : 'hidden'}
         >
           <NavLink to="/" end className={classeLink}>
             Início
