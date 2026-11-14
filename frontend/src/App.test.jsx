@@ -73,6 +73,7 @@ describe('acesso à aplicação', () => {
       'Agendamentos',
       'Cadastros',
       'Administração',
+      'Configurações',
       'Configuração fiscal',
       'Envio de documentos',
       'Conta',
@@ -80,7 +81,7 @@ describe('acesso à aplicação', () => {
 
     const links = Array.from(menu.querySelectorAll('a')).map((item) => item.textContent)
     expect(links.indexOf('Empresas')).toBe(links.indexOf('Serviços') + 1)
-    expect(links.indexOf('Parâmetros fiscais')).toBe(links.indexOf('Vínculos') + 1)
+    expect(links.indexOf('Fiscal')).toBe(links.indexOf('Vínculos') + 1)
   })
 
   it('rota desconhecida mostra a página não encontrada dentro do layout', async () => {
@@ -324,7 +325,7 @@ describe('layout e empresa ativa por aba', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent(/venceu/)
   })
 
-  it('o menu mostra Cadastros e Configuração fiscal conforme as permissões da empresa ativa', async () => {
+  it('o menu mostra Cadastros e Configurações conforme as permissões da empresa ativa', async () => {
     const admin = {
       ...EMPRESA_A,
       permissoes: ['cadastro.consultar', 'cadastro.editar', 'config.consultar', 'config.editar'],
@@ -332,14 +333,66 @@ describe('layout e empresa ativa por aba', () => {
     const consulta = { ...EMPRESA_B, permissoes: ['nfse.consultar'] }
     montarApp({ rotasApi: rotasAutenticado({ eu: respostaEu({ empresas: [admin, consulta] }) }) })
     const menu = await screen.findByRole('navigation', { name: 'Menu principal' })
-    for (const nome of ['Pessoas', 'Serviços', 'Parâmetros fiscais', 'Certificado A1', 'Logo da empresa']) {
+    for (const nome of ['Pessoas', 'Serviços', 'Fiscal', 'Logo da empresa']) {
       expect(within(menu).getByRole('link', { name: nome })).toBeInTheDocument()
     }
 
     await trocarEmpresaPara('Empresa Beta')
 
     await waitFor(() => expect(within(menu).queryByRole('link', { name: 'Pessoas' })).not.toBeInTheDocument())
-    expect(within(menu).queryByRole('link', { name: 'Certificado A1' })).not.toBeInTheDocument()
+    expect(within(menu).queryByRole('link', { name: 'Fiscal' })).not.toBeInTheDocument()
+  })
+
+  it('Configurações fiscais agrupa Parâmetros fiscais, Certificado A1 e Serviços oficiais em abas acessíveis', async () => {
+    const admin = {
+      ...EMPRESA_A,
+      permissoes: ['config.consultar', 'config.editar'],
+    }
+    montarApp({
+      rota: '/configuracoes/fiscal',
+      rotasApi: rotasAutenticado({
+        eu: respostaEu({ empresas: [admin] }),
+        extras: {
+          'GET /api/fiscal/parametros/': {
+            status: 200,
+            dados: {
+              regime_tributario: 'simples_nacional',
+              regime_apuracao_simples: 1,
+              regime_especial: 0,
+              serie_dps: 1,
+              ambiente: 'producao_restrita',
+              codigo_municipio_emissor: '2101400',
+              ibs_cbs_indicador_destinatario: 0,
+              municipio_emissor: 'Balsas/MA',
+              convenio: null,
+              opcoes: {
+                regime_tributario: [{ valor: 'simples_nacional', rotulo: 'Simples Nacional' }],
+                regime_apuracao_simples: [{ valor: 1, rotulo: 'Simples' }],
+                regime_especial: [{ valor: 0, rotulo: 'Nenhum' }],
+                ambiente: [{ valor: 'producao_restrita', rotulo: 'Produção restrita' }],
+              },
+            },
+          },
+          'GET /api/cadastros/municipios/': { status: 200, dados: [] },
+          'GET /api/fiscal/certificado/': { status: 200, dados: { existe: false } },
+        },
+      }),
+    })
+
+    expect(await screen.findByRole('heading', { name: 'Configurações fiscais' })).toBeInTheDocument()
+    const abaParametros = screen.getByRole('tab', { name: 'Parâmetros fiscais' })
+    const abaCertificado = screen.getByRole('tab', { name: 'Certificado A1' })
+    const abaServicos = screen.getByRole('tab', { name: 'Serviços oficiais' })
+    expect(abaParametros).toHaveAttribute('aria-selected', 'true')
+    expect(await screen.findByLabelText('Série da DPS')).toHaveValue(1)
+
+    fireEvent.click(abaCertificado)
+    expect(abaCertificado).toHaveAttribute('aria-selected', 'true')
+    expect(await screen.findByText(/ainda não tem certificado digital/i)).toBeInTheDocument()
+
+    fireEvent.keyDown(abaCertificado, { key: 'ArrowRight' })
+    expect(abaServicos).toHaveAttribute('aria-selected', 'true')
+    expect(await screen.findByRole('heading', { name: 'Serviços oficiais' })).toBeInTheDocument()
   })
 
   it('quem não tem empresa vê o aviso e nenhum cabeçalho X-Empresa é enviado', async () => {

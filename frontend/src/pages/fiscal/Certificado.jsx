@@ -37,7 +37,9 @@ function Situacao({ certificado }) {
   )
 }
 
-export default function Certificado() {
+export default function Certificado({ embutido = false }) {
+  const Titulo = embutido ? 'h2' : 'h1'
+  const Subtitulo = embutido ? 'h3' : 'h2'
   const confirmar = useConfirmacao()
   const { temPermissao, recarregarIdentidade } = useAuth()
   const podeEditar = temPermissao('config.editar')
@@ -104,7 +106,11 @@ export default function Certificado() {
 
   return (
     <section>
-      <h1 className="text-2xl text-gray-900 dark:text-gray-100">Certificado A1</h1>
+      <Titulo
+        className={embutido ? 'text-lg text-gray-900 dark:text-gray-100' : 'text-2xl text-gray-900 dark:text-gray-100'}
+      >
+        Certificado A1
+      </Titulo>
       <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
         O certificado digital identifica a empresa perante a Receita. Ele fica guardado cifrado, e o arquivo e a senha
         nunca são mostrados de volta.
@@ -125,9 +131,9 @@ export default function Certificado() {
           aria-label="Enviar certificado"
           className="mt-4 space-y-4 rounded border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-gray-900"
         >
-          <h2 className="text-lg text-gray-900 dark:text-gray-100">
+          <Subtitulo className="text-lg text-gray-900 dark:text-gray-100">
             {certificado.existe ? 'Trocar o certificado' : 'Enviar o certificado'}
-          </h2>
+          </Subtitulo>
           <div className="text-sm">
             <label htmlFor="certificado-arquivo">Arquivo do certificado (.pfx ou .p12)</label>
             <input

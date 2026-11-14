@@ -214,13 +214,11 @@ export default function Layout() {
           )}
           {temPermissao('config.consultar') && (
             <>
+              <p className="titulo-grupo-menu mt-4 px-3">Configurações</p>
+              <NavLink to="/configuracoes/fiscal" className={classeLink}>
+                Fiscal
+              </NavLink>
               <p className="titulo-grupo-menu mt-4 px-3">Configuração fiscal</p>
-              <NavLink to="/fiscal/parametros" className={classeLink}>
-                Parâmetros fiscais
-              </NavLink>
-              <NavLink to="/fiscal/certificado" className={classeLink}>
-                Certificado A1
-              </NavLink>
               <NavLink to="/fiscal/logo" className={classeLink}>
                 Logo da empresa
               </NavLink>

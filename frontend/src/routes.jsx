@@ -12,6 +12,7 @@ import Modelos from './pages/agendamentos/Modelos.jsx'
 import Rascunhos from './pages/agendamentos/Rascunhos.jsx'
 import Pessoas from './pages/cadastros/Pessoas.jsx'
 import Servicos from './pages/cadastros/Servicos.jsx'
+import ConfigFiscal from './pages/configuracoes/ConfigFiscal.jsx'
 import Config2FA from './pages/Config2FA.jsx'
 import ConfigDrive from './pages/documentos/ConfigDrive.jsx'
 import ConfigEmail from './pages/documentos/ConfigEmail.jsx'
@@ -42,6 +43,7 @@ export const rotas = [
           { path: 'fiscal/notas/nova', element: <NotaForm /> },
           { path: 'fiscal/notas/:id', element: <DetalheNota /> },
           { path: 'fiscal/notas/:id/editar', element: <NotaForm /> },
+          { path: 'configuracoes/fiscal', element: <ConfigFiscal /> },
           { path: 'fiscal/parametros', element: <Parametros /> },
           { path: 'fiscal/certificado', element: <Certificado /> },
           { path: 'fiscal/logo', element: <Logo /> },
