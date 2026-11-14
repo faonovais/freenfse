@@ -7,6 +7,7 @@ nem a que será reenviada após uma rejeição).
 
 import datetime as dt
 from dataclasses import dataclass, field
+from decimal import Decimal
 
 from django.utils import timezone
 
@@ -431,6 +432,13 @@ def _dados_do_destinatario(complementos):
     return ((complementos or {}).get("destinatario") or {}).get("dados") or None
 
 
+def _valor_normalizado(valor):
+    if valor in (None, ""):
+        return None
+    texto = str(valor).strip().replace(",", ".")
+    return str(Decimal(texto)) if texto else None
+
+
 def preparar(dados, *, hoje=None):
     """Valida a entrada e devolve o `Preparo` (sem gravar nada).
 
@@ -552,9 +560,7 @@ def preparar(dados, *, hoje=None):
         competencia=competencia,
         tomador=snapshot_tomador(pessoa),
         servico=copia_servico,
-        valores={
-            campo: (None if valor in (None, "") else str(valor)) for campo, valor in valores.items()
-        },
+        valores={campo: _valor_normalizado(valor) for campo, valor in valores.items()},
         totais=totais.para_dict(),
         complementos={
             "informacoes_complementares": (dados.get("informacoes_complementares") or "").strip(),

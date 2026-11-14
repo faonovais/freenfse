@@ -212,31 +212,47 @@ def executar_emissao(empresa, nfse_id):
 
     # pAliq depende do convênio do município de incidência na competência: confere de novo agora,
     # com o certificado aberto, antes de enviar. Se não dá para decidir, nada vai à Sefin.
-    avaliacao = aliquota_nota.avaliar_da_nota(
-        nfse, parametros, aliquota_nota.convenio_com_consulta(parametros, contexto)
-    )
-    if avaliacao.bloqueio:
-        return _voltar_ao_rascunho(nfse, avaliacao.bloqueio)
-    nfse.complementos = {**(nfse.complementos or {}), "aliquota_issqn": avaliacao.para_dict()}
-    nfse.save(update_fields=["complementos", "atualizado_em"])
+    try:
+        avaliacao = aliquota_nota.avaliar_da_nota(
+            nfse, parametros, aliquota_nota.convenio_com_consulta(parametros, contexto)
+        )
+        if avaliacao.bloqueio:
+            return _voltar_ao_rascunho(nfse, avaliacao.bloqueio)
+        nfse.complementos = {**(nfse.complementos or {}), "aliquota_issqn": avaliacao.para_dict()}
+        nfse.save(update_fields=["complementos", "atualizado_em"])
 
-    ibs_cbs, _na_dps, erros_ibs_cbs, _avisos = servico_nfse.avaliar_ibs_cbs_da_nota(
-        nfse, parametros
-    )
-    if erros_ibs_cbs:
-        return _voltar_ao_rascunho(nfse, " ".join(erros_ibs_cbs.values()))
+        ibs_cbs, _na_dps, erros_ibs_cbs, _avisos = servico_nfse.avaliar_ibs_cbs_da_nota(
+            nfse, parametros
+        )
+        if erros_ibs_cbs:
+            return _voltar_ao_rascunho(nfse, " ".join(erros_ibs_cbs.values()))
 
-    existente = EmissaoDps.objects.filter(nfse=nfse).order_by("-id").first()
-    dados = servico_nfse.dados_da_dps(
-        nfse,
-        empresa=empresa,
-        parametros=parametros,
-        numero=existente.numero if existente else None,
-        aliquota_issqn=avaliacao.para_dict(),
-        ibs_cbs=ibs_cbs,
-    )
-    resultado = gateway.emitir(contexto, dados)
-    return aplicar_resultado(empresa, nfse, resultado, contexto)
+        existente = EmissaoDps.objects.filter(nfse=nfse).order_by("-id").first()
+        dados = servico_nfse.dados_da_dps(
+            nfse,
+            empresa=empresa,
+            parametros=parametros,
+            numero=existente.numero if existente else None,
+            aliquota_issqn=avaliacao.para_dict(),
+            ibs_cbs=ibs_cbs,
+        )
+        resultado = gateway.emitir(contexto, dados)
+        return aplicar_resultado(empresa, nfse, resultado, contexto)
+    except gateway.TravaOcupadaErro:
+        raise
+    except Exception as erro:
+        logger.exception("Falha inesperada na emissão da nota %s", nfse.pk)
+        nfse.refresh_from_db()
+        if nfse.situacao != S.ENVIANDO:
+            return nfse.situacao
+        registro = EmissaoDps.objects.filter(nfse=nfse).order_by("-id").first()
+        if registro is None or registro.situacao == E.PENDENTE:
+            mensagem = str(erro) or (
+                "Não foi possível concluir o envio e nada chegou à Sefin. Envie de novo."
+            )
+            return _voltar_ao_rascunho(nfse, mensagem)
+        leiaute = gateway.leiaute_em_vigor(contexto.ambiente_producao, contexto.relogio)
+        return _resolver_pelo_registro(empresa, nfse, leiaute, contexto)
 
 
 def _voltar_ao_rascunho(nfse, mensagem):
