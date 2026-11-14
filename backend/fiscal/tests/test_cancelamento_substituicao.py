@@ -1,13 +1,20 @@
 """Cancelamento, substituição e DANFSe: a nota só muda depois de a Sefin confirmar o evento."""
 
 import datetime as dt
+import hashlib
+from decimal import Decimal
 
 import pytest
+from django.db import connection
+from django.db.migrations.executor import MigrationExecutor
+from django_tenants.utils import schema_context
 from freedfe.pdf.danfse import GeradorDanfse
 from lxml import etree
 
 from core.models import LogAuditoria
-from fiscal.models import EventoNfse, Nfse
+from fiscal import gateway
+from fiscal.models import EventoNfse, Nfse, TransicaoNfse
+from fiscal.persistencia.modelos import EventoFiscal
 from fiscal.services import emissao
 from fiscal.services import nfse as servico_nfse
 
@@ -261,3 +268,103 @@ def test_danfse_nao_e_guardado_e_so_existe_para_nota_emitida(
 
 def test_competencia_e_data_do_relogio_nao_misturam(autorizada):
     assert autorizada.competencia == dt.date(2026, 10, 1)
+
+
+def _gravar_evento_fiscal(sefin, chave, tipo_evento, descricao):
+    xml = sefin._evento(chave, tipo_evento, descricao)
+    protocolo = f"EVT{chave}{tipo_evento}001"
+    return EventoFiscal.objects.create(
+        modelo="nfse",
+        chave=chave,
+        tipo_evento=tipo_evento,
+        identificador=protocolo,
+        resumo={
+            "modelo": "nfse",
+            "chave": chave,
+            "tipo_evento": tipo_evento,
+            "descricao": descricao,
+            "data_evento": sefin.agora.isoformat(),
+            "protocolo": protocolo,
+            "nsu": None,
+            "caminho_xml": f"nfse/eventos/{chave}/{protocolo}",
+        },
+        xml=xml,
+        sha256=hashlib.sha256(xml).hexdigest(),
+    )
+
+
+def test_cancelamento_atualiza_nota_quando_consulta_de_eventos_falha_apos_post(
+    empresa_pronta, autorizada, sefin, monkeypatch
+):
+    def falha(*_args, **_kwargs):
+        raise gateway.ErroDeConsultaFiscal("Falha simulada ao consultar eventos na Sefin.")
+
+    monkeypatch.setattr(gateway, "listar_eventos", falha)
+
+    nota = _cancelar(empresa_pronta, autorizada)
+
+    assert nota.situacao == S.CANCELADA
+    assert EventoNfse.objects.filter(nfse=nota, tipo_evento="101101").exists()
+    assert len(_posts_de_evento(sefin)) == 1
+    assert "nfse_cancelada" in set(LogAuditoria.objects.values_list("acao", flat=True))
+
+
+def test_tentar_cancelar_nota_com_evento_local_e0840_atualiza_situacao_idempotente(
+    empresa_pronta, autorizada, sefin
+):
+    _gravar_evento_fiscal(sefin, autorizada.chave, "101101", "Cancelamento de NFS-e")
+
+    nota = _cancelar(empresa_pronta, autorizada)
+
+    assert nota.situacao == S.CANCELADA
+    assert EventoNfse.objects.filter(nfse=nota, tipo_evento="101101").exists()
+    assert not _posts_de_evento(sefin)
+    assert "nfse_cancelada" in set(LogAuditoria.objects.values_list("acao", flat=True))
+
+
+def test_migracao_0007_reconcilia_nota_autorizada_com_cancelamento_local(empresa_a):
+    antes = [("fiscal", "0006_issue_29_ibs_cbs_pelo_servico")]
+    depois = [("fiscal", "0007_reconciliar_situacoes_encerradas")]
+    chave = "21014002111222333000181000000000000126100000000010"
+    xml_evento = b'<?xml version="1.0"?><evento>cancelamento</evento>'
+
+    with schema_context(empresa_a.schema_name):
+        executor = MigrationExecutor(connection)
+        executor.migrate(antes)
+        apps_antes = MigrationExecutor(connection).loader.project_state(antes).apps
+
+        Nota = apps_antes.get_model("fiscal", "Nfse")
+        Evento = apps_antes.get_model("fiscal", "EventoFiscal")
+        nota = Nota.objects.create(
+            ambiente="producao",
+            serie=1,
+            competencia=dt.date(2026, 10, 1),
+            situacao="autorizada",
+            chave=chave,
+            valor_servico=Decimal("100.00"),
+        )
+        Evento.objects.create(
+            modelo="nfse",
+            chave=chave,
+            tipo_evento="101101",
+            identificador=f"EVT{chave}101101001",
+            resumo={
+                "modelo": "nfse",
+                "chave": chave,
+                "tipo_evento": "101101",
+                "descricao": "Cancelamento de NFS-e",
+                "data_evento": "2026-10-01T12:00:00+00:00",
+                "protocolo": f"EVT{chave}101101001",
+            },
+            xml=xml_evento,
+            sha256=hashlib.sha256(xml_evento).hexdigest(),
+        )
+
+        MigrationExecutor(connection).migrate(depois)
+
+        nota_db = Nfse.objects.get(pk=nota.pk)
+        assert nota_db.situacao == S.CANCELADA
+        assert EventoNfse.objects.filter(nfse=nota_db, tipo_evento="101101").exists()
+        assert TransicaoNfse.objects.filter(
+            nfse=nota_db, de="autorizada", para="cancelada"
+        ).exists()

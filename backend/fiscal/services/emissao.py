@@ -427,6 +427,7 @@ def reconciliar_pendentes(agora=None, *, espera_da_trava=ESPERA_DA_TRAVA_NA_CONS
     substituicoes = 0
     for empresa in Empresa.objects.filter(ativo=True):
         with schema_context(empresa.schema_name):
+            _reconciliar_eventos_locais()
             if not Certificado.objects.exists():
                 continue
             totais["empresas"] += 1
@@ -493,33 +494,41 @@ def _confirmar_substituicoes_pendentes(empresa, espera_da_trava):
     return confirmadas
 
 
+def _reconciliar_eventos_locais():
+    encerradores = EVENTOS_DE_CANCELAMENTO | {EVENTO_DE_SUBSTITUICAO}
+    chaves = set(
+        EventoFiscal.objects.filter(modelo="nfse", tipo_evento__in=encerradores).values_list(
+            "chave", flat=True
+        )
+    )
+    pks = set(
+        Nfse.objects.filter(situacao=S.AUTORIZADA, chave__in=chaves).values_list("pk", flat=True)
+    ) | set(
+        Nfse.objects.filter(
+            situacao=S.AUTORIZADA, eventos__tipo_evento__in=encerradores
+        ).values_list("pk", flat=True)
+    )
+    for nfse in Nfse.objects.filter(pk__in=pks):
+        sincronizar_eventos_locais(nfse)
+
+
 # -- eventos, consulta e substituição ----------------------------------------------------
 
 
-def sincronizar_eventos(contexto, nfse):
-    """Traz os eventos da nota da Sefin e atualiza a situação **só se o evento existir**."""
-    eventos = gateway.listar_eventos(contexto, nfse.chave)
-    guardados = {
-        (e.tipo_evento, e.identificador): e
-        for e in EventoFiscal.objects.filter(modelo="nfse", chave=nfse.chave)
-    }
-    novos = []
-    for evento in eventos:
-        origem = guardados.get((evento["tipo_evento"], evento["identificador"]))
-        registro, novo = EventoNfse.objects.get_or_create(
-            nfse=nfse,
-            tipo_evento=evento["tipo_evento"],
-            identificador=evento["identificador"],
-            defaults={
-                "descricao": evento["descricao"][:255],
-                "registrado_em": evento["data_evento"],
-                "xml": bytes(origem.xml) if origem else None,
-                "hash_xml": origem.sha256 if origem else "",
-            },
-        )
-        if novo:
-            novos.append(registro)
-    tipos = {e["tipo_evento"] for e in eventos}
+def _data_do_evento_guardado(origem):
+    resumo = origem.resumo if isinstance(origem.resumo, dict) else {}
+    bruto = resumo.get("data_evento")
+    if isinstance(bruto, dt.datetime):
+        return bruto
+    if isinstance(bruto, str) and bruto:
+        try:
+            return dt.datetime.fromisoformat(bruto)
+        except ValueError:
+            pass
+    return origem.criado_em
+
+
+def _aplicar_eventos_no_estado(nfse, tipos, novos):
     if nfse.situacao == S.AUTORIZADA:
         if tipos & EVENTOS_DE_CANCELAMENTO:
             transicionar(nfse, S.CANCELADA, motivo="Cancelamento confirmado pela Sefin")
@@ -527,6 +536,71 @@ def sincronizar_eventos(contexto, nfse):
             transicionar(nfse, S.SUBSTITUIDA, motivo="Substituição confirmada pela Sefin")
     for registro in novos:  # só depois de a situação da nota refletir o evento
         signals.avisar(signals.nfse_evento_confirmado, nfse=nfse, evento=registro)
+
+
+def _sincronizar_apenas_locais(nfse):
+    if not nfse.chave:
+        return [], set()
+    guardados = EventoFiscal.objects.filter(modelo="nfse", chave=nfse.chave)
+    novos = []
+    tipos = set(nfse.eventos.values_list("tipo_evento", flat=True))
+    for origem in guardados:
+        tipos.add(origem.tipo_evento)
+        resumo = origem.resumo if isinstance(origem.resumo, dict) else {}
+        registro, novo = EventoNfse.objects.get_or_create(
+            nfse=nfse,
+            tipo_evento=origem.tipo_evento,
+            identificador=origem.identificador,
+            defaults={
+                "descricao": (resumo.get("descricao") or "")[:255],
+                "registrado_em": _data_do_evento_guardado(origem),
+                "xml": bytes(origem.xml) if origem.xml else None,
+                "hash_xml": origem.sha256 or "",
+            },
+        )
+        if novo:
+            novos.append(registro)
+    return novos, tipos
+
+
+def sincronizar_eventos_locais(nfse):
+    """Reflete na nota os eventos fiscais já confirmados e gravados localmente."""
+    novos, tipos = _sincronizar_apenas_locais(nfse)
+    _aplicar_eventos_no_estado(nfse, tipos, novos)
+    return nfse
+
+
+def sincronizar_eventos(contexto, nfse):
+    """Traz os eventos da nota da Sefin e sincroniza também os já gravados localmente."""
+    novos = []
+    tipos = set()
+    try:
+        eventos = gateway.listar_eventos(contexto, nfse.chave)
+        guardados = {
+            (e.tipo_evento, e.identificador): e
+            for e in EventoFiscal.objects.filter(modelo="nfse", chave=nfse.chave)
+        }
+        for evento in eventos:
+            origem = guardados.get((evento["tipo_evento"], evento["identificador"]))
+            registro, novo = EventoNfse.objects.get_or_create(
+                nfse=nfse,
+                tipo_evento=evento["tipo_evento"],
+                identificador=evento["identificador"],
+                defaults={
+                    "descricao": evento["descricao"][:255],
+                    "registrado_em": evento["data_evento"],
+                    "xml": bytes(origem.xml) if origem else None,
+                    "hash_xml": origem.sha256 if origem else "",
+                },
+            )
+            if novo:
+                novos.append(registro)
+        tipos.update(e["tipo_evento"] for e in eventos)
+    finally:
+        novos_locais, tipos_locais = _sincronizar_apenas_locais(nfse)
+        novos.extend(novos_locais)
+        tipos.update(tipos_locais)
+        _aplicar_eventos_no_estado(nfse, tipos, novos)
     return nfse
 
 
@@ -598,6 +672,23 @@ def cancelar(empresa, nfse, *, codigo_motivo, justificativa, usuario, request=No
             "Há outra operação fiscal em andamento nesta empresa. Tente de novo em instantes."
         ) from None
     except gateway.DadosInvalidosErro as erro:
+        sincronizar_eventos_locais(nfse)
+        nfse.refresh_from_db()
+        if nfse.situacao == S.CANCELADA:
+            auditoria.registrar(
+                LogAuditoria.Acao.NFSE_CANCELADA,
+                request=request,
+                usuario=usuario,
+                empresa=empresa,
+                alvo=alvo,
+                detalhes={"chave": nfse.chave, "motivo": int(codigo_motivo)},
+            )
+            return nfse
+        if nfse.situacao != S.AUTORIZADA:
+            raise ErroDeEmissao(
+                "Só é possível cancelar uma nota autorizada. "
+                f"Esta está {nfse.get_situacao_display().lower()}."
+            ) from None
         raise servico_nfse.ErroDeNota({"justificativa": str(erro)}) from None
     except gateway.RejeicaoDeEventoErro as recusa:
         erros = [
@@ -613,7 +704,17 @@ def cancelar(empresa, nfse, *, codigo_motivo, justificativa, usuario, request=No
             detalhes={"codigos": [e["codigo"] for e in erros]},
         )
         if any(e["codigo"] == "E0840" for e in erros):
-            sincronizar_eventos(contexto, nfse)  # já estava cancelada na Sefin
+            try:
+                sincronizar_eventos(contexto, nfse)  # já estava cancelada na Sefin
+            except (
+                gateway.ErroDeConsultaFiscal,
+                gateway.RejeicaoDeEventoErro,
+                gateway.TravaOcupadaErro,
+            ):
+                logger.warning(
+                    "Falha ao consultar eventos da nota %s após E0840; usando eventos locais.",
+                    nfse.pk,
+                )
         raise CancelamentoRecusado(erros) from None
     except gateway.OperacaoIncertaErro:
         auditoria.registrar(
@@ -629,7 +730,17 @@ def cancelar(empresa, nfse, *, codigo_motivo, justificativa, usuario, request=No
             "aqui até a confirmação. Consulte a nota em alguns minutos antes de tentar de novo."
         ) from None
 
-    sincronizar_eventos(contexto, nfse)
+    try:
+        sincronizar_eventos(contexto, nfse)
+    except (
+        gateway.ErroDeConsultaFiscal,
+        gateway.RejeicaoDeEventoErro,
+        gateway.TravaOcupadaErro,
+    ):
+        logger.warning(
+            "Falha ao listar eventos da nota %s após cancelamento; usando evento local.",
+            nfse.pk,
+        )
     nfse.refresh_from_db()
     if nfse.situacao != S.CANCELADA:
         raise CancelamentoIncerto(
@@ -657,10 +768,9 @@ def gerar_danfse(empresa, nfse):
     contexto = contexto_fiscal(
         empresa, nfse_id=nfse.pk, espera_da_trava=ESPERA_DA_TRAVA_NA_CONSULTA
     )
-    if (
-        nfse.situacao != S.AUTORIZADA
-        and not EventoFiscal.objects.filter(modelo="nfse", chave=nfse.chave).exists()
-    ):
+    if nfse.situacao == S.AUTORIZADA:
+        sincronizar_eventos_locais(nfse)
+    elif not EventoFiscal.objects.filter(modelo="nfse", chave=nfse.chave).exists():
         sincronizar_eventos(contexto, nfse)  # a marca d'água depende dos eventos guardados
     try:
         return gateway.gerar_danfse(contexto, nfse.chave)
