@@ -51,6 +51,14 @@ describe('acesso à aplicação', () => {
     }
   })
 
+  it('exibe o link "Emissão" apontando para /fiscal/notas no menu de notas fiscais', async () => {
+    montarApp({ rotasApi: rotasAutenticado() })
+
+    const menu = await screen.findByRole('navigation', { name: 'Menu principal' })
+    expect(within(menu).getByRole('link', { name: 'Emissão' })).toHaveAttribute('href', '/fiscal/notas')
+    expect(within(menu).queryByRole('link', { name: 'NFS-e emitidas' })).not.toBeInTheDocument()
+  })
+
   it('rota desconhecida mostra a página não encontrada dentro do layout', async () => {
     montarApp({ rota: '/nao-existe', rotasApi: rotasAutenticado() })
 

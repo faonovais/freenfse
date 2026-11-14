@@ -166,7 +166,7 @@ export default function Layout() {
             <>
               <p className="titulo-grupo-menu mt-4 px-3">Notas fiscais</p>
               <NavLink to="/fiscal/notas" className={classeLink}>
-                NFS-e emitidas
+                Emissão
               </NavLink>
             </>
           )}
