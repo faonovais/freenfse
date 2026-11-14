@@ -74,13 +74,13 @@ describe('acesso à aplicação', () => {
       'Cadastros',
       'Administração',
       'Configurações',
-      'Conta',
     ])
 
     const links = Array.from(menu.querySelectorAll('a')).map((item) => item.textContent)
     expect(links.indexOf('Empresas')).toBe(links.indexOf('Serviços') + 1)
     expect(links.indexOf('Geral')).toBe(links.indexOf('Vínculos') + 1)
     expect(links.indexOf('Fiscal')).toBe(links.indexOf('Geral') + 1)
+    expect(links.indexOf('Segurança')).toBe(links.indexOf('Fiscal') + 1)
   })
 
   it('rota desconhecida mostra a página não encontrada dentro do layout', async () => {
@@ -402,6 +402,15 @@ describe('layout e empresa ativa por aba', () => {
     fireEvent.click(abaDrive)
     expect(abaDrive).toHaveAttribute('aria-selected', 'true')
     expect(await screen.findByRole('heading', { name: 'Google Drive da empresa' })).toBeInTheDocument()
+  })
+
+  it('Configurações -> Segurança abre a verificação em duas etapas em /configuracoes/seguranca', async () => {
+    montarApp({ rota: '/configuracoes/seguranca', rotasApi: rotasAutenticado() })
+
+    const menu = await screen.findByRole('navigation', { name: 'Menu principal' })
+    expect(within(menu).getByRole('link', { name: 'Segurança' })).toHaveAttribute('href', '/configuracoes/seguranca')
+    expect(within(menu).queryByRole('link', { name: 'Verificação em duas etapas' })).not.toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Verificação em duas etapas' })).toBeInTheDocument()
   })
 
   it('Configurações fiscais agrupa Parâmetros fiscais, Certificado A1 e Serviços oficiais em abas acessíveis', async () => {

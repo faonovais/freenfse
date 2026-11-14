@@ -212,9 +212,9 @@ export default function Layout() {
               </NavLink>
             </>
           )}
+          <p className="titulo-grupo-menu mt-4 px-3">Configurações</p>
           {temPermissao('config.consultar') && (
             <>
-              <p className="titulo-grupo-menu mt-4 px-3">Configurações</p>
               <NavLink to="/configuracoes/geral" className={classeLink}>
                 Geral
               </NavLink>
@@ -223,9 +223,8 @@ export default function Layout() {
               </NavLink>
             </>
           )}
-          <p className="titulo-grupo-menu mt-4 px-3">Conta</p>
-          <NavLink to="/seguranca/2fa" className={classeLink}>
-            Verificação em duas etapas
+          <NavLink to="/configuracoes/seguranca" className={classeLink}>
+            Segurança
           </NavLink>
         </nav>
 

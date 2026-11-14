@@ -46,6 +46,7 @@ export const rotas = [
           { path: 'fiscal/notas/:id/editar', element: <NotaForm /> },
           { path: 'configuracoes/geral', element: <ConfigGeral /> },
           { path: 'configuracoes/fiscal', element: <ConfigFiscal /> },
+          { path: 'configuracoes/seguranca', element: <Config2FA /> },
           { path: 'fiscal/parametros', element: <Parametros /> },
           { path: 'fiscal/certificado', element: <Certificado /> },
           { path: 'fiscal/logo', element: <Logo /> },
