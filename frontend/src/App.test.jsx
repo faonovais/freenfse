@@ -229,6 +229,30 @@ describe('layout e empresa ativa por aba', () => {
     expect(seletor.firstElementChild).toHaveClass('min-w-0', 'flex-1', 'truncate')
   })
 
+  it('mostra Nome para exibição como rótulo principal e razão social com CNPJ como detalhe no seletor', async () => {
+    const comApelido = { ...EMPRESA_A, nome_exibicao: 'Grupo Alfa' }
+    const semApelido = { ...EMPRESA_B, nome_exibicao: '' }
+    montarApp({
+      rotasApi: rotasAutenticado({
+        eu: respostaEu({ master: true, empresas: [comApelido, semApelido] }),
+      }),
+    })
+
+    const seletor = await screen.findByRole('combobox', { name: 'Empresa ativa' })
+    expect(seletor).toHaveTextContent('Grupo Alfa')
+    expect(seletor).not.toHaveTextContent('Empresa Alfa Ltda')
+
+    fireEvent.click(seletor)
+    const opcoes = await screen.findAllByRole('option')
+    expect(opcoes[0]).toHaveTextContent('Grupo Alfa')
+    expect(opcoes[0]).toHaveTextContent('Empresa Alfa Ltda · 11.222.333/0001-81')
+    expect(opcoes[1]).toHaveTextContent('Empresa Beta S.A.')
+    expect(opcoes[1]).toHaveTextContent('11.444.777/0001-61')
+
+    const detalhe = within(opcoes[0]).getByText('Empresa Alfa Ltda · 11.222.333/0001-81')
+    expect(detalhe).toHaveClass('text-xs', 'text-gray-600')
+  })
+
   it('avisa quando o certificado está para vencer, com link para quem pode ver a configuração', async () => {
     const empresaComConfig = { ...EMPRESA_A, permissoes: [...EMPRESA_A.permissoes, 'config.consultar'] }
     montarApp({

@@ -20,6 +20,7 @@ class EmpresaSerializer(serializers.ModelSerializer):
         fields = [
             "id",
             "razao_social",
+            "nome_exibicao",
             "cnpj",
             "cnpj_formatado",
             "schema_name",

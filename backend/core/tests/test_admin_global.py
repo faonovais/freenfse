@@ -108,6 +108,41 @@ def test_listagem_de_empresas_filtra_por_busca_e_situacao(cliente_de, master, em
     assert [e["id"] for e in inativas] == [empresa_b.pk]
 
 
+def test_master_define_altera_e_filtra_nome_exibicao_da_empresa(cliente_de, master):
+    painel = cliente_de(master)
+
+    criada = painel.post(
+        EMPRESAS,
+        {
+            "razao_social": "Empresa Alfa Servicos Ltda",
+            "nome_exibicao": "  Alfa Matriz  ",
+            "cnpj": CNPJ_A,
+        },
+        format="json",
+    )
+    assert criada.status_code == 201
+    assert criada.json()["nome_exibicao"] == "Alfa Matriz"
+
+    eid = criada.json()["id"]
+    alterada = painel.patch(
+        f"{EMPRESAS}{eid}/",
+        {"nome_exibicao": "Alfa Filial Sul"},
+        format="json",
+    )
+    assert alterada.status_code == 200
+    assert alterada.json()["nome_exibicao"] == "Alfa Filial Sul"
+
+    encontradas = painel.get(EMPRESAS, {"busca": "Filial Sul"}).json()
+    assert [e["id"] for e in encontradas] == [eid]
+
+    eu = painel.get("/api/eu/").json()
+    assert eu["empresas"][0]["nome_exibicao"] == "Alfa Filial Sul"
+
+    limpa = painel.patch(f"{EMPRESAS}{eid}/", {"nome_exibicao": ""}, format="json")
+    assert limpa.status_code == 200
+    assert limpa.json()["nome_exibicao"] == ""
+
+
 # --- Usuários ---------------------------------------------------------------------------
 
 

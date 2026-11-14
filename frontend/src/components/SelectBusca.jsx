@@ -28,7 +28,9 @@ export default function SelectBusca({
   const selecionada = opcoes.find((opcao) => opcao.valor === valor)
   const filtradas = useMemo(() => {
     const termo = semAcento(busca)
-    return opcoes.filter((opcao) => semAcento(`${opcao.rotulo} ${opcao.detalhe ?? ''}`).includes(termo))
+    return opcoes.filter((opcao) =>
+      semAcento(`${opcao.rotulo} ${opcao.detalhe ?? ''} ${opcao.busca ?? ''}`).includes(termo),
+    )
   }, [opcoes, busca])
 
   useEffect(() => {
@@ -116,9 +118,9 @@ export default function SelectBusca({
                   posicao === indice ? 'bg-gray-100 dark:bg-gray-800' : ''
                 } ${opcao.valor === valor ? 'text-accent' : ''}`}
               >
-                <span>{opcao.rotulo}</span>
+                <span className="block truncate">{opcao.rotulo}</span>
                 {opcao.detalhe && (
-                  <span className="block text-xs text-gray-600 dark:text-gray-400">{opcao.detalhe}</span>
+                  <span className="block truncate text-xs text-gray-600 dark:text-gray-400">{opcao.detalhe}</span>
                 )}
               </li>
             ))}

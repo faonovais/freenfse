@@ -74,11 +74,15 @@ export default function Layout() {
     trocarEmpresa(id)
   }
 
-  const opcoesEmpresa = empresas.map((empresa) => ({
-    valor: empresa.id,
-    rotulo: empresa.razao_social,
-    detalhe: empresa.cnpj_formatado,
-  }))
+  const opcoesEmpresa = empresas.map((empresa) => {
+    const nomeExibicao = empresa.nome_exibicao?.trim()
+    return {
+      valor: empresa.id,
+      rotulo: nomeExibicao || empresa.razao_social,
+      detalhe: nomeExibicao ? `${empresa.razao_social} · ${empresa.cnpj_formatado}` : empresa.cnpj_formatado,
+      busca: `${empresa.razao_social} ${empresa.nome_exibicao ?? ''} ${empresa.cnpj_formatado}`,
+    }
+  })
 
   return (
     <div className="flex min-h-screen flex-col bg-gray-100 text-gray-800 dark:bg-[#121212] dark:text-gray-300">

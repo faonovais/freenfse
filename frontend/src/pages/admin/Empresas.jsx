@@ -11,13 +11,18 @@ import { errosPorCampo, mensagemErro } from '../../utils/erros.js'
 function FormEmpresa({ empresa, aoSalvar, aoCancelar }) {
   const novo = !empresa.id
   const [razaoSocial, setRazaoSocial] = useState(empresa.razao_social ?? '')
+  const [nomeExibicao, setNomeExibicao] = useState(empresa.nome_exibicao ?? '')
   const [cnpj, setCnpj] = useState(empresa.cnpj_formatado ?? '')
   const [erros, setErros] = useState({})
   const [erroGeral, setErroGeral] = useState('')
   const [salvando, setSalvando] = useState(false)
   const [salvo, setSalvo] = useState(false)
 
-  const sujo = !salvo && (razaoSocial !== (empresa.razao_social ?? '') || (novo && cnpj !== ''))
+  const sujo =
+    !salvo &&
+    (razaoSocial !== (empresa.razao_social ?? '') ||
+      nomeExibicao !== (empresa.nome_exibicao ?? '') ||
+      (novo && cnpj !== ''))
   useFormularioSujo(sujo)
 
   async function salvar(evento) {
@@ -25,7 +30,11 @@ function FormEmpresa({ empresa, aoSalvar, aoCancelar }) {
     setSalvando(true)
     setErros({})
     setErroGeral('')
+    const nomeExibicaoLimpo = nomeExibicao.trim()
     const corpo = novo ? { razao_social: razaoSocial.trim(), cnpj } : { razao_social: razaoSocial.trim() }
+    if (novo ? nomeExibicaoLimpo !== '' : nomeExibicaoLimpo !== (empresa.nome_exibicao ?? '')) {
+      corpo.nome_exibicao = nomeExibicaoLimpo
+    }
     const resposta = novo ? await empresas.criar(corpo) : await empresas.alterar(empresa.id, corpo)
     setSalvando(false)
     if (!resposta.ok) {
@@ -50,6 +59,13 @@ function FormEmpresa({ empresa, aoSalvar, aoCancelar }) {
         value={razaoSocial}
         onChange={(evento) => setRazaoSocial(evento.target.value)}
         erro={erros.razao_social}
+      />
+      <Campo
+        rotulo="Nome para exibição"
+        value={nomeExibicao}
+        onChange={(evento) => setNomeExibicao(evento.target.value)}
+        erro={erros.nome_exibicao}
+        dica="Opcional. Se preenchido, aparece como nome principal no seletor de empresa."
       />
       <Campo
         rotulo="CNPJ"
@@ -171,6 +187,7 @@ export default function Empresas() {
           <thead className="border-b border-gray-200 dark:border-gray-800">
             <tr>
               <CabecalhoColuna rotulo="Razão social" coluna="razao_social" ordenacao={ordenacao} aoOrdenar={ordenarPor} />
+              <CabecalhoColuna rotulo="Nome para exibição" coluna="nome_exibicao" ordenacao={ordenacao} aoOrdenar={ordenarPor} />
               <CabecalhoColuna rotulo="CNPJ" coluna="cnpj" ordenacao={ordenacao} aoOrdenar={ordenarPor} />
               <CabecalhoColuna rotulo="Situação" coluna="ativo" ordenacao={ordenacao} aoOrdenar={ordenarPor} />
               <th scope="col" className="px-3 py-2 text-right">Ações</th>
@@ -179,14 +196,14 @@ export default function Empresas() {
           <tbody>
             {carregando && (
               <tr>
-                <td colSpan={4} className="px-3 py-4 text-gray-600 dark:text-gray-400">
+                <td colSpan={5} className="px-3 py-4 text-gray-600 dark:text-gray-400">
                   Carregando…
                 </td>
               </tr>
             )}
             {!carregando && itens.length === 0 && (
               <tr>
-                <td colSpan={4} className="px-3 py-4 text-gray-600 dark:text-gray-400">
+                <td colSpan={5} className="px-3 py-4 text-gray-600 dark:text-gray-400">
                   Nenhuma empresa encontrada.
                 </td>
               </tr>
@@ -194,6 +211,7 @@ export default function Empresas() {
             {itensOrdenados.map((empresa) => (
               <tr key={empresa.id} className="border-b border-gray-200 last:border-0 dark:border-gray-800">
                 <td className="px-3 py-2">{empresa.razao_social}</td>
+                <td className="px-3 py-2">{empresa.nome_exibicao || '—'}</td>
                 <td className="px-3 py-2">{empresa.cnpj_formatado}</td>
                 <td className={`px-3 py-2 ${empresa.ativo ? 'text-estado-sucesso' : 'text-estado-neutro'}`}>
                   {empresa.ativo ? 'Ativa' : 'Inativa'}

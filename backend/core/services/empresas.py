@@ -8,25 +8,36 @@ from core.services import auditoria
 Acao = LogAuditoria.Acao
 
 
-def criar_empresa(*, razao_social, cnpj, ativo=True, request=None):
+def criar_empresa(*, razao_social, cnpj, nome_exibicao="", ativo=True, request=None):
     """Cria a empresa e o schema dedicado dela no PostgreSQL, e registra na auditoria."""
     # O schema é criado pelo django-tenants ao salvar; fica fora da transação do
     # registro de auditoria para um erro de DDL não deixar auditoria órfã.
-    empresa = Empresa.objects.create(razao_social=razao_social, cnpj=cnpj, ativo=ativo)
+    nome_exibicao = (nome_exibicao or "").strip()
+    empresa = Empresa.objects.create(
+        razao_social=razao_social,
+        nome_exibicao=nome_exibicao,
+        cnpj=cnpj,
+        ativo=ativo,
+    )
+    detalhes = {"cnpj": empresa.cnpj, "razao_social": empresa.razao_social}
+    if empresa.nome_exibicao:
+        detalhes["nome_exibicao"] = empresa.nome_exibicao
     auditoria.registrar(
         Acao.EMPRESA_CRIADA,
         request=request,
         empresa=empresa,
         alvo=f"Empresa:{empresa.pk}",
-        detalhes={"cnpj": empresa.cnpj, "razao_social": empresa.razao_social},
+        detalhes=detalhes,
     )
     return empresa
 
 
 @transaction.atomic
 def atualizar_empresa(empresa, *, request=None, **campos):
-    """Altera razão social, CNPJ e situação. O schema nunca é renomeado nem removido."""
-    antes = {c: getattr(empresa, c) for c in ("razao_social", "cnpj", "ativo")}
+    """Altera razão social, nome para exibição, CNPJ e situação; preserva o schema."""
+    if "nome_exibicao" in campos and campos["nome_exibicao"] is not None:
+        campos["nome_exibicao"] = campos["nome_exibicao"].strip()
+    antes = {c: getattr(empresa, c) for c in ("razao_social", "nome_exibicao", "cnpj", "ativo")}
     for campo in antes:
         if campo in campos:
             setattr(empresa, campo, campos[campo])
