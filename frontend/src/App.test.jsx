@@ -197,6 +197,38 @@ describe('layout e empresa ativa por aba', () => {
     expect(chamadas.some((chamada) => chamada.caminho === '/api/fiscal/logo/claro/')).toBe(false)
   })
 
+  it('mantém título, logo e seletor alinhados na mesma linha sem quebrar a linha interna', async () => {
+    const empresaNomeLongo = {
+      ...EMPRESA_A,
+      razao_social: 'Empresa Alfa com Razão Social Muito Longa Para Caber Sem Truncar Ltda',
+    }
+    montarApp({
+      rotasApi: rotasAutenticado({
+        eu: respostaEu({ empresas: [empresaNomeLongo, EMPRESA_B] }),
+        extras: {
+          'GET /api/fiscal/identidade/': {
+            status: 200,
+            dados: { ...IDENTIDADE_PADRAO.dados, logo: { claro: 'abc123' } },
+          },
+          'GET /api/fiscal/logo/claro/': { status: 200, blob: new Blob(['x'], { type: 'image/png' }) },
+        },
+      }),
+    })
+
+    const imagem = await screen.findByRole('img', { name: `Logo de ${empresaNomeLongo.razao_social}` })
+    const cabecalho = imagem.closest('header')
+    const linhaExterna = cabecalho.firstElementChild
+    const areaEmpresa = screen.getByLabelText('Empresa em operação')
+    const seletor = screen.getByRole('combobox', { name: 'Empresa ativa' })
+
+    expect(linhaExterna).toHaveClass('md:flex-nowrap')
+    expect(imagem).toHaveClass('shrink-0')
+    expect(areaEmpresa.parentElement).not.toHaveClass('flex-wrap')
+    expect(areaEmpresa).toHaveClass('min-w-0', 'truncate')
+    expect(seletor).toHaveClass('overflow-hidden')
+    expect(seletor.firstElementChild).toHaveClass('min-w-0', 'flex-1', 'truncate')
+  })
+
   it('avisa quando o certificado está para vencer, com link para quem pode ver a configuração', async () => {
     const empresaComConfig = { ...EMPRESA_A, permissoes: [...EMPRESA_A.permissoes, 'config.consultar'] }
     montarApp({

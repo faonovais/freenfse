@@ -77,12 +77,12 @@ export default function SelectBusca({
         aria-controls={aberto ? idLista : undefined}
         disabled={desabilitado}
         onClick={() => (aberto ? setAberto(false) : abrir())}
-        className="campo flex items-center justify-between gap-2 text-left disabled:opacity-50"
+        className="campo flex items-center justify-between gap-2 overflow-hidden text-left disabled:opacity-50"
       >
-        <span className={selecionada ? '' : 'text-gray-600 dark:text-gray-400'}>
+        <span className={`min-w-0 flex-1 truncate ${selecionada ? '' : 'text-gray-600 dark:text-gray-400'}`}>
           {selecionada ? selecionada.rotulo : placeholder}
         </span>
-        <span aria-hidden="true">▾</span>
+        <span aria-hidden="true" className="shrink-0">▾</span>
       </button>
       {aberto && (
         <div className="absolute z-40 mt-1 w-full rounded border border-gray-200 bg-white shadow dark:border-gray-800 dark:bg-gray-900">
