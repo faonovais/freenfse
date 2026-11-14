@@ -74,14 +74,13 @@ describe('acesso à aplicação', () => {
       'Cadastros',
       'Administração',
       'Configurações',
-      'Configuração fiscal',
-      'Envio de documentos',
       'Conta',
     ])
 
     const links = Array.from(menu.querySelectorAll('a')).map((item) => item.textContent)
     expect(links.indexOf('Empresas')).toBe(links.indexOf('Serviços') + 1)
-    expect(links.indexOf('Fiscal')).toBe(links.indexOf('Vínculos') + 1)
+    expect(links.indexOf('Geral')).toBe(links.indexOf('Vínculos') + 1)
+    expect(links.indexOf('Fiscal')).toBe(links.indexOf('Geral') + 1)
   })
 
   it('rota desconhecida mostra a página não encontrada dentro do layout', async () => {
@@ -333,14 +332,76 @@ describe('layout e empresa ativa por aba', () => {
     const consulta = { ...EMPRESA_B, permissoes: ['nfse.consultar'] }
     montarApp({ rotasApi: rotasAutenticado({ eu: respostaEu({ empresas: [admin, consulta] }) }) })
     const menu = await screen.findByRole('navigation', { name: 'Menu principal' })
-    for (const nome of ['Pessoas', 'Serviços', 'Fiscal', 'Logo da empresa']) {
+    for (const nome of ['Pessoas', 'Serviços', 'Geral', 'Fiscal']) {
       expect(within(menu).getByRole('link', { name: nome })).toBeInTheDocument()
     }
 
     await trocarEmpresaPara('Empresa Beta')
 
     await waitFor(() => expect(within(menu).queryByRole('link', { name: 'Pessoas' })).not.toBeInTheDocument())
+    expect(within(menu).queryByRole('link', { name: 'Geral' })).not.toBeInTheDocument()
     expect(within(menu).queryByRole('link', { name: 'Fiscal' })).not.toBeInTheDocument()
+  })
+
+  it('Configurações gerais agrupa Logo, E-mail e Google Drive em abas', async () => {
+    const admin = {
+      ...EMPRESA_A,
+      permissoes: ['config.consultar', 'config.editar'],
+    }
+    montarApp({
+      rota: '/configuracoes/geral',
+      rotasApi: rotasAutenticado({
+        eu: respostaEu({ empresas: [admin] }),
+        extras: {
+          'GET /api/documentos/config/email/': {
+            status: 200,
+            dados: {
+              provedor: 'smtp',
+              remetente_email: 'notas@alfa.test',
+              remetente_nome: 'Alfa',
+              smtp_host: 'smtp.alfa.test',
+              smtp_porta: 587,
+              smtp_seguranca: 'starttls',
+              smtp_usuario: 'notas@alfa.test',
+              credenciais_configuradas: {},
+              copias_fixas: [],
+              emails_alerta: [],
+              variaveis: {},
+              opcoes: {
+                provedores: [{ valor: 'smtp', rotulo: 'SMTP próprio' }],
+                seguranca: [{ valor: 'starttls', rotulo: 'STARTTLS' }],
+              },
+            },
+          },
+          'GET /api/documentos/config/drive/': {
+            status: 200,
+            dados: {
+              ativo: false,
+              pasta_raiz_id: '',
+              modelo_subpastas: '{ano}/{mes}',
+              modelo_arquivo: '{chave}',
+              enviar_automaticamente: false,
+              variaveis: {},
+            },
+          },
+        },
+      }),
+    })
+
+    expect(await screen.findByRole('heading', { name: 'Configurações gerais' })).toBeInTheDocument()
+    const abaLogo = screen.getByRole('tab', { name: 'Logo da empresa' })
+    const abaEmail = screen.getByRole('tab', { name: 'E-mail da empresa' })
+    const abaDrive = screen.getByRole('tab', { name: 'Google Drive' })
+    expect(abaLogo).toHaveAttribute('aria-selected', 'true')
+    expect(screen.getByRole('heading', { name: /Logo da empresa/ })).toBeInTheDocument()
+
+    fireEvent.click(abaEmail)
+    expect(abaEmail).toHaveAttribute('aria-selected', 'true')
+    expect(await screen.findByLabelText('E-mail do remetente')).toHaveValue('notas@alfa.test')
+
+    fireEvent.click(abaDrive)
+    expect(abaDrive).toHaveAttribute('aria-selected', 'true')
+    expect(await screen.findByRole('heading', { name: 'Google Drive da empresa' })).toBeInTheDocument()
   })
 
   it('Configurações fiscais agrupa Parâmetros fiscais, Certificado A1 e Serviços oficiais em abas acessíveis', async () => {

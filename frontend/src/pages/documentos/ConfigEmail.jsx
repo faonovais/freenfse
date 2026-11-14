@@ -72,7 +72,8 @@ function CampoSecreto({ campo, rotulo, configurada, valor, aoMudar, erro, podeEd
   )
 }
 
-function EnvioDeTeste({ dados, podeEditar, alterado }) {
+function EnvioDeTeste({ dados, podeEditar, alterado, embutido = false }) {
+  const Subtitulo = embutido ? 'h3' : 'h2'
   const [destino, setDestino] = useState('')
   const [resultado, setResultado] = useState(null)
   const [erro, setErro] = useState('')
@@ -97,13 +98,13 @@ function EnvioDeTeste({ dados, podeEditar, alterado }) {
       aria-label="E-mail de teste"
       className="mt-6 space-y-3 rounded border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-gray-900"
     >
-      <h2 className="text-lg text-gray-900 dark:text-gray-100">
+      <Subtitulo className="text-lg text-gray-900 dark:text-gray-100">
         Enviar e-mail de teste{' '}
         <BotaoAjuda rotulo="e-mail de teste">
           Envia uma mensagem simples com a configuração <strong>salva</strong>, para conferir se o remetente e a
           credencial funcionam antes de enviar notas aos clientes.
         </BotaoAjuda>
-      </h2>
+      </Subtitulo>
       {desligado && <Aviso tipo="atencao">Escolha e salve um provedor de e-mail para poder testar.</Aviso>}
       {alterado && !desligado && (
         <Aviso tipo="atencao">Há alterações não salvas: o teste usa a configuração já gravada.</Aviso>
@@ -130,7 +131,8 @@ function EnvioDeTeste({ dados, podeEditar, alterado }) {
   )
 }
 
-export default function ConfigEmail() {
+export default function ConfigEmail({ embutido = false }) {
+  const Titulo = embutido ? 'h2' : 'h1'
   const confirmar = useConfirmacao()
   const { temPermissao } = useAuth()
   const podeEditar = temPermissao('config.editar')
@@ -239,7 +241,11 @@ export default function ConfigEmail() {
 
   return (
     <section>
-      <h1 className="text-2xl text-gray-900 dark:text-gray-100">E-mail da empresa</h1>
+      <Titulo
+        className={embutido ? 'text-lg text-gray-900 dark:text-gray-100' : 'text-2xl text-gray-900 dark:text-gray-100'}
+      >
+        E-mail da empresa
+      </Titulo>
       <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
         Por onde as notas são enviadas aos tomadores. As credenciais ficam guardadas cifradas e nunca são mostradas de
         volta; para trocar, digite a nova.
@@ -477,7 +483,7 @@ export default function ConfigEmail() {
         )}
       </form>
 
-      <EnvioDeTeste dados={dados} podeEditar={podeEditar} alterado={alterado} />
+      <EnvioDeTeste dados={dados} podeEditar={podeEditar} alterado={alterado} embutido={embutido} />
     </section>
   )
 }

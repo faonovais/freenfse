@@ -74,7 +74,8 @@ function PreviaDosModelos({ previa }) {
   )
 }
 
-function ReenvioDoPeriodo({ ativo }) {
+function ReenvioDoPeriodo({ ativo, embutido = false }) {
+  const Subtitulo = embutido ? 'h3' : 'h2'
   const [periodo, setPeriodo] = useState({ periodo_inicio: '', periodo_fim: '' })
   const [resultado, setResultado] = useState(null)
   const [erro, setErro] = useState('')
@@ -98,13 +99,13 @@ function ReenvioDoPeriodo({ ativo }) {
       aria-label="Reenviar um período ao Drive"
       className="mt-6 space-y-3 rounded border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-gray-900"
     >
-      <h2 className="text-lg text-gray-900 dark:text-gray-100">
+      <Subtitulo className="text-lg text-gray-900 dark:text-gray-100">
         Reenviar um período ao Drive{' '}
         <BotaoAjuda rotulo="reenvio por período">
           Copia de novo ao Drive todas as notas emitidas no período (pela data de emissão), com os modelos de caminho
           atuais. Útil depois de mudar os modelos ou de corrigir uma falha de acesso.
         </BotaoAjuda>
-      </h2>
+      </Subtitulo>
       {!ativo && <Aviso tipo="atencao">Ative a cópia ao Drive (e salve) para poder reenviar.</Aviso>}
       <div className="grid gap-3 sm:grid-cols-2">
         <Campo
@@ -131,7 +132,9 @@ function ReenvioDoPeriodo({ ativo }) {
   )
 }
 
-export default function ConfigDrive() {
+export default function ConfigDrive({ embutido = false }) {
+  const Titulo = embutido ? 'h2' : 'h1'
+  const Subtitulo = embutido ? 'h3' : 'h2'
   const { temPermissao } = useAuth()
   const podeEditar = temPermissao('config.editar')
   const podeReenviar = temPermissao('documentos.enviar')
@@ -236,7 +239,11 @@ export default function ConfigDrive() {
 
   return (
     <section>
-      <h1 className="text-2xl text-gray-900 dark:text-gray-100">Google Drive da empresa</h1>
+      <Titulo
+        className={embutido ? 'text-lg text-gray-900 dark:text-gray-100' : 'text-2xl text-gray-900 dark:text-gray-100'}
+      >
+        Google Drive da empresa
+      </Titulo>
       <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
         Guarda o XML e o PDF de cada nota numa pasta do Drive, organizada pelos modelos abaixo. A chave da conta de
         serviço fica cifrada e nunca é mostrada de volta.
@@ -298,7 +305,7 @@ export default function ConfigDrive() {
           </div>
 
           <div className="space-y-3">
-            <h2 className="text-lg text-gray-900 dark:text-gray-100">Onde guardar cada nota</h2>
+            <Subtitulo className="text-lg text-gray-900 dark:text-gray-100">Onde guardar cada nota</Subtitulo>
             <Campo
               rotulo="Modelo das subpastas"
               value={f.modelo_subpastas}
@@ -363,7 +370,7 @@ export default function ConfigDrive() {
         )}
       </form>
 
-      {podeReenviar && <ReenvioDoPeriodo ativo={dados.ativo} />}
+      {podeReenviar && <ReenvioDoPeriodo ativo={dados.ativo} embutido={embutido} />}
     </section>
   )
 }

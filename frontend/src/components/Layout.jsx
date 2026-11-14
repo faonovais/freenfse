@@ -215,19 +215,11 @@ export default function Layout() {
           {temPermissao('config.consultar') && (
             <>
               <p className="titulo-grupo-menu mt-4 px-3">Configurações</p>
+              <NavLink to="/configuracoes/geral" className={classeLink}>
+                Geral
+              </NavLink>
               <NavLink to="/configuracoes/fiscal" className={classeLink}>
                 Fiscal
-              </NavLink>
-              <p className="titulo-grupo-menu mt-4 px-3">Configuração fiscal</p>
-              <NavLink to="/fiscal/logo" className={classeLink}>
-                Logo da empresa
-              </NavLink>
-              <p className="titulo-grupo-menu mt-4 px-3">Envio de documentos</p>
-              <NavLink to="/documentos/email" className={classeLink}>
-                E-mail da empresa
-              </NavLink>
-              <NavLink to="/documentos/drive" className={classeLink}>
-                Google Drive
               </NavLink>
             </>
           )}
