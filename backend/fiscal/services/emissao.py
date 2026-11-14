@@ -427,8 +427,8 @@ def reconciliar_pendentes(agora=None, *, espera_da_trava=ESPERA_DA_TRAVA_NA_CONS
     substituicoes = 0
     for empresa in Empresa.objects.filter(ativo=True):
         with schema_context(empresa.schema_name):
-            _reconciliar_eventos_locais()
             if not Certificado.objects.exists():
+                _reconciliar_eventos_locais()
                 continue
             totais["empresas"] += 1
             for nfse in _pendentes(agora):
@@ -448,6 +448,7 @@ def reconciliar_pendentes(agora=None, *, espera_da_trava=ESPERA_DA_TRAVA_NA_CONS
                 elif depois == S.RASCUNHO and antes == S.ENVIANDO:
                     totais["soltas"] += 1
             substituicoes += _confirmar_substituicoes_pendentes(empresa, espera_da_trava)
+            _reconciliar_eventos_locais()
     return ResumoDaReconciliacao(substituicoes_confirmadas=substituicoes, **totais)
 
 
@@ -477,6 +478,16 @@ def _conferir(empresa, nfse, espera_da_trava, agora):
     return reconciliar_nota(empresa, nfse, espera_da_trava=espera_da_trava)
 
 
+def _registrar_substituicao_auditada(empresa, original):
+    auditoria.registrar(
+        LogAuditoria.Acao.NFSE_SUBSTITUIDA,
+        usuario=original.criado_por,
+        empresa=empresa,
+        alvo=f"nfse:{original.pk}",
+        detalhes={"chave": original.chave},
+    )
+
+
 def _confirmar_substituicoes_pendentes(empresa, espera_da_trava):
     confirmadas = 0
     originais = Nfse.objects.filter(
@@ -488,9 +499,11 @@ def _confirmar_substituicoes_pendentes(empresa, espera_da_trava):
             sincronizar_eventos(contexto, original)
         except Exception:
             logger.exception("Falha ao confirmar a substituição da nota %s", original.pk)
-            continue
+            sincronizar_eventos_locais(original)
         original.refresh_from_db()
-        confirmadas += original.situacao == S.SUBSTITUIDA
+        if original.situacao == S.SUBSTITUIDA:
+            _registrar_substituicao_auditada(empresa, original)
+            confirmadas += 1
     return confirmadas
 
 
@@ -608,17 +621,13 @@ def _confirmar_substituicao(empresa, original, contexto):
     """Depois da nota nova, confere se a Sefin registrou a substituição da original."""
     try:
         sincronizar_eventos(contexto, original)
-    except gateway.ErroDeConsultaFiscal, gateway.RejeicaoDeEventoErro:
-        logger.warning("Substituição da nota %s ainda não confirmada.", original.pk)
-        return
+    except gateway.ErroDeConsultaFiscal, gateway.RejeicaoDeEventoErro, gateway.TravaOcupadaErro:
+        sincronizar_eventos_locais(original)
+    original.refresh_from_db()
     if original.situacao == S.SUBSTITUIDA:
-        auditoria.registrar(
-            LogAuditoria.Acao.NFSE_SUBSTITUIDA,
-            usuario=original.criado_por,
-            empresa=empresa,
-            alvo=f"nfse:{original.pk}",
-            detalhes={"chave": original.chave},
-        )
+        _registrar_substituicao_auditada(empresa, original)
+    else:
+        logger.warning("Substituição da nota %s ainda não confirmada.", original.pk)
 
 
 def consultar(empresa, nfse):

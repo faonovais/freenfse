@@ -368,3 +368,84 @@ def test_migracao_0007_reconcilia_nota_autorizada_com_cancelamento_local(empresa
         assert TransicaoNfse.objects.filter(
             nfse=nota_db, de="autorizada", para="cancelada"
         ).exists()
+
+
+def test_substituicao_com_evento_105102_local_atualiza_original_mesmo_se_consulta_falhar(
+    empresa_pronta, autorizada, sefin, monkeypatch
+):
+    sefin.registrar_substituicao = False
+    substituta = _substituir(empresa_pronta, autorizada)
+    autorizada.refresh_from_db()
+    assert substituta.situacao == S.AUTORIZADA
+    assert autorizada.situacao == S.AUTORIZADA
+
+    _gravar_evento_fiscal(
+        sefin,
+        autorizada.chave,
+        "105102",
+        "Cancelamento de NFS-e por Substituicao",
+    )
+
+    def falha(*_args, **_kwargs):
+        raise gateway.ErroDeConsultaFiscal("Falha simulada ao consultar eventos na Sefin.")
+
+    monkeypatch.setattr(gateway, "listar_eventos", falha)
+
+    resumo = emissao.reconciliar_pendentes()
+
+    autorizada.refresh_from_db()
+    assert resumo.substituicoes_confirmadas == 1
+    assert autorizada.situacao == S.SUBSTITUIDA
+    assert EventoNfse.objects.filter(nfse=autorizada, tipo_evento="105102").exists()
+    assert "nfse_substituida" in set(LogAuditoria.objects.values_list("acao", flat=True))
+
+    with pytest.raises(servico_nfse.ErroDeNota, match="Só uma nota autorizada"):
+        servico_nfse.criar_substituta(autorizada, codigo_motivo="01", motivo="", usuario=None)
+
+
+def test_migracao_0007_reconcilia_nota_autorizada_com_substituicao_local(empresa_a):
+    antes = [("fiscal", "0006_issue_29_ibs_cbs_pelo_servico")]
+    depois = [("fiscal", "0007_reconciliar_situacoes_encerradas")]
+    chave = "21014002111222333000181000000000000226100000000020"
+    xml_evento = b'<?xml version="1.0"?><evento>substituicao</evento>'
+
+    with schema_context(empresa_a.schema_name):
+        executor = MigrationExecutor(connection)
+        executor.migrate(antes)
+        apps_antes = MigrationExecutor(connection).loader.project_state(antes).apps
+
+        Nota = apps_antes.get_model("fiscal", "Nfse")
+        Evento = apps_antes.get_model("fiscal", "EventoFiscal")
+        nota = Nota.objects.create(
+            ambiente="producao",
+            serie=1,
+            competencia=dt.date(2026, 10, 1),
+            situacao="autorizada",
+            chave=chave,
+            valor_servico=Decimal("100.00"),
+        )
+        Evento.objects.create(
+            modelo="nfse",
+            chave=chave,
+            tipo_evento="105102",
+            identificador=f"EVT{chave}105102001",
+            resumo={
+                "modelo": "nfse",
+                "chave": chave,
+                "tipo_evento": "105102",
+                "descricao": "Cancelamento de NFS-e por Substituicao",
+                "data_evento": "2026-10-01T12:00:00+00:00",
+                "protocolo": f"EVT{chave}105102001",
+            },
+            xml=xml_evento,
+            sha256=hashlib.sha256(xml_evento).hexdigest(),
+        )
+
+        MigrationExecutor(connection).migrate(depois)
+
+        nota_db = Nfse.objects.get(pk=nota.pk)
+        assert nota_db.situacao == S.SUBSTITUIDA
+        assert EventoNfse.objects.filter(nfse=nota_db, tipo_evento="105102").exists()
+        assert TransicaoNfse.objects.filter(
+            nfse=nota_db, de="autorizada", para="substituida"
+        ).exists()

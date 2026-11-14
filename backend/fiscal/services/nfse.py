@@ -646,6 +646,10 @@ def criar_substituta(original, *, codigo_motivo, motivo, usuario):
     A substituída só passa a "substituída" quando a Sefin confirma o evento, depois que a nova
     nota for autorizada.
     """
+    from fiscal.services.emissao import sincronizar_eventos_locais
+
+    sincronizar_eventos_locais(original)
+    original.refresh_from_db()
     if original.situacao != Nfse.Situacao.AUTORIZADA:
         raise ErroDeNota(
             "Só uma nota autorizada pode ser substituída. "
