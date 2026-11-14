@@ -148,21 +148,20 @@ export default function Layout() {
           <NavLink to="/" end className={classeLink}>
             Início
           </NavLink>
-          {temPermissao('nfse.consultar') && (
+          {(temPermissao('nfse.consultar') ||
+            temPermissao('agendamento.consultar') ||
+            temPermissao('documentos.exportar')) && (
             <>
               <p className="titulo-grupo-menu mt-4 px-3">Notas fiscais</p>
-              <NavLink to="/fiscal/notas" className={classeLink}>
-                Emissão
-              </NavLink>
-            </>
-          )}
-          {(temPermissao('nfse.consultar') || temPermissao('agendamento.consultar')) && (
-            <>
-              <p className="titulo-grupo-menu mt-4 px-3">Agendamentos</p>
               {temPermissao('nfse.consultar') && (
-                <NavLink to="/agendamentos/rascunhos" className={classeLink}>
-                  Rascunhos
-                </NavLink>
+                <>
+                  <NavLink to="/fiscal/notas" className={classeLink}>
+                    Emissão
+                  </NavLink>
+                  <NavLink to="/agendamentos/rascunhos" className={classeLink}>
+                    Rascunhos
+                  </NavLink>
+                </>
               )}
               {temPermissao('agendamento.consultar') && (
                 <>
@@ -177,14 +176,11 @@ export default function Layout() {
                   </NavLink>
                 </>
               )}
-            </>
-          )}
-          {temPermissao('documentos.exportar') && (
-            <>
-              <p className="titulo-grupo-menu mt-4 px-3">Documentos</p>
-              <NavLink to="/documentos/exportacoes" className={classeLink}>
-                Download em lote
-              </NavLink>
+              {temPermissao('documentos.exportar') && (
+                <NavLink to="/documentos/exportacoes" className={classeLink}>
+                  Download em lote
+                </NavLink>
+              )}
             </>
           )}
           {temPermissao('cadastro.consultar') && (

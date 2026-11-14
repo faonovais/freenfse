@@ -59,10 +59,16 @@ describe('acesso à aplicação', () => {
     expect(within(menu).queryByRole('link', { name: 'NFS-e emitidas' })).not.toBeInTheDocument()
   })
 
-  it('posiciona o menu Administração logo após o menu Cadastros', async () => {
+  it('consolida Agendamentos e Downloads no menu Notas fiscais e posiciona Administração após Cadastros', async () => {
     const empresaCompleta = {
       ...EMPRESA_A,
-      permissoes: ['nfse.consultar', 'cadastro.consultar', 'config.consultar'],
+      permissoes: [
+        'nfse.consultar',
+        'agendamento.consultar',
+        'documentos.exportar',
+        'cadastro.consultar',
+        'config.consultar',
+      ],
     }
     montarApp({ rotasApi: rotasAutenticado({ eu: respostaEu({ master: true, empresas: [empresaCompleta] }) }) })
 
@@ -70,13 +76,14 @@ describe('acesso à aplicação', () => {
     const grupos = Array.from(menu.querySelectorAll('.titulo-grupo-menu')).map((item) => item.textContent)
     expect(grupos).toEqual([
       'Notas fiscais',
-      'Agendamentos',
       'Cadastros',
       'Administração',
       'Configurações',
     ])
 
     const links = Array.from(menu.querySelectorAll('a')).map((item) => item.textContent)
+    expect(links.indexOf('Rascunhos')).toBe(links.indexOf('Emissão') + 1)
+    expect(links.indexOf('Download em lote')).toBe(links.indexOf('Histórico de execuções') + 1)
     expect(links.indexOf('Empresas')).toBe(links.indexOf('Serviços') + 1)
     expect(links.indexOf('Geral')).toBe(links.indexOf('Vínculos') + 1)
     expect(links.indexOf('Fiscal')).toBe(links.indexOf('Geral') + 1)
