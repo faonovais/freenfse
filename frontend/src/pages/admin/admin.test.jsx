@@ -132,6 +132,50 @@ describe('administração de empresas', () => {
     expect(chamadas.find((chamada) => chamada.metodo === 'PATCH').corpo).toEqual({ razao_social: 'Alfa Agro Ltda' })
   })
 
+  it('permite cadastrar e alterar o Nome para exibição da empresa', async () => {
+    const comApelido = { ...EMPRESAS_API[0], nome_exibicao: 'Grupo Alfa' }
+    const { chamadas } = montarApp({
+      rota: '/admin/empresas',
+      rotasApi: rotasAutenticado({
+        eu,
+        extras: {
+          [`GET ${ADMIN}/empresas/`]: { status: 200, dados: [comApelido] },
+          [`POST ${ADMIN}/empresas/`]: { status: 201, dados: comApelido },
+          [`PATCH ${ADMIN}/empresas/1/`]: { status: 200, dados: comApelido },
+        },
+      }),
+    })
+
+    const tabela = await screen.findByRole('table', { name: 'Empresas cadastradas' })
+    expect(await within(tabela).findByText('Grupo Alfa')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Nova empresa' }))
+    const formNovo = screen.getByRole('form', { name: 'Nova empresa' })
+    fireEvent.change(within(formNovo).getByLabelText('Razão social'), { target: { value: 'Empresa Nova Ltda' } })
+    fireEvent.change(within(formNovo).getByLabelText('Nome para exibição'), { target: { value: '  Nova Matriz  ' } })
+    fireEvent.change(within(formNovo).getByLabelText('CNPJ'), { target: { value: '11.222.333/0001-81' } })
+    fireEvent.click(within(formNovo).getByRole('button', { name: 'Criar empresa' }))
+
+    await waitFor(() => expect(chamadas.some((chamada) => chamada.metodo === 'POST')).toBe(true))
+    expect(chamadas.find((chamada) => chamada.metodo === 'POST').corpo).toEqual({
+      razao_social: 'Empresa Nova Ltda',
+      nome_exibicao: 'Nova Matriz',
+      cnpj: '11.222.333/0001-81',
+    })
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Editar Empresa Alfa Ltda' }))
+    const formEditar = screen.getByRole('form', { name: 'Editar empresa' })
+    expect(within(formEditar).getByLabelText('Nome para exibição')).toHaveValue('Grupo Alfa')
+    fireEvent.change(within(formEditar).getByLabelText('Nome para exibição'), { target: { value: 'Alfa Matriz' } })
+    fireEvent.click(within(formEditar).getByRole('button', { name: 'Salvar' }))
+
+    await waitFor(() => expect(chamadas.some((chamada) => chamada.metodo === 'PATCH')).toBe(true))
+    expect(chamadas.find((chamada) => chamada.metodo === 'PATCH').corpo).toEqual({
+      razao_social: 'Empresa Alfa Ltda',
+      nome_exibicao: 'Alfa Matriz',
+    })
+  })
+
   it('desativar pede confirmação; cancelar não altera nada', async () => {
     const { chamadas } = montarApp({
       rota: '/admin/empresas',

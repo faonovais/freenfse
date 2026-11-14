@@ -16,7 +16,7 @@ Segredos: o certificado chega aqui já aberto em memória (`CertificadoA1`) e nu
 import logging
 from collections.abc import Callable
 from dataclasses import asdict, dataclass, field, replace
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 
 from freedfe.certificado import CertificadoA1
 from freedfe.distribuicao.estado import relogio_utc
@@ -186,7 +186,10 @@ def descricao_do_leiaute(codigo):
 
 
 def _decimal(valor):
-    return Decimal(str(valor)) if valor not in (None, "") else None
+    if valor in (None, ""):
+        return None
+    texto = str(valor).strip().replace(",", ".")
+    return Decimal(texto) if texto else None
 
 
 def _endereco(dados):
@@ -324,7 +327,7 @@ def montar_dps(dados):
                 else None
             ),
         )
-    except ValidacaoErro as erro:
+    except (ValidacaoErro, InvalidOperation) as erro:
         raise DadosInvalidosErro(str(erro)) from None
 
 

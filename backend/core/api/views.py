@@ -31,6 +31,7 @@ def _empresa_para_o_frontend(empresa, perfil, permissoes):
     return {
         "id": empresa.pk,
         "razao_social": empresa.razao_social,
+        "nome_exibicao": empresa.nome_exibicao,
         "cnpj": empresa.cnpj,
         "cnpj_formatado": empresa.cnpj_formatado,
         "perfil": perfil,
@@ -108,12 +109,16 @@ class EmpresaViewSet(_AdminGlobalViewSet):
     serializer_class = EmpresaSerializer
 
     def get_queryset(self):
-        """Filtros opcionais: `busca` (razão social ou CNPJ) e `ativo`."""
+        """Filtros opcionais: `busca` (razão social, nome para exibição ou CNPJ) e `ativo`."""
         consulta = super().get_queryset()
         busca = self.request.query_params.get("busca", "").strip()
         if busca:
-            consulta = consulta.filter(razao_social__icontains=busca) | consulta.filter(
-                cnpj__icontains=busca.replace(".", "").replace("/", "").replace("-", "")
+            consulta = (
+                consulta.filter(razao_social__icontains=busca)
+                | consulta.filter(nome_exibicao__icontains=busca)
+                | consulta.filter(
+                    cnpj__icontains=busca.replace(".", "").replace("/", "").replace("-", "")
+                )
             )
         ativo = self.request.query_params.get("ativo")
         if ativo in ("true", "false"):

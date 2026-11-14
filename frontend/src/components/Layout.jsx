@@ -74,24 +74,34 @@ export default function Layout() {
     trocarEmpresa(id)
   }
 
-  const opcoesEmpresa = empresas.map((empresa) => ({
-    valor: empresa.id,
-    rotulo: empresa.razao_social,
-    detalhe: empresa.cnpj_formatado,
-  }))
+  const opcoesEmpresa = empresas.map((empresa) => {
+    const nomeExibicao = empresa.nome_exibicao?.trim()
+    return {
+      valor: empresa.id,
+      rotulo: nomeExibicao || empresa.razao_social,
+      detalhe: nomeExibicao ? `${empresa.razao_social} · ${empresa.cnpj_formatado}` : empresa.cnpj_formatado,
+      busca: `${empresa.razao_social} ${empresa.nome_exibicao ?? ''} ${empresa.cnpj_formatado}`,
+    }
+  })
 
   return (
     <div className="flex min-h-screen flex-col bg-gray-100 text-gray-800 dark:bg-[#121212] dark:text-gray-300">
       <header className="border-b border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900">
-        <div className="flex flex-wrap items-center gap-4 px-4 py-3">
-          <span className="font-title text-xl text-gray-900 dark:text-gray-100">freenfse</span>
-          {urlDoLogo && (
-            <img src={urlDoLogo} alt={`Logo de ${empresaAtiva?.razao_social ?? 'a empresa'}`} className="h-8 max-w-40 object-contain" />
-          )}
+        <div className="flex flex-wrap items-center gap-4 px-4 py-3 md:flex-nowrap">
+          <div className="flex shrink-0 items-center gap-3">
+            <span className="font-title text-xl leading-none text-gray-900 dark:text-gray-100">freenfse</span>
+            {urlDoLogo && (
+              <img
+                src={urlDoLogo}
+                alt={`Logo de ${empresaAtiva?.razao_social ?? 'a empresa'}`}
+                className="h-8 max-w-40 shrink-0 object-contain"
+              />
+            )}
+          </div>
 
-          <div className="flex min-w-0 flex-1 flex-wrap items-center gap-3">
+          <div className="flex min-w-0 flex-1 items-center gap-3">
             {empresas.length > 0 ? (
-              <div className="w-72 max-w-full">
+              <div className="w-72 max-w-full shrink-0">
                 <SelectBusca
                   rotulo="Empresa ativa"
                   opcoes={opcoesEmpresa}
@@ -104,20 +114,28 @@ export default function Layout() {
               <span className="text-sm text-gray-600 dark:text-gray-400">Nenhuma empresa liberada</span>
             )}
             {empresaAtiva && (
-              <p className="text-sm" aria-label="Empresa em operação">
+              <p
+                className="min-w-0 truncate text-sm"
+                aria-label="Empresa em operação"
+                title={`${empresaAtiva.razao_social} ${empresaAtiva.cnpj_formatado}`}
+              >
                 <strong className="text-gray-900 dark:text-gray-100">{empresaAtiva.razao_social}</strong>
                 <span className="ml-2 text-gray-600 dark:text-gray-400">{empresaAtiva.cnpj_formatado}</span>
               </p>
             )}
-            <EmblemaAmbiente ambiente={identidade?.ambiente} />
+            <div className="shrink-0">
+              <EmblemaAmbiente ambiente={identidade?.ambiente} />
+            </div>
           </div>
 
-          <SeletorTema />
-          <div className="flex items-center gap-3 text-sm">
-            <span title={usuario.email}>{usuario.nome || usuario.email}</span>
-            <button type="button" className="botao-leve" onClick={sair}>
-              Sair
-            </button>
+          <div className="flex shrink-0 items-center gap-3">
+            <SeletorTema />
+            <div className="flex items-center gap-3 text-sm">
+              <span title={usuario.email}>{usuario.nome || usuario.email}</span>
+              <button type="button" className="botao-leve" onClick={sair}>
+                Sair
+              </button>
+            </div>
           </div>
         </div>
       </header>
@@ -130,25 +148,11 @@ export default function Layout() {
           <NavLink to="/" end className={classeLink}>
             Início
           </NavLink>
-          {usuario.is_master && (
-            <>
-              <p className="titulo-grupo-menu mt-4 px-3">Administração</p>
-              <NavLink to="/admin/empresas" className={classeLink}>
-                Empresas
-              </NavLink>
-              <NavLink to="/admin/usuarios" className={classeLink}>
-                Usuários
-              </NavLink>
-              <NavLink to="/admin/vinculos" className={classeLink}>
-                Vínculos
-              </NavLink>
-            </>
-          )}
           {temPermissao('nfse.consultar') && (
             <>
               <p className="titulo-grupo-menu mt-4 px-3">Notas fiscais</p>
               <NavLink to="/fiscal/notas" className={classeLink}>
-                NFS-e emitidas
+                Emissão
               </NavLink>
             </>
           )}
@@ -191,6 +195,20 @@ export default function Layout() {
               </NavLink>
               <NavLink to="/cadastros/servicos" className={classeLink}>
                 Serviços
+              </NavLink>
+            </>
+          )}
+          {usuario.is_master && (
+            <>
+              <p className="titulo-grupo-menu mt-4 px-3">Administração</p>
+              <NavLink to="/admin/empresas" className={classeLink}>
+                Empresas
+              </NavLink>
+              <NavLink to="/admin/usuarios" className={classeLink}>
+                Usuários
+              </NavLink>
+              <NavLink to="/admin/vinculos" className={classeLink}>
+                Vínculos
               </NavLink>
             </>
           )}

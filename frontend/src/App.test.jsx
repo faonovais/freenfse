@@ -51,6 +51,38 @@ describe('acesso à aplicação', () => {
     }
   })
 
+  it('exibe o link "Emissão" apontando para /fiscal/notas no menu de notas fiscais', async () => {
+    montarApp({ rotasApi: rotasAutenticado() })
+
+    const menu = await screen.findByRole('navigation', { name: 'Menu principal' })
+    expect(within(menu).getByRole('link', { name: 'Emissão' })).toHaveAttribute('href', '/fiscal/notas')
+    expect(within(menu).queryByRole('link', { name: 'NFS-e emitidas' })).not.toBeInTheDocument()
+  })
+
+  it('posiciona o menu Administração logo após o menu Cadastros', async () => {
+    const empresaCompleta = {
+      ...EMPRESA_A,
+      permissoes: ['nfse.consultar', 'cadastro.consultar', 'config.consultar'],
+    }
+    montarApp({ rotasApi: rotasAutenticado({ eu: respostaEu({ master: true, empresas: [empresaCompleta] }) }) })
+
+    const menu = await screen.findByRole('navigation', { name: 'Menu principal' })
+    const grupos = Array.from(menu.querySelectorAll('.titulo-grupo-menu')).map((item) => item.textContent)
+    expect(grupos).toEqual([
+      'Notas fiscais',
+      'Agendamentos',
+      'Cadastros',
+      'Administração',
+      'Configuração fiscal',
+      'Envio de documentos',
+      'Conta',
+    ])
+
+    const links = Array.from(menu.querySelectorAll('a')).map((item) => item.textContent)
+    expect(links.indexOf('Empresas')).toBe(links.indexOf('Serviços') + 1)
+    expect(links.indexOf('Parâmetros fiscais')).toBe(links.indexOf('Vínculos') + 1)
+  })
+
   it('rota desconhecida mostra a página não encontrada dentro do layout', async () => {
     montarApp({ rota: '/nao-existe', rotasApi: rotasAutenticado() })
 
@@ -195,6 +227,62 @@ describe('layout e empresa ativa por aba', () => {
 
     expect(chamadas.some((chamada) => chamada.caminho === '/api/fiscal/logo/escuro/')).toBe(true)
     expect(chamadas.some((chamada) => chamada.caminho === '/api/fiscal/logo/claro/')).toBe(false)
+  })
+
+  it('mantém título, logo e seletor alinhados na mesma linha sem quebrar a linha interna', async () => {
+    const empresaNomeLongo = {
+      ...EMPRESA_A,
+      razao_social: 'Empresa Alfa com Razão Social Muito Longa Para Caber Sem Truncar Ltda',
+    }
+    montarApp({
+      rotasApi: rotasAutenticado({
+        eu: respostaEu({ empresas: [empresaNomeLongo, EMPRESA_B] }),
+        extras: {
+          'GET /api/fiscal/identidade/': {
+            status: 200,
+            dados: { ...IDENTIDADE_PADRAO.dados, logo: { claro: 'abc123' } },
+          },
+          'GET /api/fiscal/logo/claro/': { status: 200, blob: new Blob(['x'], { type: 'image/png' }) },
+        },
+      }),
+    })
+
+    const imagem = await screen.findByRole('img', { name: `Logo de ${empresaNomeLongo.razao_social}` })
+    const cabecalho = imagem.closest('header')
+    const linhaExterna = cabecalho.firstElementChild
+    const areaEmpresa = screen.getByLabelText('Empresa em operação')
+    const seletor = screen.getByRole('combobox', { name: 'Empresa ativa' })
+
+    expect(linhaExterna).toHaveClass('md:flex-nowrap')
+    expect(imagem).toHaveClass('shrink-0')
+    expect(areaEmpresa.parentElement).not.toHaveClass('flex-wrap')
+    expect(areaEmpresa).toHaveClass('min-w-0', 'truncate')
+    expect(seletor).toHaveClass('overflow-hidden')
+    expect(seletor.firstElementChild).toHaveClass('min-w-0', 'flex-1', 'truncate')
+  })
+
+  it('mostra Nome para exibição como rótulo principal e razão social com CNPJ como detalhe no seletor', async () => {
+    const comApelido = { ...EMPRESA_A, nome_exibicao: 'Grupo Alfa' }
+    const semApelido = { ...EMPRESA_B, nome_exibicao: '' }
+    montarApp({
+      rotasApi: rotasAutenticado({
+        eu: respostaEu({ master: true, empresas: [comApelido, semApelido] }),
+      }),
+    })
+
+    const seletor = await screen.findByRole('combobox', { name: 'Empresa ativa' })
+    expect(seletor).toHaveTextContent('Grupo Alfa')
+    expect(seletor).not.toHaveTextContent('Empresa Alfa Ltda')
+
+    fireEvent.click(seletor)
+    const opcoes = await screen.findAllByRole('option')
+    expect(opcoes[0]).toHaveTextContent('Grupo Alfa')
+    expect(opcoes[0]).toHaveTextContent('Empresa Alfa Ltda · 11.222.333/0001-81')
+    expect(opcoes[1]).toHaveTextContent('Empresa Beta S.A.')
+    expect(opcoes[1]).toHaveTextContent('11.444.777/0001-61')
+
+    const detalhe = within(opcoes[0]).getByText('Empresa Alfa Ltda · 11.222.333/0001-81')
+    expect(detalhe).toHaveClass('text-xs', 'text-gray-600')
   })
 
   it('avisa quando o certificado está para vencer, com link para quem pode ver a configuração', async () => {

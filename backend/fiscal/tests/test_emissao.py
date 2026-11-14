@@ -297,6 +297,78 @@ def test_dado_invalido_nao_chega_a_sefin_e_a_nota_volta_a_rascunho(
     assert not EmissaoDps.objects.exists()  # a reserva de número foi devolvida
 
 
+def test_valores_com_virgula_sao_normalizados_ao_gravar_e_emitem_normalmente(empresa_pronta, sefin):
+    from fiscal.services import nfse as servico_nfse
+    from fiscal.tests.apoio import criar_cadastros_de_teste
+
+    tomador, servico = criar_cadastros_de_teste()
+    nota = servico_nfse.criar_rascunho(
+        {
+            "tomador": tomador.pk,
+            "servico": servico.pk,
+            "competencia": dt.date(2026, 10, 1),
+            "valores": {
+                "servico": "1,00",
+                "desconto_incondicionado": "0,10",
+            },
+        },
+        usuario=None,
+    )
+
+    assert nota.valores["servico"] == "1.00"
+    assert nota.valores["desconto_incondicionado"] == "0.10"
+
+    nota = _emitir(empresa_pronta, nota)
+
+    assert nota.situacao == S.AUTORIZADA
+    assert sefin.total_de_posts == 1
+
+
+def test_nota_legada_com_virgula_em_valores_e_montada_e_emitida_normalmente(
+    empresa_pronta, nova_nota, sefin
+):
+    nota = nova_nota()
+    Nfse.objects.filter(pk=nota.pk).update(
+        valores={**nota.valores, "servico": "1,00", "desconto_incondicionado": "0,10"}
+    )
+    nota.refresh_from_db()
+
+    nota = _emitir(empresa_pronta, nota)
+
+    assert nota.situacao == S.AUTORIZADA
+    assert sefin.total_de_posts == 1
+
+
+def test_erro_decimal_ou_inesperado_antes_do_envio_devolve_a_nota_a_rascunho(
+    empresa_pronta, nova_nota, sefin, monkeypatch
+):
+    nota_decimal = nova_nota()
+    Nfse.objects.filter(pk=nota_decimal.pk).update(
+        valores={**nota_decimal.valores, "servico": "abc"}
+    )
+    nota_decimal.refresh_from_db()
+
+    nota_decimal = _emitir(empresa_pronta, nota_decimal)
+
+    assert nota_decimal.situacao == S.RASCUNHO
+    assert sefin.total_de_posts == 0
+    assert not EmissaoDps.objects.exists()
+
+    nota_falha = nova_nota()
+    monkeypatch.setattr(
+        emissao.gateway,
+        "emitir",
+        lambda *_a, **_kw: (_ for _ in ()).throw(RuntimeError("Falha local inesperada")),
+    )
+
+    nota_falha = _emitir(empresa_pronta, nota_falha)
+
+    assert nota_falha.situacao == S.RASCUNHO
+    assert "Falha local inesperada" in nota_falha.mensagem
+    assert sefin.total_de_posts == 0
+    assert not EmissaoDps.objects.exists()
+
+
 # -- bloqueios ---------------------------------------------------------------------------
 
 

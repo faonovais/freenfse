@@ -28,7 +28,9 @@ export default function SelectBusca({
   const selecionada = opcoes.find((opcao) => opcao.valor === valor)
   const filtradas = useMemo(() => {
     const termo = semAcento(busca)
-    return opcoes.filter((opcao) => semAcento(`${opcao.rotulo} ${opcao.detalhe ?? ''}`).includes(termo))
+    return opcoes.filter((opcao) =>
+      semAcento(`${opcao.rotulo} ${opcao.detalhe ?? ''} ${opcao.busca ?? ''}`).includes(termo),
+    )
   }, [opcoes, busca])
 
   useEffect(() => {
@@ -77,12 +79,12 @@ export default function SelectBusca({
         aria-controls={aberto ? idLista : undefined}
         disabled={desabilitado}
         onClick={() => (aberto ? setAberto(false) : abrir())}
-        className="campo flex items-center justify-between gap-2 text-left disabled:opacity-50"
+        className="campo flex items-center justify-between gap-2 overflow-hidden text-left disabled:opacity-50"
       >
-        <span className={selecionada ? '' : 'text-gray-600 dark:text-gray-400'}>
+        <span className={`min-w-0 flex-1 truncate ${selecionada ? '' : 'text-gray-600 dark:text-gray-400'}`}>
           {selecionada ? selecionada.rotulo : placeholder}
         </span>
-        <span aria-hidden="true">▾</span>
+        <span aria-hidden="true" className="shrink-0">▾</span>
       </button>
       {aberto && (
         <div className="absolute z-40 mt-1 w-full rounded border border-gray-200 bg-white shadow dark:border-gray-800 dark:bg-gray-900">
@@ -116,9 +118,9 @@ export default function SelectBusca({
                   posicao === indice ? 'bg-gray-100 dark:bg-gray-800' : ''
                 } ${opcao.valor === valor ? 'text-accent' : ''}`}
               >
-                <span>{opcao.rotulo}</span>
+                <span className="block truncate">{opcao.rotulo}</span>
                 {opcao.detalhe && (
-                  <span className="block text-xs text-gray-600 dark:text-gray-400">{opcao.detalhe}</span>
+                  <span className="block truncate text-xs text-gray-600 dark:text-gray-400">{opcao.detalhe}</span>
                 )}
               </li>
             ))}
