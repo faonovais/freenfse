@@ -59,6 +59,30 @@ describe('acesso à aplicação', () => {
     expect(within(menu).queryByRole('link', { name: 'NFS-e emitidas' })).not.toBeInTheDocument()
   })
 
+  it('posiciona o menu Administração logo após o menu Cadastros', async () => {
+    const empresaCompleta = {
+      ...EMPRESA_A,
+      permissoes: ['nfse.consultar', 'cadastro.consultar', 'config.consultar'],
+    }
+    montarApp({ rotasApi: rotasAutenticado({ eu: respostaEu({ master: true, empresas: [empresaCompleta] }) }) })
+
+    const menu = await screen.findByRole('navigation', { name: 'Menu principal' })
+    const grupos = Array.from(menu.querySelectorAll('.titulo-grupo-menu')).map((item) => item.textContent)
+    expect(grupos).toEqual([
+      'Notas fiscais',
+      'Agendamentos',
+      'Cadastros',
+      'Administração',
+      'Configuração fiscal',
+      'Envio de documentos',
+      'Conta',
+    ])
+
+    const links = Array.from(menu.querySelectorAll('a')).map((item) => item.textContent)
+    expect(links.indexOf('Empresas')).toBe(links.indexOf('Serviços') + 1)
+    expect(links.indexOf('Parâmetros fiscais')).toBe(links.indexOf('Vínculos') + 1)
+  })
+
   it('rota desconhecida mostra a página não encontrada dentro do layout', async () => {
     montarApp({ rota: '/nao-existe', rotasApi: rotasAutenticado() })
 

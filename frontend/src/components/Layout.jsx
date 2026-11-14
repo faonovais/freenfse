@@ -148,20 +148,6 @@ export default function Layout() {
           <NavLink to="/" end className={classeLink}>
             Início
           </NavLink>
-          {usuario.is_master && (
-            <>
-              <p className="titulo-grupo-menu mt-4 px-3">Administração</p>
-              <NavLink to="/admin/empresas" className={classeLink}>
-                Empresas
-              </NavLink>
-              <NavLink to="/admin/usuarios" className={classeLink}>
-                Usuários
-              </NavLink>
-              <NavLink to="/admin/vinculos" className={classeLink}>
-                Vínculos
-              </NavLink>
-            </>
-          )}
           {temPermissao('nfse.consultar') && (
             <>
               <p className="titulo-grupo-menu mt-4 px-3">Notas fiscais</p>
@@ -209,6 +195,20 @@ export default function Layout() {
               </NavLink>
               <NavLink to="/cadastros/servicos" className={classeLink}>
                 Serviços
+              </NavLink>
+            </>
+          )}
+          {usuario.is_master && (
+            <>
+              <p className="titulo-grupo-menu mt-4 px-3">Administração</p>
+              <NavLink to="/admin/empresas" className={classeLink}>
+                Empresas
+              </NavLink>
+              <NavLink to="/admin/usuarios" className={classeLink}>
+                Usuários
+              </NavLink>
+              <NavLink to="/admin/vinculos" className={classeLink}>
+                Vínculos
               </NavLink>
             </>
           )}
