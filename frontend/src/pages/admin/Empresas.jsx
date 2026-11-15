@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { empresas } from '../../api/admin.js'
 import CabecalhoColuna from '../../components/CabecalhoColuna.jsx'
 import Campo from '../../components/Campo.jsx'
@@ -8,11 +8,13 @@ import { useGridLocal } from '../../hooks/useGridLocal.js'
 import { useLista } from '../../hooks/useLista.js'
 import { errosPorCampo, mensagemErro } from '../../utils/erros.js'
 
-function FormEmpresa({ empresa, aoSalvar, aoCancelar }) {
+function FormEmpresa({ empresa, servicosOficiaisDisponiveis = [], aoSalvar, aoCancelar }) {
   const novo = !empresa.id
   const [razaoSocial, setRazaoSocial] = useState(empresa.razao_social ?? '')
   const [nomeExibicao, setNomeExibicao] = useState(empresa.nome_exibicao ?? '')
   const [cnpj, setCnpj] = useState(empresa.cnpj_formatado ?? '')
+  const [servicosOficiais, setServicosOficiais] = useState(empresa.servicos_oficiais ?? [])
+  const [servicosAlterados, setServicosAlterados] = useState(false)
   const [erros, setErros] = useState({})
   const [erroGeral, setErroGeral] = useState('')
   const [salvando, setSalvando] = useState(false)
@@ -22,8 +24,14 @@ function FormEmpresa({ empresa, aoSalvar, aoCancelar }) {
     !salvo &&
     (razaoSocial !== (empresa.razao_social ?? '') ||
       nomeExibicao !== (empresa.nome_exibicao ?? '') ||
-      (novo && cnpj !== ''))
+      (novo && cnpj !== '') ||
+      servicosAlterados)
   useFormularioSujo(sujo)
+
+  function alternarServicoOficial(id) {
+    setServicosAlterados(true)
+    setServicosOficiais((atual) => (atual.includes(id) ? atual.filter((item) => item !== id) : [...atual, id]))
+  }
 
   async function salvar(evento) {
     evento.preventDefault()
@@ -34,6 +42,9 @@ function FormEmpresa({ empresa, aoSalvar, aoCancelar }) {
     const corpo = novo ? { razao_social: razaoSocial.trim(), cnpj } : { razao_social: razaoSocial.trim() }
     if (novo ? nomeExibicaoLimpo !== '' : nomeExibicaoLimpo !== (empresa.nome_exibicao ?? '')) {
       corpo.nome_exibicao = nomeExibicaoLimpo
+    }
+    if (novo ? servicosOficiais.length > 0 : servicosAlterados) {
+      corpo.servicos_oficiais = servicosOficiais
     }
     const resposta = novo ? await empresas.criar(corpo) : await empresas.alterar(empresa.id, corpo)
     setSalvando(false)
@@ -76,6 +87,33 @@ function FormEmpresa({ empresa, aoSalvar, aoCancelar }) {
         erro={erros.cnpj}
         dica={novo ? 'O CNPJ não poderá ser alterado depois. Aceita CNPJ alfanumérico.' : 'O CNPJ não pode ser alterado.'}
       />
+      <fieldset className="space-y-2">
+        <legend className="text-sm font-medium text-gray-900 dark:text-gray-100">Serviços oficiais vinculados</legend>
+        {servicosOficiaisDisponiveis.length === 0 ? (
+          <p className="text-xs text-gray-600 dark:text-gray-400">
+            Nenhum serviço oficial cadastrado para vínculo direto ainda.
+          </p>
+        ) : (
+          <div className="max-h-48 space-y-1.5 overflow-y-auto rounded border border-gray-200 p-2.5 dark:border-gray-800">
+            {servicosOficiaisDisponiveis.map((servico) => (
+              <label key={servico.id} className="flex items-start gap-2 text-xs">
+                <input
+                  type="checkbox"
+                  checked={servicosOficiais.includes(servico.id)}
+                  onChange={() => alternarServicoOficial(servico.id)}
+                />
+                <span>
+                  LC 116 <strong>{servico.codigo_tributacao_nacional}</strong> · NBS <strong>{servico.nbs}</strong> ·
+                  cClassTrib <strong>{servico.c_class_trib}</strong> · cIndOp{' '}
+                  <strong>{servico.codigo_indicador_operacao}</strong>
+                  {servico.descricao_item_lc116 ? ` — ${servico.descricao_item_lc116}` : ''}
+                </span>
+              </label>
+            ))}
+          </div>
+        )}
+        {erros.servicos_oficiais && <p className="text-xs text-estado-erro">{erros.servicos_oficiais}</p>}
+      </fieldset>
       {erroGeral && Object.keys(erros).length === 0 && (
         <p role="alert" className="text-sm text-estado-erro">
           {erroGeral}
@@ -101,6 +139,19 @@ export default function Empresas() {
   const { itensOrdenados, ordenacao, ordenarPor } = useGridLocal(itens, { colunaInicial: 'razao_social' })
   const [edicao, setEdicao] = useState(null)
   const [erroAcao, setErroAcao] = useState('')
+  const [servicosOficiaisDisponiveis, setServicosOficiaisDisponiveis] = useState([])
+
+  useEffect(() => {
+    let ativo = true
+    empresas.servicosOficiais().then((resposta) => {
+      if (ativo && resposta.ok && Array.isArray(resposta.dados)) {
+        setServicosOficiaisDisponiveis(resposta.dados)
+      }
+    })
+    return () => {
+      ativo = false
+    }
+  }, [])
 
   async function alternarAtivo(empresa) {
     if (empresa.ativo) {
@@ -165,6 +216,7 @@ export default function Empresas() {
         <FormEmpresa
           key={edicao.id ?? 'nova'}
           empresa={edicao}
+          servicosOficiaisDisponiveis={servicosOficiaisDisponiveis}
           aoSalvar={aoSalvar}
           aoCancelar={() => setEdicao(null)}
         />

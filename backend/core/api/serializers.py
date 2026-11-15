@@ -4,16 +4,41 @@ from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as ErroDjango
 from rest_framework import serializers
 
-from core.models import Empresa, Usuario, VinculoUsuarioEmpresa
+from core.models import Empresa, ServicoOficial, Usuario, VinculoUsuarioEmpresa
 from core.permissoes import catalogo
 from core.services import acesso
 from core.validators import normalizar_cnpj, validar_cnpj
+
+
+class ServicoOficialResumoSerializer(serializers.ModelSerializer):
+    """Resumo de serviço oficial para seleção em empresa e cadastro de serviço."""
+
+    class Meta:
+        model = ServicoOficial
+        fields = [
+            "id",
+            "codigo_tributacao_nacional",
+            "descricao_item_lc116",
+            "nbs",
+            "cst_ibs_cbs",
+            "c_class_trib",
+            "descricao_class_trib",
+            "codigo_indicador_operacao",
+            "local_fornecimento",
+            "ativo",
+        ]
 
 
 class EmpresaSerializer(serializers.ModelSerializer):
     """Empresa (tenant). O CNPJ só é definido na criação."""
 
     cnpj_formatado = serializers.CharField(read_only=True)
+    servicos_oficiais = serializers.PrimaryKeyRelatedField(
+        many=True, queryset=ServicoOficial.objects.all(), required=False
+    )
+    servicos_oficiais_detalhes = ServicoOficialResumoSerializer(
+        source="servicos_oficiais", many=True, read_only=True
+    )
 
     class Meta:
         model = Empresa
@@ -25,6 +50,8 @@ class EmpresaSerializer(serializers.ModelSerializer):
             "cnpj_formatado",
             "schema_name",
             "ativo",
+            "servicos_oficiais",
+            "servicos_oficiais_detalhes",
             "criado_em",
             "atualizado_em",
         ]

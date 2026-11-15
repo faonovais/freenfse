@@ -388,3 +388,56 @@ def test_master_cria_duas_empresas_e_um_usuario_com_perfis_diferentes_em_cada(cl
         empresa_2["id"],
     }
     assert Empresa.objects.count() == 2
+
+
+def test_master_lista_e_vincula_servicos_oficiais_na_empresa(cliente_de, master):
+    from core.models import ServicoOficial
+
+    oficial = ServicoOficial(
+        codigo_tributacao_nacional="010101",
+        nbs="115021000",
+        cst_ibs_cbs="000",
+        c_class_trib="000001",
+        codigo_indicador_operacao="100301",
+    )
+    oficial.full_clean()
+    oficial.save()
+    inativo = ServicoOficial(
+        codigo_tributacao_nacional="010101",
+        nbs="115022000",
+        cst_ibs_cbs="000",
+        c_class_trib="000001",
+        codigo_indicador_operacao="100301",
+        ativo=False,
+    )
+    inativo.full_clean()
+    inativo.save()
+
+    painel = cliente_de(master)
+    lista = painel.get(f"{EMPRESAS}servicos-oficiais/")
+    assert lista.status_code == 200
+    assert [s["id"] for s in lista.json()] == [oficial.id]
+
+    criada = painel.post(
+        EMPRESAS,
+        {
+            "razao_social": "Alfa Tecnologia Ltda",
+            "cnpj": CNPJ_A,
+            "servicos_oficiais": [oficial.id],
+        },
+        format="json",
+    )
+    assert criada.status_code == 201
+    dados_criada = criada.json()
+    assert dados_criada["servicos_oficiais"] == [oficial.id]
+    assert dados_criada["servicos_oficiais_detalhes"][0]["nbs"] == "115021000"
+
+    atualizada = painel.patch(
+        f"{EMPRESAS}{dados_criada['id']}/",
+        {"servicos_oficiais": []},
+        format="json",
+    )
+    assert atualizada.status_code == 200
+    assert atualizada.json()["servicos_oficiais"] == []
+    log = LogAuditoria.objects.filter(acao=LogAuditoria.Acao.EMPRESA_ALTERADA).latest("id")
+    assert log.detalhes["mudancas"]["servicos_oficiais"] == {"de": [oficial.id], "para": []}
