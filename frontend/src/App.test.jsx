@@ -546,3 +546,127 @@ describe('layout e empresa ativa por aba', () => {
     expect(screen.queryByRole('navigation', { name: 'Menu principal' })).not.toBeInTheDocument()
   })
 })
+
+describe('dashboard inicial', () => {
+  const DASHBOARD_EXEMPLO = {
+    quantidade_emitidas: 12,
+    valor_total_servicos: '18450.00',
+    servicos_mais_utilizados: [
+      { servico: 'Consultoria Fiscal', quantidade: 8, valor_total: '12000.00' },
+      { servico: 'Auditoria Contábil', quantidade: 4, valor_total: '6450.00' },
+    ],
+    ultimas_notas: [
+      {
+        id: 77,
+        serie: '1',
+        numero_dps: 245,
+        numero_nfse: '1050',
+        emitida_em: '2026-11-10T14:30:00-03:00',
+        tomador_nome: 'Cliente X Ltda',
+        valor_servico: '1500.00',
+      },
+    ],
+  }
+
+  it('mostra os indicadores, o gráfico de serviços e as últimas notas na tela inicial', async () => {
+    montarApp({
+      rotasApi: rotasAutenticado({
+        extras: {
+          'GET /api/fiscal/notas/dashboard/': { status: 200, dados: DASHBOARD_EXEMPLO },
+        },
+      }),
+    })
+
+    expect(await screen.findByRole('heading', { name: 'Resumo dos últimos 30 dias' })).toBeInTheDocument()
+    expect(screen.getByText('NFS-e emitidas (30 dias)')).toBeInTheDocument()
+    expect(screen.getByText('12')).toBeInTheDocument()
+    expect(screen.getByText('Valor total dos serviços (30 dias)')).toBeInTheDocument()
+    expect(screen.getByText('R$ 18.450,00')).toBeInTheDocument()
+
+    const listaServicos = screen.getByRole('list', { name: 'Serviços mais utilizados' })
+    expect(within(listaServicos).getByText('Consultoria Fiscal')).toBeInTheDocument()
+    expect(within(listaServicos).getByText('8 notas · R$ 12.000,00')).toBeInTheDocument()
+    expect(within(listaServicos).getByText('Auditoria Contábil')).toBeInTheDocument()
+
+    const tabela = screen.getByRole('table', { name: 'Últimas NFS-e emitidas' })
+    expect(within(tabela).getByText('1050')).toBeInTheDocument()
+    expect(within(tabela).getByText('Cliente X Ltda')).toBeInTheDocument()
+    expect(within(tabela).getByText('R$ 1.500,00')).toBeInTheDocument()
+    expect(within(tabela).getByRole('link', { name: 'Abrir nota' })).toHaveAttribute('href', '/notas/77')
+  })
+
+  it('navega para /notas/:id ao clicar em Abrir nota na tabela do dashboard', async () => {
+    const notaDetalhe = {
+      id: 77,
+      situacao: 'autorizada',
+      numero_nfse: '1050',
+      numero_dps: 245,
+      serie: '1',
+      chave: 'CHAVE77',
+      ambiente: 'producao_restrita',
+      competencia: '2026-11-01',
+      emitida_em: '2026-11-10T14:30:00-03:00',
+      acoes: {},
+      tomador: { nome: 'Cliente X Ltda', documento: '22333444000155' },
+      servico: { nome: 'Consultoria Fiscal', codigo_tributacao_nacional: '010101' },
+      totais: {
+        valor_servico: '1500.00',
+        base_calculo: '1500.00',
+        valor_iss: '30.00',
+        total_retencoes: '0.00',
+        valor_liquido: '1500.00',
+      },
+      eventos: [],
+      historico: [],
+    }
+    montarApp({
+      rotasApi: rotasAutenticado({
+        extras: {
+          'GET /api/fiscal/notas/dashboard/': { status: 200, dados: DASHBOARD_EXEMPLO },
+          'GET /api/fiscal/notas/77/': { status: 200, dados: notaDetalhe },
+        },
+      }),
+    })
+
+    const link = await screen.findByRole('link', { name: 'Abrir nota' })
+    fireEvent.click(link)
+
+    expect(await screen.findByRole('heading', { name: 'Nota nº 1050' })).toBeInTheDocument()
+    expect(screen.getByText('Consultoria Fiscal')).toBeInTheDocument()
+  })
+
+  it('mostra estado vazio quando não há notas emitidas nos últimos 30 dias', async () => {
+    const vazio = {
+      quantidade_emitidas: 0,
+      valor_total_servicos: '0.00',
+      servicos_mais_utilizados: [],
+      ultimas_notas: [],
+    }
+    montarApp({
+      rotasApi: rotasAutenticado({
+        extras: {
+          'GET /api/fiscal/notas/dashboard/': { status: 200, dados: vazio },
+        },
+      }),
+    })
+
+    expect(await screen.findByRole('heading', { name: 'Resumo dos últimos 30 dias' })).toBeInTheDocument()
+    expect(screen.getAllByText('Nenhuma NFS-e emitida nos últimos 30 dias.')).toHaveLength(2)
+  })
+
+  it('oculta o dashboard quando o usuário não tem a permissão nfse.consultar', async () => {
+    const semPermissao = [{ ...EMPRESA_A, permissoes: ['cadastro.consultar'] }]
+    montarApp({
+      rotasApi: rotasAutenticado({
+        eu: respostaEu({ empresas: semPermissao }),
+        extras: {
+          'GET /api/fiscal/notas/dashboard/': { status: 200, dados: DASHBOARD_EXEMPLO },
+        },
+      }),
+    })
+
+    await screen.findByRole('list', { name: 'Permissões' })
+    expect(screen.queryByRole('heading', { name: 'Resumo dos últimos 30 dias' })).not.toBeInTheDocument()
+    expect(screen.queryByText('Consultoria Fiscal')).not.toBeInTheDocument()
+  })
+})

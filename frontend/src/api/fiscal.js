@@ -53,6 +53,7 @@ export const notas = {
   substituir: (id, corpo) => http(`${BASE}/notas/${id}/substituir/`, { metodo: 'POST', corpo }),
   baixarXml: (id) => baixarBinario(`${BASE}/notas/${id}/xml/`),
   baixarDanfse: (id) => baixarBinario(`${BASE}/notas/${id}/danfse/`),
+  dashboard: () => http(`${BASE}/notas/dashboard/`),
 }
 
 /** Serviços oficiais (LC 116 + NBS + IBS/CBS) vinculados à empresa e catálogo oficial. */
