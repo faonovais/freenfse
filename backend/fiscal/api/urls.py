@@ -7,6 +7,7 @@ from . import notas, views
 
 roteador = SimpleRouter()
 roteador.register("notas", notas.NotaViewSet, basename="nota")
+roteador.register("servicos-oficiais", views.ServicoOficialViewSet, basename="servico-oficial")
 
 urlpatterns = [
     path("identidade/", views.IdentidadeView.as_view(), name="fiscal-identidade"),

@@ -1,9 +1,10 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { servicos } from '../../api/cadastros.js'
 import Aviso from '../../components/Aviso.jsx'
 import BotaoAjuda from '../../components/BotaoAjuda.jsx'
 import CabecalhoColuna from '../../components/CabecalhoColuna.jsx'
 import Campo from '../../components/Campo.jsx'
+import CampoSelecao from '../../components/CampoSelecao.jsx'
 import { useAuth } from '../../contexts/AuthContext.jsx'
 import { useConfirmacao } from '../../contexts/ConfirmacaoContext.jsx'
 import { useFormularioSujo } from '../../hooks/useFormularioSujo.js'
@@ -25,6 +26,7 @@ function formularioDe(servico) {
   return {
     nome: servico?.nome ?? '',
     descricao: servico?.descricao ?? '',
+    servico_oficial_id: servico?.servico_oficial_id ? String(servico.servico_oficial_id) : '',
     codigo_tributacao_nacional: servico?.codigo_tributacao_nacional ?? '',
     codigo_tributacao_municipal: servico?.codigo_tributacao_municipal ?? '',
     nbs: servico?.nbs ?? '',
@@ -45,6 +47,7 @@ function corpoDe(f) {
   const numero = (valor) => (valor === '' ? null : valor)
   return {
     ...f,
+    servico_oficial_id: f.servico_oficial_id ? Number(f.servico_oficial_id) : null,
     aliquota_iss: numero(f.aliquota_iss),
     vigencia_fim: f.vigencia_fim || null,
     ...Object.fromEntries(RETENCOES.map(([campo]) => [campo, numero(f[campo])])),
@@ -55,6 +58,9 @@ function FormServico({ servico, aoSalvar, aoCancelar }) {
   const novo = !servico
   const inicial = useMemo(() => formularioDe(servico), [servico])
   const [f, setF] = useState(inicial)
+  const [oficiais, setOficiais] = useState(() =>
+    servico?.servico_oficial_detalhes ? [servico.servico_oficial_detalhes] : [],
+  )
   const [erros, setErros] = useState({})
   const [erroGeral, setErroGeral] = useState('')
   const [salvando, setSalvando] = useState(false)
@@ -65,6 +71,37 @@ function FormServico({ servico, aoSalvar, aoCancelar }) {
   const marcar = (campo) => (evento) => setF((atual) => ({ ...atual, [campo]: evento.target.checked }))
 
   useFormularioSujo(!salvo && JSON.stringify(f) !== JSON.stringify(inicial))
+
+  useEffect(() => {
+    let ativo = true
+    servicos.oficiaisDisponiveis().then((resposta) => {
+      if (!ativo || !resposta.ok || !Array.isArray(resposta.dados)) return
+      setOficiais((atuais) => {
+        const mapa = new Map(resposta.dados.map((item) => [item.id, item]))
+        for (const atual of atuais) {
+          if (atual?.id && !mapa.has(atual.id)) mapa.set(atual.id, atual)
+        }
+        return Array.from(mapa.values())
+      })
+    })
+    return () => {
+      ativo = false
+    }
+  }, [])
+
+  function selecionarOficial(evento) {
+    const idTexto = evento.target.value
+    const encontrado = oficiais.find((item) => String(item.id) === idTexto)
+    setF((atual) => ({
+      ...atual,
+      servico_oficial_id: idTexto,
+      codigo_tributacao_nacional: encontrado?.codigo_tributacao_nacional ?? '',
+      nbs: encontrado?.nbs ?? '',
+      cst_ibs_cbs: encontrado?.cst_ibs_cbs ?? '',
+      c_class_trib: encontrado?.c_class_trib ?? '',
+      codigo_indicador_operacao: encontrado?.codigo_indicador_operacao ?? '',
+    }))
+  }
 
   /** Sugestão do cIndOp (Anexo VIII) e situação da classificação na tabela oficial; só leitura. */
   async function consultarReferencias() {
@@ -124,17 +161,31 @@ function FormServico({ servico, aoSalvar, aoCancelar }) {
           Classificação{' '}
           <BotaoAjuda rotulo="classificação do serviço">
             O código nacional (6 dígitos: item, subitem e desdobro da lista de serviços) identifica o serviço na nota. O
-            municipal só existe em alguns municípios.
+            municipal só existe em alguns municípios. Os códigos oficiais vêm do serviço oficial vinculado.
           </BotaoAjuda>
         </legend>
+        <CampoSelecao
+          rotulo="Serviço oficial vinculado"
+          required
+          vazio="Selecione um serviço oficial"
+          value={f.servico_oficial_id}
+          onChange={selecionarOficial}
+          erro={erros.servico_oficial_id}
+          opcoes={oficiais.map((oficial) => ({
+            valor: String(oficial.id),
+            rotulo: `${oficial.codigo_tributacao_nacional} · NBS ${oficial.nbs} · cClassTrib ${oficial.c_class_trib} · cIndOp ${oficial.codigo_indicador_operacao}`,
+          }))}
+          dica="Define código LC 116, NBS, CST, cClassTrib e cIndOp (somente leitura abaixo)."
+        />
         <div className="grid gap-3 sm:grid-cols-3">
           <Campo
             rotulo="Código de tributação nacional"
             required
+            readOnly
             value={f.codigo_tributacao_nacional}
             onChange={mudar('codigo_tributacao_nacional')}
             erro={erros.codigo_tributacao_nacional}
-            dica="6 dígitos, por exemplo 17.01.01."
+            dica="Definido pelo serviço oficial vinculado."
           />
           <Campo
             rotulo="Código de tributação municipal"
@@ -145,10 +196,11 @@ function FormServico({ servico, aoSalvar, aoCancelar }) {
           />
           <Campo
             rotulo="NBS"
+            readOnly
             value={f.nbs}
             onChange={mudar('nbs')}
             erro={erros.nbs}
-            dica="9 dígitos. Obrigatória com IBS/CBS."
+            dica="Definida pelo serviço oficial vinculado."
           />
         </div>
       </fieldset>
@@ -157,28 +209,34 @@ function FormServico({ servico, aoSalvar, aoCancelar }) {
         <legend className="text-sm">
           IBS e CBS (reforma tributária){' '}
           <BotaoAjuda rotulo="IBS e CBS">
-            São os novos tributos sobre o consumo, em transição de 2026 a 2033. Informe o CST (3 dígitos) e a
-            classificação tributária (6 dígitos) juntos, ou deixe os dois em branco. É a classificação que decide se a
-            nota leva o grupo de IBS/CBS: quando exige, a nota precisa do indicador da operação (cIndOp), que é do
-            serviço. O CST deve ser igual aos 3 primeiros dígitos da classificação.
+            São os novos tributos sobre o consumo, em transição de 2026 a 2033. O CST (3 dígitos), a classificação
+            tributária (6 dígitos) e o indicador da operação (cIndOp) são herdados do serviço oficial vinculado.
           </BotaoAjuda>
         </legend>
         <div className="grid gap-3 sm:grid-cols-2">
-          <Campo rotulo="CST do IBS/CBS" value={f.cst_ibs_cbs} onChange={mudar('cst_ibs_cbs')} erro={erros.cst_ibs_cbs} />
+          <Campo
+            rotulo="CST do IBS/CBS"
+            readOnly
+            value={f.cst_ibs_cbs}
+            onChange={mudar('cst_ibs_cbs')}
+            erro={erros.cst_ibs_cbs}
+          />
           <Campo
             rotulo="Classificação tributária (cClassTrib)"
+            readOnly
             value={f.c_class_trib}
             onChange={mudar('c_class_trib')}
             erro={erros.c_class_trib}
           />
           <Campo
             rotulo="Indicador da operação (cIndOp)"
+            readOnly
             inputMode="numeric"
             maxLength={6}
             value={f.codigo_indicador_operacao}
             onChange={mudar('codigo_indicador_operacao')}
             erro={erros.codigo_indicador_operacao}
-            dica="6 dígitos. Obrigatório quando a classificação exige o grupo de IBS/CBS."
+            dica="Definido pelo serviço oficial vinculado."
           />
         </div>
         <button type="button" className="botao-leve" onClick={consultarReferencias} disabled={consultandoReferencias}>
@@ -198,18 +256,12 @@ function FormServico({ servico, aoSalvar, aoCancelar }) {
                   Anexo VIII (item {referencias.indop.item}, NBS informada):{' '}
                   {referencias.indop.sugestao
                     ? 'o anexo indica um único indicador.'
-                    : 'o anexo indica mais de um indicador; escolha o que corresponde à operação.'}
+                    : 'o anexo indica mais de um indicador para esta operação.'}
                 </p>
                 <ul className="flex flex-wrap gap-2">
                   {referencias.indop.opcoes.map((opcao) => (
                     <li key={opcao}>
-                      <button
-                        type="button"
-                        className="botao-leve"
-                        onClick={() => setF((atual) => ({ ...atual, codigo_indicador_operacao: opcao }))}
-                      >
-                        Usar {opcao}
-                      </button>
+                      <span>{opcao}</span>
                       {referencias.indop.locais?.[opcao] && (
                         <span className="ml-1 text-xs text-gray-600 dark:text-gray-400">
                           ({referencias.indop.locais[opcao]})

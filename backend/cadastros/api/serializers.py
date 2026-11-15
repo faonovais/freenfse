@@ -3,8 +3,9 @@
 from django.core.exceptions import ValidationError as ErroDjango
 from rest_framework import serializers
 
-from cadastros.models import PerfilPessoa, Pessoa, Servico
-from core.models import Municipio
+from cadastros.models import PerfilPessoa, Pessoa, Servico, _apenas_digitos
+from core.api.serializers import ServicoOficialResumoSerializer
+from core.models import Municipio, ServicoOficial
 from core.validators import formatar_cnpj, formatar_cpf
 
 
@@ -113,25 +114,46 @@ class PessoaSerializer(serializers.ModelSerializer):
         return pessoa
 
 
+CAMPOS_FISCAIS_TRAVADOS = (
+    "codigo_tributacao_nacional",
+    "nbs",
+    "cst_ibs_cbs",
+    "c_class_trib",
+    "codigo_indicador_operacao",
+)
+
 CAMPOS_DO_SERVICO = (
-    "nome", "descricao", "codigo_tributacao_nacional", "codigo_tributacao_municipal", "nbs",
-    "cst_ibs_cbs", "c_class_trib", "codigo_indicador_operacao", "aliquota_iss", "iss_retido",
-    "retencao_irrf",
+    "nome", "descricao", "servico_oficial_id", "codigo_tributacao_nacional",
+    "codigo_tributacao_municipal", "nbs", "cst_ibs_cbs", "c_class_trib",
+    "codigo_indicador_operacao", "aliquota_iss", "iss_retido", "retencao_irrf",
     "retencao_csll", "retencao_pis", "retencao_cofins", "retencao_inss", "vigencia_inicio",
     "vigencia_fim", "ativo",
 )  # fmt: skip
 
 
 class ServicoSerializer(serializers.ModelSerializer):
-    """Serviço com vigência."""
+    """Serviço com vigência e vínculo obrigatório a um serviço oficial da empresa."""
+
+    servico_oficial_detalhes = serializers.SerializerMethodField()
 
     class Meta:
         model = Servico
-        fields = ["id", *CAMPOS_DO_SERVICO, "criado_em", "atualizado_em"]
+        fields = [
+            "id",
+            *CAMPOS_DO_SERVICO,
+            "servico_oficial_detalhes",
+            "criado_em",
+            "atualizado_em",
+        ]
         read_only_fields = ["criado_em", "atualizado_em"]
         # Os códigos aceitam máscara (por exemplo, 17.01.01); o modelo normaliza para dígitos.
         extra_kwargs = {
-            "codigo_tributacao_nacional": {"max_length": 12},
+            "servico_oficial_id": {"required": False, "allow_null": True},
+            "codigo_tributacao_nacional": {
+                "max_length": 12,
+                "required": False,
+                "allow_blank": True,
+            },
             "codigo_tributacao_municipal": {
                 "max_length": 6,
                 "required": False,
@@ -143,8 +165,67 @@ class ServicoSerializer(serializers.ModelSerializer):
             "codigo_indicador_operacao": {"max_length": 12, "required": False, "allow_blank": True},
         }
 
+    def get_servico_oficial_detalhes(self, servico):
+        """Resumo do serviço oficial vinculado, quando houver."""
+        if not servico.servico_oficial_id:
+            return None
+        oficial = ServicoOficial.objects.filter(pk=servico.servico_oficial_id).first()
+        return ServicoOficialResumoSerializer(oficial).data if oficial else None
+
     def validate(self, atributos):
-        """Valida as regras do serviço e antecipa a checagem de sobreposição de vigência."""
+        """Exige serviço oficial vinculado e trava os 5 campos fiscais oficiais."""
+        servico_oficial_id = atributos.get(
+            "servico_oficial_id",
+            getattr(self.instance, "servico_oficial_id", None),
+        )
+        if not servico_oficial_id:
+            raise serializers.ValidationError(
+                {"servico_oficial_id": "Selecione um serviço oficial vinculado à empresa."}
+            )
+
+        request = self.context.get("request")
+        empresa = getattr(request, "empresa", None)
+        trocando_vinculo = (
+            self.instance is None or servico_oficial_id != self.instance.servico_oficial_id
+        )
+        consulta = (
+            empresa.servicos_oficiais.filter(pk=servico_oficial_id)
+            if empresa is not None
+            else ServicoOficial.objects.filter(pk=servico_oficial_id)
+        )
+        if trocando_vinculo:
+            consulta = consulta.filter(ativo=True)
+        oficial = consulta.first()
+        if oficial is None:
+            raise serializers.ValidationError(
+                {
+                    "servico_oficial_id": (
+                        "O serviço oficial selecionado não está vinculado ou ativo para esta "
+                        "empresa."
+                    )
+                }
+            )
+
+        entrada = self.initial_data if isinstance(self.initial_data, dict) else {}
+        erros_trava = {}
+        for campo in CAMPOS_FISCAIS_TRAVADOS:
+            if campo not in entrada:
+                continue
+            valor_enviado = _apenas_digitos(entrada[campo])
+            valor_oficial = getattr(oficial, campo)
+            if self.instance is not None or valor_enviado:
+                if valor_enviado != valor_oficial:
+                    erros_trava[campo] = (
+                        "Este campo é definido pelo serviço oficial vinculado e não pode ser "
+                        "alterado diretamente."
+                    )
+        if erros_trava:
+            raise serializers.ValidationError(erros_trava)
+
+        atributos["servico_oficial_id"] = oficial.pk
+        for campo in CAMPOS_FISCAIS_TRAVADOS:
+            atributos[campo] = getattr(oficial, campo)
+
         candidato = _validar_candidato(Servico, self.instance, atributos, CAMPOS_DO_SERVICO)
         try:
             candidato.validar_vigencia()

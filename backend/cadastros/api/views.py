@@ -14,6 +14,7 @@ from rest_framework.views import APIView
 from cadastros.models import PerfilPessoa, Pessoa, Servico
 from cadastros.services import copia, servicos
 from core.api.permissions import PermissaoPorOperacao, QualquerVinculado
+from core.api.serializers import ServicoOficialResumoSerializer
 from core.models import Empresa, Municipio
 from core.municipios import normalizar_nome
 from fiscal.referencias import classificacao, indop
@@ -113,6 +114,7 @@ class ServicoViewSet(
         "retrieve": "cadastro.consultar",
         "vigente": "cadastro.consultar",
         "referencias_ibs_cbs": "cadastro.consultar",
+        "oficiais_disponiveis": "cadastro.consultar",
         "create": "cadastro.editar",
         "update": "cadastro.editar",
         "partial_update": "cadastro.editar",
@@ -158,6 +160,14 @@ class ServicoViewSet(
     def perform_update(self, serializer):
         """Altera a versão sob o lock de vigência."""
         serializer.instance = self._gravar(serializer)
+
+    @action(detail=False, methods=["get"], url_path="oficiais-disponiveis")
+    def oficiais_disponiveis(self, request):
+        """Serviços oficiais ativos vinculados à empresa para escolha no cadastro de serviço."""
+        itens = request.empresa.servicos_oficiais.filter(ativo=True).order_by(
+            "codigo_tributacao_nacional", "nbs", "c_class_trib", "codigo_indicador_operacao"
+        )
+        return Response(ServicoOficialResumoSerializer(itens, many=True).data)
 
     @action(detail=False, methods=["get"])
     def vigente(self, request):

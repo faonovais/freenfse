@@ -281,6 +281,10 @@ class Servico(models.Model):
 
     nome = models.CharField("nome (uso interno)", max_length=120)
     descricao = models.TextField("descrição na nota", max_length=2000)
+    # Sem ForeignKey entre tenant e schema público (GUIDELINES §1): referencia `ServicoOficial`.
+    servico_oficial_id = models.PositiveBigIntegerField(
+        "ID do serviço oficial", null=True, blank=True
+    )
     codigo_tributacao_nacional = models.CharField(
         "código de tributação nacional",
         max_length=6,

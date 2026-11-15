@@ -6,6 +6,7 @@ from django_tenants.utils import schema_context
 
 from cadastros.models import Pessoa
 from conftest import CNPJ_C, CPF_A, CPF_B
+from core.models import Empresa, ServicoOficial
 from core.permissoes import Perfil
 
 
@@ -104,9 +105,56 @@ def pessoa_estrangeira(**extra):
     return {"tipo": "estrangeiro", "nif": "AB1234567", "nome": "John Test", **extra}
 
 
+_OFICIAIS_PADRAO = {
+    "010101": {
+        "nbs": "115021000",
+        "cst_ibs_cbs": "000",
+        "c_class_trib": "000001",
+        "codigo_indicador_operacao": "100301",
+    },
+    "170101": {
+        "nbs": "106084000",
+        "cst_ibs_cbs": "000",
+        "c_class_trib": "000001",
+        "codigo_indicador_operacao": "100301",
+    },
+    "171901": {
+        "nbs": "113022100",
+        "cst_ibs_cbs": "000",
+        "c_class_trib": "000001",
+        "codigo_indicador_operacao": "100301",
+    },
+}
+
+
+def garantir_servico_oficial(empresa=None, **campos):
+    """Obtém ou cria um `ServicoOficial` válido e o vincula às empresas de teste."""
+    bruto = str(campos.get("codigo_tributacao_nacional", "170101"))
+    codigo = "".join(c for c in bruto if c.isdigit())
+    padrao = _OFICIAIS_PADRAO.get(codigo, _OFICIAIS_PADRAO["170101"])
+    chave = {
+        "codigo_tributacao_nacional": codigo if codigo in _OFICIAIS_PADRAO else "170101",
+        "nbs": campos.get("nbs", padrao["nbs"]),
+        "cst_ibs_cbs": campos.get("cst_ibs_cbs", padrao["cst_ibs_cbs"]),
+        "c_class_trib": campos.get("c_class_trib", padrao["c_class_trib"]),
+        "codigo_indicador_operacao": campos.get(
+            "codigo_indicador_operacao", padrao["codigo_indicador_operacao"]
+        ),
+    }
+    oficial = ServicoOficial.objects.filter(**chave).first()
+    if oficial is None:
+        oficial = ServicoOficial(**chave)
+        oficial.full_clean()
+        oficial.save()
+    empresas = [empresa] if empresa is not None else list(Empresa.objects.all())
+    for item in empresas:
+        item.servicos_oficiais.add(oficial)
+    return oficial
+
+
 def servico_json(**extra):
-    """Dados de um serviço válido (JSON da API)."""
-    return {
+    """Dados de um serviço válido (JSON da API) já vinculado a um `ServicoOficial`."""
+    dados = {
         "nome": "Consultoria agrícola",
         "descricao": "Serviços de consultoria e assessoria técnica agrícola.",
         "codigo_tributacao_nacional": "170101",
@@ -114,6 +162,12 @@ def servico_json(**extra):
         "vigencia_inicio": "2026-01-01",
         **extra,
     }
+    if "servico_oficial_id" not in dados:
+        oficial = garantir_servico_oficial(
+            codigo_tributacao_nacional=dados["codigo_tributacao_nacional"]
+        )
+        dados["servico_oficial_id"] = oficial.pk
+    return dados
 
 
 @pytest.fixture

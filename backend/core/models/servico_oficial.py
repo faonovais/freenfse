@@ -14,9 +14,7 @@ class ServicoOficial(models.Model):
     """Combinação oficial validada de LC 116, NBS, CST, cClassTrib e cIndOp."""
 
     codigo_tributacao_nacional = models.CharField("código de tributação nacional", max_length=6)
-    descricao_item_lc116 = models.CharField(
-        "descrição do item LC 116", max_length=500, blank=True
-    )
+    descricao_item_lc116 = models.CharField("descrição do item LC 116", max_length=500, blank=True)
     nbs = models.CharField("NBS", max_length=9)
     cst_ibs_cbs = models.CharField("CST do IBS/CBS", max_length=3)
     c_class_trib = models.CharField("classificação tributária (cClassTrib)", max_length=6)
@@ -116,11 +114,13 @@ class ServicoOficial(models.Model):
             raise ValidationError(erros)
 
         regras_incidencia = {
-            _apenas_digitos(codigo): desc for codigo, desc in incidencia.todas_as_regras().items()
+            _apenas_digitos(codigo): regra for codigo, regra in incidencia.todas_as_regras().items()
         }
-        descricao_lc116 = (
-            self.descricao_item_lc116 or ""
-        ).strip() or regras_incidencia.get(self.codigo_tributacao_nacional, "")
+        regra = regras_incidencia.get(self.codigo_tributacao_nacional, "")
+        regra_desc = incidencia.DESCRICAO.get(regra, "")
+        cod = self.codigo_tributacao_nacional
+        padrao_lc116 = f"{cod[:2]}.{cod[2:4]}.{cod[4:6]} ({regra_desc})" if regra_desc else ""
+        descricao_lc116 = (self.descricao_item_lc116 or "").strip() or padrao_lc116
         self.descricao_item_lc116 = descricao_lc116[:500]
         if regra_class is not None:
             self.descricao_class_trib = (regra_class.descricao or "")[:500]
