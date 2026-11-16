@@ -5,11 +5,15 @@ import { limparEmpresaAtiva, obterEmpresaAtiva } from './api/empresaAtiva.js'
 import { EMPRESA_A, EMPRESA_B, IDENTIDADE_PADRAO, respostaEu } from './testes/apiFalsa.js'
 import { BASE, montarApp, rotasAnonimo, rotasAutenticado } from './testes/montarApp.jsx'
 
+const matchMediaOriginal = window.matchMedia
+
 afterEach(() => {
   cleanup()
   limparEmpresaAtiva()
   window.localStorage.clear()
   document.documentElement.classList.remove('dark')
+  if (matchMediaOriginal === undefined) delete window.matchMedia
+  else window.matchMedia = matchMediaOriginal
 })
 
 const trocarEmpresaPara = async (nome) => {
@@ -59,10 +63,16 @@ describe('acesso à aplicação', () => {
     expect(within(menu).queryByRole('link', { name: 'NFS-e emitidas' })).not.toBeInTheDocument()
   })
 
-  it('posiciona o menu Administração logo após o menu Cadastros', async () => {
+  it('consolida Agendamentos e Downloads no menu Notas fiscais e posiciona Administração após Cadastros', async () => {
     const empresaCompleta = {
       ...EMPRESA_A,
-      permissoes: ['nfse.consultar', 'cadastro.consultar', 'config.consultar'],
+      permissoes: [
+        'nfse.consultar',
+        'agendamento.consultar',
+        'documentos.exportar',
+        'cadastro.consultar',
+        'config.consultar',
+      ],
     }
     montarApp({ rotasApi: rotasAutenticado({ eu: respostaEu({ master: true, empresas: [empresaCompleta] }) }) })
 
@@ -70,17 +80,18 @@ describe('acesso à aplicação', () => {
     const grupos = Array.from(menu.querySelectorAll('.titulo-grupo-menu')).map((item) => item.textContent)
     expect(grupos).toEqual([
       'Notas fiscais',
-      'Agendamentos',
       'Cadastros',
       'Administração',
-      'Configuração fiscal',
-      'Envio de documentos',
-      'Conta',
+      'Configurações',
     ])
 
     const links = Array.from(menu.querySelectorAll('a')).map((item) => item.textContent)
+    expect(links.indexOf('Rascunhos')).toBe(links.indexOf('Emissão') + 1)
+    expect(links.indexOf('Download em lote')).toBe(links.indexOf('Histórico de execuções') + 1)
     expect(links.indexOf('Empresas')).toBe(links.indexOf('Serviços') + 1)
-    expect(links.indexOf('Parâmetros fiscais')).toBe(links.indexOf('Vínculos') + 1)
+    expect(links.indexOf('Geral')).toBe(links.indexOf('Vínculos') + 1)
+    expect(links.indexOf('Fiscal')).toBe(links.indexOf('Geral') + 1)
+    expect(links.indexOf('Segurança')).toBe(links.indexOf('Fiscal') + 1)
   })
 
   it('rota desconhecida mostra a página não encontrada dentro do layout', async () => {
@@ -324,7 +335,7 @@ describe('layout e empresa ativa por aba', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent(/venceu/)
   })
 
-  it('o menu mostra Cadastros e Configuração fiscal conforme as permissões da empresa ativa', async () => {
+  it('o menu mostra Cadastros e Configurações conforme as permissões da empresa ativa', async () => {
     const admin = {
       ...EMPRESA_A,
       permissoes: ['cadastro.consultar', 'cadastro.editar', 'config.consultar', 'config.editar'],
@@ -332,14 +343,137 @@ describe('layout e empresa ativa por aba', () => {
     const consulta = { ...EMPRESA_B, permissoes: ['nfse.consultar'] }
     montarApp({ rotasApi: rotasAutenticado({ eu: respostaEu({ empresas: [admin, consulta] }) }) })
     const menu = await screen.findByRole('navigation', { name: 'Menu principal' })
-    for (const nome of ['Pessoas', 'Serviços', 'Parâmetros fiscais', 'Certificado A1', 'Logo da empresa']) {
+    for (const nome of ['Pessoas', 'Serviços', 'Geral', 'Fiscal']) {
       expect(within(menu).getByRole('link', { name: nome })).toBeInTheDocument()
     }
 
     await trocarEmpresaPara('Empresa Beta')
 
     await waitFor(() => expect(within(menu).queryByRole('link', { name: 'Pessoas' })).not.toBeInTheDocument())
-    expect(within(menu).queryByRole('link', { name: 'Certificado A1' })).not.toBeInTheDocument()
+    expect(within(menu).queryByRole('link', { name: 'Geral' })).not.toBeInTheDocument()
+    expect(within(menu).queryByRole('link', { name: 'Fiscal' })).not.toBeInTheDocument()
+  })
+
+  it('Configurações gerais agrupa Logo, E-mail e Google Drive em abas', async () => {
+    const admin = {
+      ...EMPRESA_A,
+      permissoes: ['config.consultar', 'config.editar'],
+    }
+    montarApp({
+      rota: '/configuracoes/geral',
+      rotasApi: rotasAutenticado({
+        eu: respostaEu({ empresas: [admin] }),
+        extras: {
+          'GET /api/documentos/config/email/': {
+            status: 200,
+            dados: {
+              provedor: 'smtp',
+              remetente_email: 'notas@alfa.test',
+              remetente_nome: 'Alfa',
+              smtp_host: 'smtp.alfa.test',
+              smtp_porta: 587,
+              smtp_seguranca: 'starttls',
+              smtp_usuario: 'notas@alfa.test',
+              credenciais_configuradas: {},
+              copias_fixas: [],
+              emails_alerta: [],
+              variaveis: {},
+              opcoes: {
+                provedores: [{ valor: 'smtp', rotulo: 'SMTP próprio' }],
+                seguranca: [{ valor: 'starttls', rotulo: 'STARTTLS' }],
+              },
+            },
+          },
+          'GET /api/documentos/config/drive/': {
+            status: 200,
+            dados: {
+              ativo: false,
+              pasta_raiz_id: '',
+              modelo_subpastas: '{ano}/{mes}',
+              modelo_arquivo: '{chave}',
+              enviar_automaticamente: false,
+              variaveis: {},
+            },
+          },
+        },
+      }),
+    })
+
+    expect(await screen.findByRole('heading', { name: 'Configurações gerais' })).toBeInTheDocument()
+    const abaLogo = screen.getByRole('tab', { name: 'Logo da empresa' })
+    const abaEmail = screen.getByRole('tab', { name: 'E-mail da empresa' })
+    const abaDrive = screen.getByRole('tab', { name: 'Google Drive' })
+    expect(abaLogo).toHaveAttribute('aria-selected', 'true')
+    expect(screen.getByRole('heading', { name: /Logo da empresa/ })).toBeInTheDocument()
+
+    fireEvent.click(abaEmail)
+    expect(abaEmail).toHaveAttribute('aria-selected', 'true')
+    expect(await screen.findByLabelText('E-mail do remetente')).toHaveValue('notas@alfa.test')
+
+    fireEvent.click(abaDrive)
+    expect(abaDrive).toHaveAttribute('aria-selected', 'true')
+    expect(await screen.findByRole('heading', { name: 'Google Drive da empresa' })).toBeInTheDocument()
+  })
+
+  it('Configurações -> Segurança abre a verificação em duas etapas em /configuracoes/seguranca', async () => {
+    montarApp({ rota: '/configuracoes/seguranca', rotasApi: rotasAutenticado() })
+
+    const menu = await screen.findByRole('navigation', { name: 'Menu principal' })
+    expect(within(menu).getByRole('link', { name: 'Segurança' })).toHaveAttribute('href', '/configuracoes/seguranca')
+    expect(within(menu).queryByRole('link', { name: 'Verificação em duas etapas' })).not.toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Verificação em duas etapas' })).toBeInTheDocument()
+  })
+
+  it('Configurações fiscais agrupa Parâmetros fiscais, Certificado A1 e Serviços oficiais em abas acessíveis', async () => {
+    const admin = {
+      ...EMPRESA_A,
+      permissoes: ['config.consultar', 'config.editar'],
+    }
+    montarApp({
+      rota: '/configuracoes/fiscal',
+      rotasApi: rotasAutenticado({
+        eu: respostaEu({ empresas: [admin] }),
+        extras: {
+          'GET /api/fiscal/parametros/': {
+            status: 200,
+            dados: {
+              regime_tributario: 'simples_nacional',
+              regime_apuracao_simples: 1,
+              regime_especial: 0,
+              serie_dps: 1,
+              ambiente: 'producao_restrita',
+              codigo_municipio_emissor: '2101400',
+              ibs_cbs_indicador_destinatario: 0,
+              municipio_emissor: 'Balsas/MA',
+              convenio: null,
+              opcoes: {
+                regime_tributario: [{ valor: 'simples_nacional', rotulo: 'Simples Nacional' }],
+                regime_apuracao_simples: [{ valor: 1, rotulo: 'Simples' }],
+                regime_especial: [{ valor: 0, rotulo: 'Nenhum' }],
+                ambiente: [{ valor: 'producao_restrita', rotulo: 'Produção restrita' }],
+              },
+            },
+          },
+          'GET /api/cadastros/municipios/': { status: 200, dados: [] },
+          'GET /api/fiscal/certificado/': { status: 200, dados: { existe: false } },
+        },
+      }),
+    })
+
+    expect(await screen.findByRole('heading', { name: 'Configurações fiscais' })).toBeInTheDocument()
+    const abaParametros = screen.getByRole('tab', { name: 'Parâmetros fiscais' })
+    const abaCertificado = screen.getByRole('tab', { name: 'Certificado A1' })
+    const abaServicos = screen.getByRole('tab', { name: 'Serviços oficiais' })
+    expect(abaParametros).toHaveAttribute('aria-selected', 'true')
+    expect(await screen.findByLabelText('Série da DPS')).toHaveValue(1)
+
+    fireEvent.click(abaCertificado)
+    expect(abaCertificado).toHaveAttribute('aria-selected', 'true')
+    expect(await screen.findByText(/ainda não tem certificado digital/i)).toBeInTheDocument()
+
+    fireEvent.keyDown(abaCertificado, { key: 'ArrowRight' })
+    expect(abaServicos).toHaveAttribute('aria-selected', 'true')
+    expect(await screen.findByRole('heading', { name: 'Serviços oficiais' })).toBeInTheDocument()
   })
 
   it('quem não tem empresa vê o aviso e nenhum cabeçalho X-Empresa é enviado', async () => {
@@ -372,5 +506,167 @@ describe('layout e empresa ativa por aba', () => {
 
     expect(document.documentElement).toHaveClass('dark')
     expect(window.localStorage.getItem('freenfse-tema')).toBe('escuro')
+  })
+
+  it('o botão Alternar menu lateral recolhe e expande o menu principal', async () => {
+    montarApp({ rotasApi: rotasAutenticado() })
+    const botao = await screen.findByRole('button', { name: 'Alternar menu lateral' })
+    expect(botao).toHaveAttribute('aria-expanded', 'true')
+    expect(screen.getByRole('navigation', { name: 'Menu principal' })).toBeVisible()
+
+    fireEvent.click(botao)
+    expect(botao).toHaveAttribute('aria-expanded', 'false')
+    expect(screen.queryByRole('navigation', { name: 'Menu principal' })).not.toBeInTheDocument()
+
+    fireEvent.click(botao)
+    expect(botao).toHaveAttribute('aria-expanded', 'true')
+    expect(screen.getByRole('navigation', { name: 'Menu principal' })).toBeVisible()
+  })
+
+  it('em viewport estreito (< 768px) inicia colapsado e fecha após clicar em um link', async () => {
+    const ouvintes = []
+    window.matchMedia = () => ({
+      matches: false,
+      media: '(min-width: 768px)',
+      addEventListener: (_evento, fn) => ouvintes.push(fn),
+      removeEventListener: () => {},
+    })
+
+    montarApp({ rotasApi: rotasAutenticado() })
+    const botao = await screen.findByRole('button', { name: 'Alternar menu lateral' })
+    expect(botao).toHaveAttribute('aria-expanded', 'false')
+    expect(screen.queryByRole('navigation', { name: 'Menu principal' })).not.toBeInTheDocument()
+
+    fireEvent.click(botao)
+    expect(botao).toHaveAttribute('aria-expanded', 'true')
+    const menu = screen.getByRole('navigation', { name: 'Menu principal' })
+    fireEvent.click(within(menu).getByRole('link', { name: 'Segurança' }))
+
+    expect(botao).toHaveAttribute('aria-expanded', 'false')
+    expect(screen.queryByRole('navigation', { name: 'Menu principal' })).not.toBeInTheDocument()
+  })
+})
+
+describe('dashboard inicial', () => {
+  const DASHBOARD_EXEMPLO = {
+    quantidade_emitidas: 12,
+    valor_total_servicos: '18450.00',
+    servicos_mais_utilizados: [
+      { servico: 'Consultoria Fiscal', quantidade: 8, valor_total: '12000.00' },
+      { servico: 'Auditoria Contábil', quantidade: 4, valor_total: '6450.00' },
+    ],
+    ultimas_notas: [
+      {
+        id: 77,
+        serie: '1',
+        numero_dps: 245,
+        numero_nfse: '1050',
+        emitida_em: '2026-11-10T14:30:00-03:00',
+        tomador_nome: 'Cliente X Ltda',
+        valor_servico: '1500.00',
+      },
+    ],
+  }
+
+  it('mostra os indicadores, o gráfico de serviços e as últimas notas na tela inicial', async () => {
+    montarApp({
+      rotasApi: rotasAutenticado({
+        extras: {
+          'GET /api/fiscal/notas/dashboard/': { status: 200, dados: DASHBOARD_EXEMPLO },
+        },
+      }),
+    })
+
+    expect(await screen.findByRole('heading', { name: 'Resumo dos últimos 30 dias' })).toBeInTheDocument()
+    expect(screen.getByText('NFS-e emitidas (30 dias)')).toBeInTheDocument()
+    expect(screen.getByText('12')).toBeInTheDocument()
+    expect(screen.getByText('Valor total dos serviços (30 dias)')).toBeInTheDocument()
+    expect(screen.getByText('R$ 18.450,00')).toBeInTheDocument()
+
+    const listaServicos = screen.getByRole('list', { name: 'Serviços mais utilizados' })
+    expect(within(listaServicos).getByText('Consultoria Fiscal')).toBeInTheDocument()
+    expect(within(listaServicos).getByText('8 notas · R$ 12.000,00')).toBeInTheDocument()
+    expect(within(listaServicos).getByText('Auditoria Contábil')).toBeInTheDocument()
+
+    const tabela = screen.getByRole('table', { name: 'Últimas NFS-e emitidas' })
+    expect(within(tabela).getByText('1050')).toBeInTheDocument()
+    expect(within(tabela).getByText('Cliente X Ltda')).toBeInTheDocument()
+    expect(within(tabela).getByText('R$ 1.500,00')).toBeInTheDocument()
+    expect(within(tabela).getByRole('link', { name: 'Abrir nota' })).toHaveAttribute('href', '/notas/77')
+  })
+
+  it('navega para /notas/:id ao clicar em Abrir nota na tabela do dashboard', async () => {
+    const notaDetalhe = {
+      id: 77,
+      situacao: 'autorizada',
+      numero_nfse: '1050',
+      numero_dps: 245,
+      serie: '1',
+      chave: 'CHAVE77',
+      ambiente: 'producao_restrita',
+      competencia: '2026-11-01',
+      emitida_em: '2026-11-10T14:30:00-03:00',
+      acoes: {},
+      tomador: { nome: 'Cliente X Ltda', documento: '22333444000155' },
+      servico: { nome: 'Consultoria Fiscal', codigo_tributacao_nacional: '010101' },
+      totais: {
+        valor_servico: '1500.00',
+        base_calculo: '1500.00',
+        valor_iss: '30.00',
+        total_retencoes: '0.00',
+        valor_liquido: '1500.00',
+      },
+      eventos: [],
+      historico: [],
+    }
+    montarApp({
+      rotasApi: rotasAutenticado({
+        extras: {
+          'GET /api/fiscal/notas/dashboard/': { status: 200, dados: DASHBOARD_EXEMPLO },
+          'GET /api/fiscal/notas/77/': { status: 200, dados: notaDetalhe },
+        },
+      }),
+    })
+
+    const link = await screen.findByRole('link', { name: 'Abrir nota' })
+    fireEvent.click(link)
+
+    expect(await screen.findByRole('heading', { name: 'Nota nº 1050' })).toBeInTheDocument()
+    expect(screen.getByText('Consultoria Fiscal')).toBeInTheDocument()
+  })
+
+  it('mostra estado vazio quando não há notas emitidas nos últimos 30 dias', async () => {
+    const vazio = {
+      quantidade_emitidas: 0,
+      valor_total_servicos: '0.00',
+      servicos_mais_utilizados: [],
+      ultimas_notas: [],
+    }
+    montarApp({
+      rotasApi: rotasAutenticado({
+        extras: {
+          'GET /api/fiscal/notas/dashboard/': { status: 200, dados: vazio },
+        },
+      }),
+    })
+
+    expect(await screen.findByRole('heading', { name: 'Resumo dos últimos 30 dias' })).toBeInTheDocument()
+    expect(screen.getAllByText('Nenhuma NFS-e emitida nos últimos 30 dias.')).toHaveLength(2)
+  })
+
+  it('oculta o dashboard quando o usuário não tem a permissão nfse.consultar', async () => {
+    const semPermissao = [{ ...EMPRESA_A, permissoes: ['cadastro.consultar'] }]
+    montarApp({
+      rotasApi: rotasAutenticado({
+        eu: respostaEu({ empresas: semPermissao }),
+        extras: {
+          'GET /api/fiscal/notas/dashboard/': { status: 200, dados: DASHBOARD_EXEMPLO },
+        },
+      }),
+    })
+
+    await screen.findByRole('list', { name: 'Permissões' })
+    expect(screen.queryByRole('heading', { name: 'Resumo dos últimos 30 dias' })).not.toBeInTheDocument()
+    expect(screen.queryByText('Consultoria Fiscal')).not.toBeInTheDocument()
   })
 })

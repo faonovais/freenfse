@@ -10,11 +10,25 @@ afterEach(() => {
 })
 
 const SERVICOS = '/api/cadastros/servicos/'
+const OFICIAIS = `${SERVICOS}oficiais-disponiveis/`
+const OFICIAL_CONSULTORIA = {
+  id: 9,
+  codigo_tributacao_nacional: '170101',
+  descricao_item_lc116: '17.01.01 (estabelecimento do prestador)',
+  nbs: '106084000',
+  cst_ibs_cbs: '000',
+  c_class_trib: '000001',
+  codigo_indicador_operacao: '100301',
+  local_fornecimento: 'Domicílio principal do adquirente',
+  ativo: true,
+}
 const CONSULTORIA = {
-  id: 3, nome: 'Consultoria agrícola', descricao: 'Consultoria.', codigo_tributacao_nacional: '170101',
-  codigo_tributacao_municipal: '001', nbs: '', cst_ibs_cbs: '', c_class_trib: '', codigo_indicador_operacao: '', aliquota_iss: '3.00',
-  iss_retido: false, retencao_irrf: null, retencao_csll: null, retencao_pis: null, retencao_cofins: null,
-  retencao_inss: null, vigencia_inicio: '2026-01-01', vigencia_fim: '2026-06-30', ativo: true,
+  id: 3, nome: 'Consultoria agrícola', descricao: 'Consultoria.', servico_oficial_id: 9,
+  servico_oficial_detalhes: OFICIAL_CONSULTORIA, codigo_tributacao_nacional: '170101',
+  codigo_tributacao_municipal: '001', nbs: '106084000', cst_ibs_cbs: '000', c_class_trib: '000001',
+  codigo_indicador_operacao: '100301', aliquota_iss: '3.00', iss_retido: false, retencao_irrf: null,
+  retencao_csll: null, retencao_pis: null, retencao_cofins: null, retencao_inss: null,
+  vigencia_inicio: '2026-01-01', vigencia_fim: '2026-06-30', ativo: true,
 }  // fmt: skip
 
 const abrir = (extras = {}, empresas = [EMPRESA_ADMIN]) =>
@@ -22,7 +36,11 @@ const abrir = (extras = {}, empresas = [EMPRESA_ADMIN]) =>
     rota: '/cadastros/servicos',
     rotasApi: rotasAutenticado({
       eu: respostaEu({ empresas }),
-      extras: { [`GET ${SERVICOS}`]: { status: 200, dados: [CONSULTORIA] }, ...extras },
+      extras: {
+        [`GET ${SERVICOS}`]: { status: 200, dados: [CONSULTORIA] },
+        [`GET ${OFICIAIS}`]: { status: 200, dados: [OFICIAL_CONSULTORIA] },
+        ...extras,
+      },
     }),
   })
 const digitar = (rotulo, valor) => fireEvent.change(screen.getByLabelText(rotulo), { target: { value: valor } })
@@ -39,13 +57,28 @@ describe('Serviços', () => {
     expect(within(tabela).getByText('01/01/2026 a 30/06/2026')).toBeInTheDocument()
   })
 
-  it('cadastra um serviço: números vazios vão como nulos e o fim da vigência vazio como "sem fim"', async () => {
+  it('cadastra um serviço: preenche e trava os 5 códigos fiscais pelo serviço oficial selecionado', async () => {
     const { chamadas } = abrir({ [`POST ${SERVICOS}`]: { status: 201, dados: CONSULTORIA } })
     fireEvent.click(await screen.findByRole('button', { name: 'Novo serviço' }))
 
+    await screen.findByRole('option', { name: /170101 · NBS 106084000/ })
     digitar('Nome (uso interno)', 'Assessoria')
     digitar('Descrição que sai na nota', 'Assessoria técnica.')
-    digitar('Código de tributação nacional', '17.01.01')
+    digitar('Serviço oficial vinculado', '9')
+
+    for (const rotulo of [
+      'Código de tributação nacional',
+      'NBS',
+      'CST do IBS/CBS',
+      'Classificação tributária (cClassTrib)',
+      'Indicador da operação (cIndOp)',
+    ]) {
+      expect(screen.getByLabelText(rotulo)).toHaveAttribute('readonly')
+    }
+    expect(screen.getByLabelText('Código de tributação nacional')).toHaveValue('170101')
+    expect(screen.getByLabelText('NBS')).toHaveValue('106084000')
+    expect(screen.getByLabelText('Indicador da operação (cIndOp)')).toHaveValue('100301')
+
     digitar('Alíquota do ISS (%)', '2.5')
     digitar('Início da vigência', '2026-07-01')
     fireEvent.click(screen.getByRole('button', { name: 'Cadastrar serviço' }))
@@ -53,7 +86,12 @@ describe('Serviços', () => {
     await waitFor(() => expect(chamadas.some((c) => c.metodo === 'POST')).toBe(true))
     expect(chamadas.find((c) => c.metodo === 'POST').corpo).toMatchObject({
       nome: 'Assessoria',
-      codigo_tributacao_nacional: '17.01.01',
+      servico_oficial_id: 9,
+      codigo_tributacao_nacional: '170101',
+      nbs: '106084000',
+      cst_ibs_cbs: '000',
+      c_class_trib: '000001',
+      codigo_indicador_operacao: '100301',
       aliquota_iss: '2.5',
       retencao_irrf: null,
       retencao_inss: null,
@@ -71,9 +109,10 @@ describe('Serviços', () => {
       },
     })
     fireEvent.click(await screen.findByRole('button', { name: 'Novo serviço' }))
+    await screen.findByRole('option', { name: /170101 · NBS 106084000/ })
     digitar('Nome (uso interno)', 'Assessoria')
     digitar('Descrição que sai na nota', 'Assessoria técnica.')
-    digitar('Código de tributação nacional', '170101')
+    digitar('Serviço oficial vinculado', '9')
     digitar('Início da vigência', '2026-03-01')
 
     fireEvent.click(screen.getByRole('button', { name: 'Cadastrar serviço' }))
@@ -119,14 +158,14 @@ describe('Serviços', () => {
       },
     }  // fmt: skip
 
-    it('o serviço tem o indicador da operação (cIndOp) e ele vai no corpo', async () => {
+    it('o serviço herda o indicador da operação (cIndOp) do serviço oficial e o envia no corpo', async () => {
       const { chamadas } = abrir({ [`POST ${SERVICOS}`]: { status: 201, dados: CONSULTORIA } })
       fireEvent.click(await screen.findByRole('button', { name: 'Novo serviço' }))
+      await screen.findByRole('option', { name: /170101 · NBS 106084000/ })
 
       digitar('Nome (uso interno)', 'Análise')
       digitar('Descrição que sai na nota', 'Análise de sistemas.')
-      digitar('Código de tributação nacional', '01.01.01')
-      digitar('Indicador da operação (cIndOp)', '100301')
+      digitar('Serviço oficial vinculado', '9')
       digitar('Início da vigência', '2026-07-01')
       fireEvent.click(screen.getByRole('button', { name: 'Cadastrar serviço' }))
 
@@ -134,27 +173,23 @@ describe('Serviços', () => {
       expect(chamadas.find((c) => c.metodo === 'POST').corpo).toMatchObject({ codigo_indicador_operacao: '100301' })
     })
 
-    it('mostra a sugestão do Anexo VIII e a situação da classificação; "Usar" preenche o campo', async () => {
+    it('mostra a sugestão do Anexo VIII e a situação da classificação do serviço selecionado', async () => {
       const { chamadas } = abrir({ [`GET ${REFERENCIAS}`]: { status: 200, dados: SUGESTAO } })
       fireEvent.click(await screen.findByRole('button', { name: 'Novo serviço' }))
-      digitar('Código de tributação nacional', '01.01.01')
-      digitar('NBS', '1.1502.10.00')
-      digitar('Classificação tributária (cClassTrib)', '000001')
+      await screen.findByRole('option', { name: /170101 · NBS 106084000/ })
+      digitar('Serviço oficial vinculado', '9')
 
       fireEvent.click(screen.getByRole('button', { name: 'Ver sugestão do indicador e situação da classificação' }))
 
       expect(await screen.findByText(/A classificação 000001 exige o grupo de IBS\/CBS/)).toBeInTheDocument()
       const consulta = chamadas.find((c) => c.caminho === REFERENCIAS)
-      expect(consulta.url).toContain('codigo_nacional=01.01.01')
+      expect(consulta.url).toContain('codigo_nacional=170101')
       expect(consulta.url).toContain('c_class_trib=000001')
       expect(screen.getByText('(Domicílio principal do adquirente)')).toBeInTheDocument()
-
-      fireEvent.click(screen.getByRole('button', { name: 'Usar 100301' }))
-
       expect(screen.getByLabelText('Indicador da operação (cIndOp)')).toHaveValue('100301')
     })
 
-    it('com mais de uma opção no anexo, a tela lista todas e não escolhe pelo usuário', async () => {
+    it('com mais de uma opção no anexo, lista as opções sem alterar o campo travado', async () => {
       abrir({
         [`GET ${REFERENCIAS}`]: {
           status: 200,
@@ -165,8 +200,9 @@ describe('Serviços', () => {
 
       fireEvent.click(screen.getByRole('button', { name: 'Ver sugestão do indicador e situação da classificação' }))
 
-      expect(await screen.findByText(/mais de um indicador; escolha o que corresponde à operação/)).toBeInTheDocument()
-      expect(screen.getAllByRole('button', { name: /^Usar / })).toHaveLength(3)
+      expect(await screen.findByText(/mais de um indicador para esta operação/)).toBeInTheDocument()
+      expect(screen.getByText('050101')).toBeInTheDocument()
+      expect(screen.getByText('050102')).toBeInTheDocument()
       expect(screen.getByLabelText('Indicador da operação (cIndOp)')).toHaveValue('')
     })
 
@@ -189,10 +225,10 @@ describe('Serviços', () => {
         [`POST ${SERVICOS}`]: { status: 400, dados: { codigo_indicador_operacao: ['Para o código 99.03 o indicador deve ser do grupo 02XXXX. Regra E0902 da Sefin.'] } },
       })
       fireEvent.click(await screen.findByRole('button', { name: 'Novo serviço' }))
+      await screen.findByRole('option', { name: /170101 · NBS 106084000/ })
       digitar('Nome (uso interno)', 'Locação')
       digitar('Descrição que sai na nota', 'Locação de imóvel.')
-      digitar('Código de tributação nacional', '99.03.01')
-      digitar('Indicador da operação (cIndOp)', '100301')
+      digitar('Serviço oficial vinculado', '9')
       digitar('Início da vigência', '2026-07-01')
 
       fireEvent.click(screen.getByRole('button', { name: 'Cadastrar serviço' }))

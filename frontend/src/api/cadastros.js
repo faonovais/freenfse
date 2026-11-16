@@ -16,6 +16,7 @@ export const servicos = {
   ...recurso('servicos'),
   vigente: (filtros) => http(`${BASE}/servicos/vigente/${consulta(filtros)}`),
   referenciasIbsCbs: (filtros) => http(`${BASE}/servicos/referencias-ibs-cbs/${consulta(filtros)}`),
+  oficiaisDisponiveis: () => http(`${BASE}/servicos/oficiais-disponiveis/`),
 }
 export const perfis = {
   listar: () => http(`${BASE}/perfis/`),

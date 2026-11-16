@@ -17,7 +17,8 @@ const TEMAS = [
   },
 ]
 
-function PainelDoLogo({ tema, titulo, fundo, dica, versao, podeEditar, aoAlterar }) {
+function PainelDoLogo({ tema, titulo, fundo, dica, versao, podeEditar, aoAlterar, embutido = false }) {
+  const Subtitulo = embutido ? 'h3' : 'h2'
   const confirmar = useConfirmacao()
   const url = useLogoUrl(tema, versao)
   const [erro, setErro] = useState('')
@@ -69,7 +70,7 @@ function PainelDoLogo({ tema, titulo, fundo, dica, versao, podeEditar, aoAlterar
       aria-label={titulo}
       className="space-y-3 rounded border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-gray-900"
     >
-      <h2 className="text-lg text-gray-900 dark:text-gray-100">{titulo}</h2>
+      <Subtitulo className="text-lg text-gray-900 dark:text-gray-100">{titulo}</Subtitulo>
       <p className="text-xs text-gray-600 dark:text-gray-400">{dica}</p>
       <div className={`flex h-24 items-center justify-center rounded border border-gray-200 dark:border-gray-800 ${fundo}`}>
         {url ? (
@@ -103,25 +104,29 @@ function PainelDoLogo({ tema, titulo, fundo, dica, versao, podeEditar, aoAlterar
   )
 }
 
-export default function Logo() {
+export default function Logo({ embutido = false }) {
+  const Titulo = embutido ? 'h2' : 'h1'
   const { temPermissao, identidade, recarregarIdentidade } = useAuth()
   const podeEditar = temPermissao('config.editar')
   const logos = identidade?.logo ?? {}
 
   return (
     <section>
-      <h1 className="text-2xl text-gray-900 dark:text-gray-100">
+      <Titulo
+        className={embutido ? 'text-lg text-gray-900 dark:text-gray-100' : 'text-2xl text-gray-900 dark:text-gray-100'}
+      >
         Logo da empresa{' '}
         <BotaoAjuda rotulo="logo da empresa">
           O logo aparece no cabeçalho para todos os usuários da empresa. Aceita PNG (até 512 KB e 2000×2000 pixels) ou
           SVG (até 200 KB). Em SVG, scripts e links externos são removidos automaticamente.
         </BotaoAjuda>
-      </h1>
+      </Titulo>
       <div className="mt-4 grid gap-4 md:grid-cols-2">
         {TEMAS.map((item) => (
           <PainelDoLogo
             key={item.tema}
             {...item}
+            embutido={embutido}
             versao={logos[item.tema]}
             podeEditar={podeEditar}
             aoAlterar={recarregarIdentidade}

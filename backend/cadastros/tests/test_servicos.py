@@ -4,7 +4,8 @@ import pytest
 from django_tenants.utils import schema_context
 
 from cadastros.models import Servico
-from cadastros.tests.conftest import servico_json
+from cadastros.tests.conftest import garantir_servico_oficial, servico_json
+from core.models import ServicoOficial
 from core.permissoes import Perfil
 
 URL = "/api/cadastros/servicos/"
@@ -22,7 +23,7 @@ def test_cria_servico_com_a_classificacao_tributaria(api_de, empresa_a):
         URL,
         servico_json(
             codigo_tributacao_municipal="001",
-            nbs="1.1301.10.00",
+            nbs="1.0608.40.00",
             cst_ibs_cbs="000",
             c_class_trib="000001",
             iss_retido=True,
@@ -34,10 +35,12 @@ def test_cria_servico_com_a_classificacao_tributaria(api_de, empresa_a):
     assert resposta.status_code == 201, resposta.json()
     corpo = resposta.json()
     assert (corpo["nbs"], corpo["cst_ibs_cbs"], corpo["c_class_trib"]) == (
-        "113011000",
+        "106084000",
         "000",
         "000001",
     )
+    assert corpo["servico_oficial_id"] > 0
+    assert corpo["servico_oficial_detalhes"]["nbs"] == "106084000"
     assert corpo["iss_retido"] is True and corpo["retencao_irrf"] == "1.50"
 
 
@@ -48,8 +51,9 @@ def test_cria_servico_com_a_classificacao_tributaria(api_de, empresa_a):
         ({"codigo_tributacao_municipal": "000"}, "codigo_tributacao_municipal"),
         ({"codigo_tributacao_municipal": "12"}, "codigo_tributacao_municipal"),
         ({"nbs": "123"}, "nbs"),
-        ({"cst_ibs_cbs": "000"}, "c_class_trib"),  # CST sem classificação
-        ({"cst_ibs_cbs": "000", "c_class_trib": "000001"}, "nbs"),  # IBS/CBS sem NBS
+        ({"cst_ibs_cbs": "200"}, "cst_ibs_cbs"),  # diverge do serviço oficial
+        ({"c_class_trib": "410001"}, "c_class_trib"),  # diverge do serviço oficial
+        ({"codigo_indicador_operacao": "050101"}, "codigo_indicador_operacao"),
         ({"aliquota_iss": "5.01"}, "aliquota_iss"),
         ({"aliquota_iss": "-1"}, "aliquota_iss"),
         ({"retencao_pis": "100.01"}, "retencao_pis"),
@@ -241,3 +245,62 @@ def test_gravacao_usa_lock_por_servico(api_de, empresa_a, monkeypatch):
     api_de(empresa_a).post(URL, servico_json())
 
     assert any("pg_advisory_xact_lock" in sql for sql in comandos)
+
+
+def test_oficiais_disponiveis_lista_apenas_vinculados_ativos(api_de, empresa_a, empresa_b):
+    oficial_a = garantir_servico_oficial(empresa_a, codigo_tributacao_nacional="010101")
+    garantir_servico_oficial(empresa_b, codigo_tributacao_nacional="170101")
+    inativo = ServicoOficial(
+        codigo_tributacao_nacional="170101",
+        nbs="110014000",
+        cst_ibs_cbs="000",
+        c_class_trib="000001",
+        codigo_indicador_operacao="100301",
+        ativo=False,
+    )
+    inativo.full_clean()
+    inativo.save()
+    empresa_a.servicos_oficiais.add(inativo)
+
+    resposta = api_de(empresa_a, Perfil.CONSULTA).get(f"{URL}oficiais-disponiveis/")
+
+    assert resposta.status_code == 200
+    assert [item["id"] for item in resposta.json()] == [oficial_a.pk]
+
+
+def test_servico_exige_oficial_vinculado_ativo_e_trava_campos_fiscais(api_de, empresa_a, empresa_b):
+    api = api_de(empresa_a)
+    sem_vinculo = api.post(URL, servico_json(servico_oficial_id=None))
+    assert sem_vinculo.status_code == 400
+    assert "servico_oficial_id" in sem_vinculo.json()
+
+    oficial_b = garantir_servico_oficial(empresa_b, codigo_tributacao_nacional="010101")
+    de_outra = api.post(URL, servico_json(servico_oficial_id=oficial_b.pk))
+    assert de_outra.status_code == 400
+    assert "servico_oficial_id" in de_outra.json()
+
+    oficial_a = garantir_servico_oficial(empresa_a, codigo_tributacao_nacional="170101")
+    criado = api.post(
+        URL,
+        {
+            "nome": "Consultoria vinculada",
+            "descricao": "Serviço vinculado a registro oficial.",
+            "servico_oficial_id": oficial_a.pk,
+            "aliquota_iss": "3.00",
+            "vigencia_inicio": "2026-01-01",
+        },
+    )
+    assert criado.status_code == 201, criado.json()
+    assert criado.json()["codigo_tributacao_nacional"] == "170101"
+    assert criado.json()["nbs"] == "106084000"
+
+    for campo, valor in (
+        ("codigo_tributacao_nacional", "999999"),
+        ("nbs", "999999999"),
+        ("cst_ibs_cbs", "200"),
+        ("c_class_trib", "410001"),
+        ("codigo_indicador_operacao", "050101"),
+    ):
+        tentativa = api.patch(f"{URL}{criado.json()['id']}/", {campo: valor})
+        assert tentativa.status_code == 400
+        assert campo in tentativa.json()

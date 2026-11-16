@@ -10,10 +10,13 @@ coloca a nota "em envio" e a interface acompanha a situação.
 import datetime as dt
 import hashlib
 import logging
+from decimal import Decimal
 
 from django.db import transaction
 from django.db.models import Q
+from django.db.models.functions import Coalesce
 from django.http import HttpResponse
+from django.utils import timezone
 from rest_framework import serializers, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.pagination import PageNumberPagination
@@ -225,6 +228,7 @@ class NotaViewSet(viewsets.GenericViewSet):
         "list": "nfse.consultar",
         "retrieve": "nfse.consultar",
         "prontidao": "nfse.consultar",
+        "dashboard": "nfse.consultar",
         "consultar": "nfse.consultar",
         "conferir": "nfse.consultar",
         "xml": "nfse.consultar",
@@ -309,6 +313,73 @@ class NotaViewSet(viewsets.GenericViewSet):
                     {"codigo": k, "rotulo": v}
                     for k, v in servico_nfse.MOTIVOS_DE_SUBSTITUICAO.items()
                 ],
+            }
+        )
+
+    @action(detail=False, methods=["get"])
+    def dashboard(self, request):
+        """Resumo gerencial dos últimos 30 dias das NFS-e autorizadas da empresa ativa."""
+        limite = timezone.now() - dt.timedelta(days=30)
+        autorizadas = Nfse.objects.annotate(
+            data_referencia=Coalesce("emitida_em", "criado_em")
+        ).filter(situacao=Nfse.Situacao.AUTORIZADA, data_referencia__gte=limite)
+        total = Decimal("0.00")
+        agrupado = {}
+        quantidade_emitidas = 0
+        for valor_bruto, servico_json in autorizadas.values_list("valor_servico", "servico"):
+            quantidade_emitidas += 1
+            valor = valor_bruto or Decimal("0.00")
+            total += valor
+            servico_json = servico_json or {}
+            nome_servico = (
+                servico_json.get("nome")
+                or servico_json.get("descricao")
+                or servico_json.get("codigo_tributacao_nacional")
+                or "Serviço não informado"
+            )
+            atual = agrupado.get(nome_servico)
+            if atual is None:
+                agrupado[nome_servico] = {"quantidade": 1, "valor_total": valor}
+            else:
+                atual["quantidade"] += 1
+                atual["valor_total"] += valor
+
+        servicos_mais_utilizados = [
+            {
+                "servico": nome,
+                "quantidade": dados["quantidade"],
+                "valor_total": str(dados["valor_total"].quantize(Decimal("0.01"))),
+            }
+            for nome, dados in sorted(
+                agrupado.items(),
+                key=lambda item: (-item[1]["quantidade"], -item[1]["valor_total"], item[0]),
+            )[:6]
+        ]
+
+        ultimas_notas = []
+        for nota in autorizadas.order_by("-data_referencia", "-id")[:10]:
+            data_emissao = nota.data_referencia
+            valor_fmt = str((nota.valor_servico or Decimal("0.00")).quantize(Decimal("0.01")))
+            ultimas_notas.append(
+                {
+                    "id": nota.pk,
+                    "serie": nota.serie,
+                    "numero_dps": nota.numero_dps,
+                    "numero_nfse": nota.numero_nfse,
+                    "emitida_em": timezone.localtime(data_emissao).isoformat()
+                    if data_emissao
+                    else None,
+                    "tomador_nome": nota.tomador_nome,
+                    "valor_servico": valor_fmt,
+                }
+            )
+
+        return Response(
+            {
+                "quantidade_emitidas": quantidade_emitidas,
+                "valor_total_servicos": str(total.quantize(Decimal("0.01"))),
+                "servicos_mais_utilizados": servicos_mais_utilizados,
+                "ultimas_notas": ultimas_notas,
             }
         )
 

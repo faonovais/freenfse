@@ -578,3 +578,66 @@ describe('Logo da empresa', () => {
     expect(screen.getByText(/pode ver o logo, mas não alterá-lo/)).toBeInTheDocument()
   })
 })
+
+describe('Serviços oficiais', () => {
+  const OFICIAIS = '/api/fiscal/servicos-oficiais/'
+  const ITEM = {
+    id: 4,
+    codigo_tributacao_nacional: '010101',
+    descricao_item_lc116: '01.01.01 (estabelecimento do prestador)',
+    nbs: '115021000',
+    cst_ibs_cbs: '000',
+    c_class_trib: '000001',
+    descricao_class_trib: 'Situações tributadas integralmente pelo IBS e CBS.',
+    codigo_indicador_operacao: '100301',
+    local_fornecimento: 'Domicílio principal do adquirente',
+    ativo: true,
+  }
+  const CATALOGO = {
+    itens_lc116: [{ codigo: '010101', codigo_formatado: '01.01.01', regra_incidencia: 'EP', descricao: 'estabelecimento do prestador' }],
+    nbs_opcoes: [{ nbs: '115021000', indicadores: ['100301'] }],
+    indicadores: [{ codigo: '100301', local_fornecimento: 'Domicílio principal do adquirente', classes_possiveis: ['000001'] }],
+    classificacoes: [{ codigo: '000001', cst: '000', descricao: 'Tributação integral', exige_grupo_ibs_cbs: true, sugerida_no_anexo_viii: true }],
+  }
+
+  it('lista serviços oficiais na aba de configurações fiscais e cadastra consultando catálogo', async () => {
+    const { chamadas } = abrir('/configuracoes/fiscal', {
+      [`GET ${OFICIAIS}`]: { status: 200, dados: [ITEM] },
+      [`GET ${OFICIAIS}catalogo/`]: { status: 200, dados: CATALOGO },
+      [`POST ${OFICIAIS}`]: { status: 201, dados: ITEM },
+    })
+
+    fireEvent.click(await screen.findByRole('tab', { name: 'Serviços oficiais' }))
+    const tabela = await screen.findByRole('table', { name: 'Serviços oficiais vinculados' })
+    expect(await within(tabela).findByText('115021000')).toBeInTheDocument()
+    expect(within(tabela).getByText('Domicílio principal do adquirente')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Novo serviço oficial' }))
+    fireEvent.change(screen.getByLabelText('Código de tributação nacional (LC 116)'), { target: { value: '010101' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Consultar catálogo oficial' }))
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Usar NBS 115021000' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Usar cIndOp 100301' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Usar 000001' }))
+    expect(screen.getByLabelText('CST do IBS/CBS')).toHaveValue('000')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Cadastrar serviço oficial' }))
+    await waitFor(() => expect(chamadas.some((c) => c.metodo === 'POST' && c.caminho === OFICIAIS)).toBe(true))
+    expect(chamadas.find((c) => c.metodo === 'POST' && c.caminho === OFICIAIS).corpo).toMatchObject({
+      codigo_tributacao_nacional: '010101',
+      nbs: '115021000',
+      cst_ibs_cbs: '000',
+      c_class_trib: '000001',
+      codigo_indicador_operacao: '100301',
+    })
+  })
+
+  it('quem só consulta não vê os botões de cadastro ou edição de serviços oficiais', async () => {
+    abrir('/configuracoes/fiscal', { [`GET ${OFICIAIS}`]: { status: 200, dados: [ITEM] } }, [EMPRESA_SO_CONSULTA])
+
+    fireEvent.click(await screen.findByRole('tab', { name: 'Serviços oficiais' }))
+    await screen.findByText('115021000')
+    expect(screen.queryByRole('button', { name: 'Novo serviço oficial' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Editar serviço oficial/ })).not.toBeInTheDocument()
+  })
+})

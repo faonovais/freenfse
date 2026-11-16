@@ -226,6 +226,56 @@ describe('administração de empresas', () => {
 
     await waitFor(() => expect(obterEmpresaAtiva()).toBe(EMPRESA_B.id))
   })
+
+  it('lista e vincula serviços oficiais ao criar e editar empresa', async () => {
+    const servicoOficial = {
+      id: 7,
+      codigo_tributacao_nacional: '010101',
+      descricao_item_lc116: 'Análise e desenvolvimento de sistemas',
+      nbs: '115021000',
+      cst_ibs_cbs: '000',
+      c_class_trib: '000001',
+      codigo_indicador_operacao: '100301',
+    }
+    const { chamadas } = montarApp({
+      rota: '/admin/empresas',
+      rotasApi: rotasAutenticado({
+        eu,
+        extras: {
+          [`GET ${ADMIN}/empresas/`]: { status: 200, dados: [{ ...EMPRESAS_API[0], servicos_oficiais: [] }] },
+          [`GET ${ADMIN}/empresas/servicos-oficiais/`]: { status: 200, dados: [servicoOficial] },
+          [`POST ${ADMIN}/empresas/`]: { status: 201, dados: { ...EMPRESAS_API[0], servicos_oficiais: [7] } },
+          [`PATCH ${ADMIN}/empresas/1/`]: { status: 200, dados: { ...EMPRESAS_API[0], servicos_oficiais: [7] } },
+        },
+      }),
+    })
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Nova empresa' }))
+    const formNovo = screen.getByRole('form', { name: 'Nova empresa' })
+    const caixa = await within(formNovo).findByRole('checkbox', { name: /115021000/ })
+    fireEvent.click(caixa)
+    fireEvent.change(within(formNovo).getByLabelText('Razão social'), { target: { value: 'Empresa Serviços Ltda' } })
+    fireEvent.change(within(formNovo).getByLabelText('CNPJ'), { target: { value: '11.222.333/0001-81' } })
+    fireEvent.click(within(formNovo).getByRole('button', { name: 'Criar empresa' }))
+
+    await waitFor(() => expect(chamadas.some((chamada) => chamada.metodo === 'POST')).toBe(true))
+    expect(chamadas.find((chamada) => chamada.metodo === 'POST').corpo).toEqual({
+      razao_social: 'Empresa Serviços Ltda',
+      cnpj: '11.222.333/0001-81',
+      servicos_oficiais: [7],
+    })
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Editar Empresa Alfa Ltda' }))
+    const formEditar = screen.getByRole('form', { name: 'Editar empresa' })
+    fireEvent.click(within(formEditar).getByRole('checkbox', { name: /115021000/ }))
+    fireEvent.click(within(formEditar).getByRole('button', { name: 'Salvar' }))
+
+    await waitFor(() => expect(chamadas.some((chamada) => chamada.metodo === 'PATCH')).toBe(true))
+    expect(chamadas.find((chamada) => chamada.metodo === 'PATCH').corpo).toEqual({
+      razao_social: 'Empresa Alfa Ltda',
+      servicos_oficiais: [7],
+    })
+  })
 })
 
 describe('administração de usuários', () => {

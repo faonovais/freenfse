@@ -1,9 +1,10 @@
 """Serializers fiscais. O certificado é só de saída e nunca expõe o `.pfx` nem a senha."""
 
+from django.core.exceptions import ValidationError as ErroDjango
 from django.utils import timezone
 from rest_framework import serializers
 
-from core.models import Municipio
+from core.models import Municipio, ServicoOficial
 from core.validators import formatar_cnpj
 from fiscal.models import Certificado, ParametrosFiscais
 from fiscal.services.vencimento import faixa_de
@@ -119,3 +120,102 @@ class CertificadoSerializer(serializers.ModelSerializer):
         """Faixa de alerta atual (30, 15, 7, 0 = vencido) ou `None`."""
         faixa = faixa_de(certificado.dias_para_vencer(), certificado.vencido())
         return None if faixa is None else int(faixa)
+
+
+class ServicoOficialSerializer(serializers.ModelSerializer):
+    """Serviço oficial (LC 116 + NBS + IBS/CBS) validado nas referências oficiais."""
+
+    class Meta:
+        model = ServicoOficial
+        fields = [
+            "id",
+            "codigo_tributacao_nacional",
+            "descricao_item_lc116",
+            "nbs",
+            "cst_ibs_cbs",
+            "c_class_trib",
+            "descricao_class_trib",
+            "codigo_indicador_operacao",
+            "local_fornecimento",
+            "ativo",
+            "criado_em",
+            "atualizado_em",
+        ]
+        read_only_fields = [
+            "descricao_item_lc116",
+            "descricao_class_trib",
+            "local_fornecimento",
+            "criado_em",
+            "atualizado_em",
+        ]
+        validators = []
+        extra_kwargs = {
+            "codigo_tributacao_nacional": {"max_length": 12},
+            "nbs": {"max_length": 15},
+            "cst_ibs_cbs": {"max_length": 5},
+            "c_class_trib": {"max_length": 8},
+            "codigo_indicador_operacao": {"max_length": 12},
+        }
+
+    def validate(self, attrs):
+        """Normaliza os códigos e valida contra as tabelas oficiais e duplicidade."""
+        self._existente = None
+        campos = (
+            "codigo_tributacao_nacional",
+            "nbs",
+            "cst_ibs_cbs",
+            "c_class_trib",
+            "codigo_indicador_operacao",
+            "ativo",
+        )
+        dados = (
+            {campo: getattr(self.instance, campo) for campo in campos}
+            if self.instance is not None
+            else {}
+        )
+        dados.update(attrs)
+        candidato = ServicoOficial(**dados)
+        if self.instance is not None:
+            candidato.pk = self.instance.pk
+        try:
+            candidato.clean()
+        except ErroDjango as erro:
+            raise serializers.ValidationError(erro.message_dict) from None
+
+        for campo in (
+            "codigo_tributacao_nacional",
+            "descricao_item_lc116",
+            "nbs",
+            "cst_ibs_cbs",
+            "c_class_trib",
+            "descricao_class_trib",
+            "codigo_indicador_operacao",
+            "local_fornecimento",
+        ):
+            attrs[campo] = getattr(candidato, campo)
+
+        existente = ServicoOficial.objects.filter(
+            codigo_tributacao_nacional=candidato.codigo_tributacao_nacional,
+            nbs=candidato.nbs,
+            cst_ibs_cbs=candidato.cst_ibs_cbs,
+            c_class_trib=candidato.c_class_trib,
+            codigo_indicador_operacao=candidato.codigo_indicador_operacao,
+        ).first()
+        if existente is not None:
+            if self.instance is not None and existente.pk != self.instance.pk:
+                raise serializers.ValidationError(
+                    "Já existe um serviço oficial cadastrado com esta combinação."
+                )
+            if self.instance is None:
+                request = self.context.get("request")
+                empresa = getattr(request, "empresa", None)
+                ja_vinculado = (
+                    empresa is not None
+                    and empresa.servicos_oficiais.filter(pk=existente.pk).exists()
+                )
+                if ja_vinculado:
+                    raise serializers.ValidationError(
+                        "Este serviço oficial já está vinculado a esta empresa."
+                    )
+                self._existente = existente
+        return attrs

@@ -67,7 +67,9 @@ function PendenciasDaProducao({ pendencias }) {
   )
 }
 
-export default function Parametros() {
+export default function Parametros({ embutido = false }) {
+  const Titulo = embutido ? 'h2' : 'h1'
+  const Subtitulo = embutido ? 'h3' : 'h2'
   const confirmar = useConfirmacao()
   const { temPermissao, recarregarIdentidade } = useAuth()
   const podeEditar = temPermissao('config.editar')
@@ -174,7 +176,11 @@ export default function Parametros() {
 
   return (
     <section>
-      <h1 className="text-2xl text-gray-900 dark:text-gray-100">Parâmetros fiscais</h1>
+      <Titulo
+        className={embutido ? 'text-lg text-gray-900 dark:text-gray-100' : 'text-2xl text-gray-900 dark:text-gray-100'}
+      >
+        Parâmetros fiscais
+      </Titulo>
       <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
         Como esta empresa emite NFS-e. Confira com a contabilidade antes de alterar.
       </p>
@@ -234,7 +240,7 @@ export default function Parametros() {
           </div>
 
           <div className="max-w-md space-y-2">
-            <h2 className="text-base text-gray-900 dark:text-gray-100">
+            <Subtitulo className="text-base text-gray-900 dark:text-gray-100">
               IBS e CBS{' '}
               <BotaoAjuda rotulo="IBS e CBS">
                 Se a nota leva o grupo de IBS/CBS é decidido sozinho pela classificação tributária do serviço (na data da
@@ -242,7 +248,7 @@ export default function Parametros() {
                 o destinatário padrão, que cada modelo de NFS-e e cada nota podem mudar (vale o da nota, depois o do
                 modelo, depois o da empresa).
               </BotaoAjuda>
-            </h2>
+            </Subtitulo>
             <CampoSelecao
               rotulo="Destinatário padrão (indDest)"
               opcoes={[
@@ -293,13 +299,13 @@ export default function Parametros() {
         aria-label="Convênio do município"
         className="mt-6 space-y-3 rounded border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-gray-900"
       >
-        <h2 className="text-lg text-gray-900 dark:text-gray-100">
+        <Subtitulo className="text-lg text-gray-900 dark:text-gray-100">
           Convênio do município{' '}
           <BotaoAjuda rotulo="convênio do município">
             Para emitir pelo ambiente nacional, o município precisa ter aderido à NFS-e Nacional. A verificação consulta
             a Receita usando o certificado da empresa.
           </BotaoAjuda>
-        </h2>
+        </Subtitulo>
         <ResultadoDoConvenio convenio={dados.convenio} />
         <Aviso tipo="erro">{erroConvenio}</Aviso>
         {podeEditar && (

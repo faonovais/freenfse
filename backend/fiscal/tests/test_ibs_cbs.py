@@ -645,9 +645,19 @@ def _referencias(api, **params):
 
 
 def _corpo_do_servico(**campos):
+    from cadastros.tests.conftest import garantir_servico_oficial
+
+    oficial = garantir_servico_oficial(
+        codigo_tributacao_nacional="010101",
+        nbs="115021000",
+        cst_ibs_cbs="000",
+        c_class_trib=EXIGE,
+        codigo_indicador_operacao=DO_SERVICO,
+    )
     return {
         "nome": "Análise de sistemas",
         "descricao": "Análise e desenvolvimento de sistemas.",
+        "servico_oficial_id": oficial.pk,
         "codigo_tributacao_nacional": "01.01.01",
         "codigo_tributacao_municipal": "007",
         "nbs": "1.1502.10.00",
@@ -667,28 +677,90 @@ def test_servico_guarda_o_cindop(api_servicos):
     assert resposta.json()["codigo_indicador_operacao"] == DO_SERVICO
 
 
+def test_servico_oficial_crud_e_catalogo(api_de, api_do_master, empresa_a, empresa_b):
+    rota = "/api/fiscal/servicos-oficiais/"
+    consulta_api = api_de(empresa_a, Perfil.CONSULTA)
+    editor_a = api_do_master(empresa_a)
+    editor_b = api_do_master(empresa_b)
+
+    catalogo = consulta_api.get(f"{rota}catalogo/?codigo_nacional=010101&nbs=115021000")
+    assert catalogo.status_code == 200
+    dados_catalogo = catalogo.json()
+    assert any(i["codigo"] == "010101" for i in dados_catalogo["itens_lc116"])
+    assert any(n["nbs"] == "115021000" for n in dados_catalogo["nbs_opcoes"])
+    assert any(ind["codigo"] == DO_SERVICO for ind in dados_catalogo["indicadores"])
+    assert any(c["codigo"] == EXIGE for c in dados_catalogo["classificacoes"])
+
+    corpo = {
+        "codigo_tributacao_nacional": "01.01.01",
+        "nbs": "1.1502.10.00",
+        "cst_ibs_cbs": "000",
+        "c_class_trib": EXIGE,
+        "codigo_indicador_operacao": "100.301",
+    }
+    assert consulta_api.post(rota, corpo).status_code == 403
+    criado_a = editor_a.post(rota, corpo)
+    assert criado_a.status_code == 201, criado_a.json()
+    assert criado_a.json()["nbs"] == "115021000"
+    assert "onerosas" in criado_a.json()["local_fornecimento"]
+    assert "01.01.01" in criado_a.json()["descricao_item_lc116"]
+
+    # Outra empresa pode vincular a mesma combinação oficial sem duplicar registro global.
+    criado_b = editor_b.post(rota, corpo)
+    assert criado_b.status_code == 201
+    assert criado_b.json()["id"] == criado_a.json()["id"]
+    assert editor_a.post(rota, corpo).status_code == 400
+
+
 @pytest.mark.parametrize("indicador", ["12345", "1234567"])
 def test_servico_recusa_cindop_com_formato_errado(api_servicos, indicador):
-    resposta = api_servicos.post(SERVICOS, _corpo_do_servico(codigo_indicador_operacao=indicador))
+    rota = "/api/fiscal/servicos-oficiais/"
+    resposta = api_servicos.post(
+        rota,
+        {
+            "codigo_tributacao_nacional": "01.01.01",
+            "nbs": "1.1502.10.00",
+            "cst_ibs_cbs": "000",
+            "c_class_trib": EXIGE,
+            "codigo_indicador_operacao": indicador,
+        },
+    )
 
     assert resposta.status_code == 400
     assert "6 dígitos" in resposta.json()["codigo_indicador_operacao"][0]
 
 
-def test_servico_99_03_recusa_cindop_fora_do_grupo_02(api_servicos):
-    resposta = api_servicos.post(SERVICOS, _corpo_do_servico(codigo_tributacao_nacional="990301"))
+def test_servico_99_03_recusa_cindop_fora_do_grupo_02():
+    from django.core.exceptions import ValidationError as ErroDjango
 
-    assert resposta.status_code == 400
-    assert "E0902" in resposta.json()["codigo_indicador_operacao"][0]
-    ok = api_servicos.post(
-        SERVICOS,
-        _corpo_do_servico(codigo_tributacao_nacional="990301", codigo_indicador_operacao="020101"),
-    )
-    assert ok.status_code == 201, ok.json()
+    base = {
+        "nome": "Locação",
+        "descricao": "Locação de imóvel.",
+        "codigo_tributacao_nacional": "990301",
+        "aliquota_iss": Decimal("2.00"),
+        "vigencia_inicio": dt.date(2026, 1, 1),
+    }
+    errado = Servico(**base, codigo_indicador_operacao="100301")
+    with pytest.raises(ErroDjango) as exc:
+        errado.clean()
+    assert "E0902" in exc.value.message_dict["codigo_indicador_operacao"][0]
+
+    correto = Servico(**base, codigo_indicador_operacao="020101")
+    correto.clean()
 
 
 def test_servico_recusa_cclasstrib_que_nao_comeca_pelo_cst(api_servicos):
-    resposta = api_servicos.post(SERVICOS, _corpo_do_servico(cst_ibs_cbs="200"))
+    rota = "/api/fiscal/servicos-oficiais/"
+    resposta = api_servicos.post(
+        rota,
+        {
+            "codigo_tributacao_nacional": "01.01.01",
+            "nbs": "1.1502.10.00",
+            "cst_ibs_cbs": "200",
+            "c_class_trib": EXIGE,
+            "codigo_indicador_operacao": DO_SERVICO,
+        },
+    )
 
     assert resposta.status_code == 400
     assert "E0959" in resposta.json()["c_class_trib"][0]

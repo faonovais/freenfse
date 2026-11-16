@@ -767,29 +767,27 @@ describe('Menu de documentos', () => {
     [`GET ${CONFIG_EMAIL}`]: { status: 200, dados: EMAIL },
   }
 
-  it('mostra download em lote e as configurações a quem tem as permissões', async () => {
+  it('mostra download em lote e o menu Geral a quem tem as permissões', async () => {
     abrir('/', extras)
 
     const menu = await screen.findByRole('navigation', { name: 'Menu principal' })
     expect(within(menu).getByRole('link', { name: 'Download em lote' })).toHaveAttribute('href', '/documentos/exportacoes')
-    expect(within(menu).getByRole('link', { name: 'E-mail da empresa' })).toHaveAttribute('href', '/documentos/email')
-    expect(within(menu).getByRole('link', { name: 'Google Drive' })).toHaveAttribute('href', '/documentos/drive')
+    expect(within(menu).getByRole('link', { name: 'Geral' })).toHaveAttribute('href', '/configuracoes/geral')
   })
 
-  it('não mostra nada de documentos a quem não tem permissão', async () => {
+  it('não mostra documentos nem Configurações -> Geral a quem não tem permissão', async () => {
     abrir('/', extras, SEM_DOCUMENTOS)
 
     const menu = await screen.findByRole('navigation', { name: 'Menu principal' })
     expect(within(menu).queryByRole('link', { name: 'Download em lote' })).not.toBeInTheDocument()
-    expect(within(menu).queryByRole('link', { name: 'E-mail da empresa' })).not.toBeInTheDocument()
-    expect(within(menu).queryByRole('link', { name: 'Google Drive' })).not.toBeInTheDocument()
+    expect(within(menu).queryByRole('link', { name: 'Geral' })).not.toBeInTheDocument()
   })
 
-  it('quem consulta documentos, mas não exporta, não vê o download em lote', async () => {
+  it('quem consulta configurações, mas não exporta, não vê o download em lote', async () => {
     abrir('/', extras, SO_CONSULTA)
 
     const menu = await screen.findByRole('navigation', { name: 'Menu principal' })
     expect(within(menu).queryByRole('link', { name: 'Download em lote' })).not.toBeInTheDocument()
-    expect(within(menu).getByRole('link', { name: 'E-mail da empresa' })).toBeInTheDocument()
+    expect(within(menu).getByRole('link', { name: 'Geral' })).toBeInTheDocument()
   })
 })

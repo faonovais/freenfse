@@ -9,7 +9,10 @@ const recurso = (nome) => ({
   alterar: (id, corpo) => http(`${BASE}/${nome}/${id}/`, { metodo: 'PATCH', corpo, semEmpresa: true }),
 })
 
-export const empresas = recurso('empresas')
+export const empresas = {
+  ...recurso('empresas'),
+  servicosOficiais: () => http(`${BASE}/empresas/servicos-oficiais/`, { semEmpresa: true }),
+}
 export const usuarios = recurso('usuarios')
 export const vinculos = recurso('vinculos')
 export const permissoes = () => http(`${BASE}/permissoes/`, { semEmpresa: true })

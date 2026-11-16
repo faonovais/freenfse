@@ -17,6 +17,12 @@ class Empresa(TenantMixin):
     nome_exibicao = models.CharField("nome para exibição", max_length=120, blank=True)
     cnpj = models.CharField("CNPJ", max_length=14, unique=True, validators=[validar_cnpj])
     ativo = models.BooleanField(default=True)
+    servicos_oficiais = models.ManyToManyField(
+        "core.ServicoOficial",
+        blank=True,
+        related_name="empresas",
+        verbose_name="serviços oficiais vinculados",
+    )
     criado_em = models.DateTimeField(auto_now_add=True)
     atualizado_em = models.DateTimeField(auto_now=True)
 

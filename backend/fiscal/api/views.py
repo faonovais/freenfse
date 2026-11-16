@@ -4,24 +4,27 @@ import hashlib
 
 from django.core.exceptions import ValidationError as ErroDjango
 from django.http import HttpResponse
-from rest_framework import serializers, status
+from rest_framework import mixins, serializers, status, viewsets
+from rest_framework.decorators import action
 from rest_framework.parsers import MultiPartParser
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from core.api.permissions import PermissaoPorOperacao, QualquerVinculado
-from core.models import LogAuditoria
+from core.models import LogAuditoria, ServicoOficial
 from core.services import auditoria
 from fiscal import logo as logos
 from fiscal.models import Certificado, LogoEmpresa, ParametrosFiscais
 from fiscal.services import certificado as servico_certificado
 from fiscal.services import parametros as servico_parametros
+from fiscal.services import servicos_oficiais as servico_servicos_oficiais
 from fiscal.services.vencimento import faixa_de
 
 from .serializers import (
     CertificadoSerializer,
     EntradaDeParametros,
     ParametrosFiscaisSerializer,
+    ServicoOficialSerializer,
     opcoes_de_parametros,
 )
 
@@ -281,4 +284,82 @@ class IdentidadeView(APIView):
                     "faixa_alerta": None if faixa is None else int(faixa),
                 },
             }
+        )
+
+
+class ServicoOficialViewSet(
+    mixins.ListModelMixin,
+    mixins.CreateModelMixin,
+    mixins.RetrieveModelMixin,
+    mixins.UpdateModelMixin,
+    viewsets.GenericViewSet,
+):
+    """Serviços oficiais vinculados à empresa e consulta ao catálogo LC 116 / NBS / IBS/CBS."""
+
+    serializer_class = ServicoOficialSerializer
+    permission_classes = [PermissaoPorOperacao]
+    permissao_requerida = {
+        "list": "config.consultar",
+        "retrieve": "config.consultar",
+        "catalogo": "config.consultar",
+        "create": "config.editar",
+        "update": "config.editar",
+        "partial_update": "config.editar",
+    }
+
+    def get_queryset(self):
+        """Lista os serviços oficiais vinculados à empresa ativa, com filtro opcional."""
+        consulta = self.request.empresa.servicos_oficiais.all()
+        busca = self.request.query_params.get("busca", "").strip()
+        if busca:
+            digitos = "".join(c for c in busca if c.isdigit())
+            filtro = consulta.filter(descricao_item_lc116__icontains=busca) | consulta.filter(
+                descricao_class_trib__icontains=busca
+            )
+            if digitos:
+                filtro = (
+                    filtro
+                    | consulta.filter(codigo_tributacao_nacional__icontains=digitos)
+                    | consulta.filter(nbs__icontains=digitos)
+                    | consulta.filter(c_class_trib__icontains=digitos)
+                )
+            consulta = filtro
+        ativo = self.request.query_params.get("ativo")
+        if ativo in ("true", "false"):
+            consulta = consulta.filter(ativo=(ativo == "true"))
+        return consulta.order_by(
+            "codigo_tributacao_nacional", "nbs", "c_class_trib", "codigo_indicador_operacao"
+        )
+
+    def perform_create(self, serializer):
+        """Grava o serviço oficial (ou reaproveita combinação idêntica) e vincula à empresa."""
+        existente = getattr(serializer, "_existente", None)
+        if existente is not None:
+            if "ativo" in serializer.validated_data:
+                existente.ativo = serializer.validated_data["ativo"]
+                existente.save(update_fields=["ativo", "atualizado_em"])
+            self.request.empresa.servicos_oficiais.add(existente)
+            serializer.instance = existente
+            return
+        instancia = ServicoOficial(**serializer.validated_data)
+        serializer.instance = servico_servicos_oficiais.salvar_servico_oficial(
+            instancia, empresa=self.request.empresa
+        )
+
+    def perform_update(self, serializer):
+        """Atualiza o serviço oficial validando contra as tabelas oficiais."""
+        instancia = serializer.instance
+        for campo, valor in serializer.validated_data.items():
+            setattr(instancia, campo, valor)
+        serializer.instance = servico_servicos_oficiais.salvar_servico_oficial(instancia)
+
+    @action(detail=False, methods=["get"])
+    def catalogo(self, request):
+        """Consulta itens LC 116, NBS, indicadores e classificações IBS/CBS oficiais."""
+        return Response(
+            servico_servicos_oficiais.consultar_catalogo_oficial(
+                codigo_nacional=request.query_params.get("codigo_nacional", ""),
+                nbs=request.query_params.get("nbs", ""),
+                c_class_trib=request.query_params.get("c_class_trib", ""),
+            )
         )

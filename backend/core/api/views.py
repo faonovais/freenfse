@@ -2,18 +2,19 @@
 
 from django.conf import settings
 from rest_framework import mixins, viewsets
-from rest_framework.decorators import api_view, permission_classes
+from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from core.models import Empresa, Usuario, VinculoUsuarioEmpresa
+from core.models import Empresa, ServicoOficial, Usuario, VinculoUsuarioEmpresa
 from core.permissoes import PERFIL_MASTER, Perfil, permissoes_do_perfil
 from core.services import acesso, empresas, usuarios, vinculos
 
 from .permissions import PermissaoMaster
 from .serializers import (
     EmpresaSerializer,
+    ServicoOficialResumoSerializer,
     UsuarioSerializer,
     VinculoSerializer,
     descrever_catalogo,
@@ -105,7 +106,7 @@ class _AdminGlobalViewSet(
 class EmpresaViewSet(_AdminGlobalViewSet):
     """Empresas (tenants)."""
 
-    queryset = Empresa.objects.all()
+    queryset = Empresa.objects.prefetch_related("servicos_oficiais").all()
     serializer_class = EmpresaSerializer
 
     def get_queryset(self):
@@ -136,6 +137,14 @@ class EmpresaViewSet(_AdminGlobalViewSet):
         serializer.instance = empresas.atualizar_empresa(
             serializer.instance, request=self.request, **serializer.validated_data
         )
+
+    @action(detail=False, methods=["get"], url_path="servicos-oficiais")
+    def servicos_oficiais(self, request):
+        """Lista os serviços oficiais ativos disponíveis para vincular a empresas."""
+        itens = ServicoOficial.objects.filter(ativo=True).order_by(
+            "codigo_tributacao_nacional", "nbs", "c_class_trib", "codigo_indicador_operacao"
+        )
+        return Response(ServicoOficialResumoSerializer(itens, many=True).data)
 
 
 class UsuarioViewSet(_AdminGlobalViewSet):
